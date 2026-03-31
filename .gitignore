@@ -1,0 +1,33 @@
+# dependencies
+node_modules
+
+# next.js
+.next
+next-env.d.ts
+
+# build
+/app
+/dist
+
+# OS files
+.DS_Store
+Thumbs.db
+Icon?
+
+# environment variables
+.env
+.env.local
+.env.*.local
+
+# editor
+.idea
+*.swp
+*.swo
+
+# debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# package lock (yarn 사용 시 yarn.lock만 유지)
+# package-lock.json

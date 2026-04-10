@@ -7,14 +7,11 @@ type Props = {
 const dragRegion: CSSProperties = { WebkitAppRegion: 'drag' } as CSSProperties
 
 /**
- * Wraps the design canvas. The canvas is 100vw wide and its height is
- * derived from the Figma 1728×1117 aspect ratio (1117 / 1728 ≈ 64.6412),
- * so all child layouts authored in vw units stay perfectly proportional
- * regardless of window width.
- *
- * The canvas is anchored to the top-left corner of the window (not centered),
- * so children positioned at top:0 / left:0 — like Header and Sidebar — sit
- * flush against the actual window edges.
+ * Wraps a fixed-pixel design canvas (1728 × 1117 — Figma's full canvas size)
+ * for pre-login pages. The canvas is anchored at the top-left of the window,
+ * so children positioned with absolute Figma px coordinates appear at the
+ * exact same window coordinates. On windows narrower than 1728px the right
+ * side is clipped; on wider windows there's empty space to the right.
  *
  * Also overlays a thin top strip marked as the OS-level draggable region,
  * so the window can always be moved by grabbing the top of the screen
@@ -29,7 +26,7 @@ export default function FitCanvas({ children }: Props) {
         className="fixed top-0 left-0 right-0 h-[28px]"
         style={dragRegion}
       />
-      <div className="relative w-[100vw] h-[64.6412vw]">{children}</div>
+      <div className="relative w-[1728px] h-[1117px]">{children}</div>
     </div>
   )
 }

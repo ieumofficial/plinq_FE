@@ -2,11 +2,11 @@ import { useState, type FormEvent } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import FitCanvas from '../components/FitCanvas'
-import Logo from '../components/Logo'
+import PublicLayout from '../components/PublicLayout'
 
 /**
  * Log In page — Figma node 122:1104.
+ * Pre-auth page: no Header, no Sidebar (PublicLayout shell).
  * Submitting redirects to /personal-dashboard (no backend yet).
  */
 export default function LoginPage() {
@@ -23,22 +23,13 @@ export default function LoginPage() {
       <Head>
         <title>Log In · Plow</title>
       </Head>
-      <FitCanvas>
-        {/* Top-left logo (links back to landing) */}
-        <Link
-          href="/"
-          className="absolute top-[44px] left-[91px] w-[100px] h-[100px]"
-        >
-            <Logo className="w-full h-full" />
-          </Link>
-
-          {/* Plow brand text */}
-          <p className="absolute top-[165px] left-[calc(50%-146px)] font-display text-[128.815px] leading-none text-black whitespace-nowrap">
+      <PublicLayout>
+        <div className="min-h-screen flex flex-col items-center justify-center gap-[30px] px-[40px] py-[60px]">
+          <p className="font-display text-[128.815px] leading-none text-black whitespace-nowrap">
             Plow
           </p>
 
-          {/* Terms tagline */}
-          <p className="absolute top-[383px] left-1/2 -translate-x-1/2 font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-black whitespace-nowrap">
+          <p className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-black whitespace-nowrap">
             By signing in, I agree to the company&rsquo;s{' '}
             <a href="#" className="text-[#4764c5]">
               Privacy Statement
@@ -49,10 +40,9 @@ export default function LoginPage() {
             </a>
           </p>
 
-          {/* Sign-in card */}
           <form
             onSubmit={handleSignIn}
-            className="absolute top-[440px] left-1/2 -translate-x-1/2 w-[486px] flex flex-col gap-[22px] bg-[#efeff0] border-2 border-[#afb1b6] rounded-lg px-[43px] py-[48px] overflow-hidden"
+            className="w-[486px] flex flex-col gap-[22px] bg-[#efeff0] border-2 border-[#afb1b6] rounded-lg px-[43px] py-[48px] overflow-hidden"
           >
             <button
               type="button"
@@ -71,7 +61,6 @@ export default function LoginPage() {
               </span>
             </button>
 
-            {/* "or" divider */}
             <div className="flex items-center gap-[12px] w-full">
               <div className="flex-1 h-px bg-[#afb1b6]" />
               <span className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-black">
@@ -80,7 +69,6 @@ export default function LoginPage() {
               <div className="flex-1 h-px bg-[#afb1b6]" />
             </div>
 
-            {/* Email field */}
             <label className="flex flex-col gap-[8px] w-full">
               <span className="font-sans font-medium text-[14px] leading-[20px] tracking-[0.399px] text-[#afb1b6]">
                 Email
@@ -104,14 +92,14 @@ export default function LoginPage() {
             </button>
           </form>
 
-        {/* Bottom: link to Create Account */}
-        <p className="absolute top-[940px] left-1/2 -translate-x-1/2 -translate-y-1/2 font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-black whitespace-nowrap">
-          or{' '}
-          <Link href="/signup" className="underline">
-            Create Account
-          </Link>
-        </p>
-      </FitCanvas>
+          <p className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-black whitespace-nowrap">
+            or{' '}
+            <Link href="/signup" className="underline">
+              Create Account
+            </Link>
+          </p>
+        </div>
+      </PublicLayout>
     </>
   )
 }

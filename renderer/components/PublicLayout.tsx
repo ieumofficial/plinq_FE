@@ -7,7 +7,7 @@ type Props = {
 const dragRegion: CSSProperties = { WebkitAppRegion: 'drag' } as CSSProperties
 
 /**
- * Layout for pre-auth pages (/, /login, /signup).
+ * Layout for pre-auth pages (/, /signup).
  * No Header, no Sidebar — just a full-viewport white surface with the
  * OS-level draggable strip along the top edge. Interactive children
  * opt out via `WebkitAppRegion: 'no-drag'` as needed.

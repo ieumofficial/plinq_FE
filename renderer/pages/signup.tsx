@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
+import Logo from '../components/Logo'
 import PublicLayout from '../components/PublicLayout'
 import { ShowIcon } from '../components/icons'
 
@@ -53,12 +54,20 @@ export default function SignupPage() {
         <title>Create Account · Plow</title>
       </Head>
       <PublicLayout>
-        <div className="min-h-screen flex flex-col items-center justify-center gap-[30px] px-[40px] py-[60px]">
-          <p className="font-display text-[128.815px] leading-none text-black whitespace-nowrap">
-            Plow
-          </p>
+        <div className="min-h-screen flex">
+          {/* Left: brand container (Figma node 122:1125 left panel) */}
+          <div className="relative flex-1 min-h-screen bg-[#efeff0] border-2 border-[#afb1b6] rounded-lg flex items-center justify-center p-[40px]">
+            <div className="absolute top-[44px] left-[91px] w-[100px] h-[100px]">
+              <Logo className="w-full h-full" />
+            </div>
+            <p className="font-display text-[128.815px] leading-none text-black whitespace-nowrap">
+              Plow
+            </p>
+          </div>
 
-          <form
+          {/* Right: form column */}
+          <div className="flex-1 min-h-screen flex flex-col items-center justify-center gap-[10px] px-[40px] py-[60px]">
+            <form
             onSubmit={handleSubmit}
             className="w-[486px] flex flex-col gap-[10px] items-start bg-[#efeff0] border-2 border-[#afb1b6] rounded-lg px-[43px] py-[48px] overflow-hidden"
           >
@@ -227,12 +236,13 @@ export default function SignupPage() {
             </button>
           </form>
 
-          <p className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-black text-center">
-            Already have an account?{' '}
-            <Link href="/login" className="underline">
-              Sign in
-            </Link>
-          </p>
+            <p className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-black text-center">
+              Already have an account?{' '}
+              <Link href="/" className="underline">
+                Sign in
+              </Link>
+            </p>
+          </div>
         </div>
       </PublicLayout>
     </>

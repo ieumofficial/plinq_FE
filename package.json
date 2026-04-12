@@ -14,6 +14,7 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.103.0",
     "electron-serve": "^3.0.0",
     "electron-store": "^11.0.2"
   },

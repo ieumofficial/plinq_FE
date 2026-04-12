@@ -97,8 +97,7 @@ export default function LandingPage() {
             <Link href="/signup" className="underline">
               Create Account
             </Link>
-          </p>
-        </div>
+          </p>        </div>
       </PublicLayout>
     </>
   )

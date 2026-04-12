@@ -1,5 +1,6 @@
 import { type CSSProperties, useEffect, useRef, useState } from 'react'
 import Logo from './Logo'
+import CreateNewModal, { type CreateNewType } from './CreateNewModal'
 import { ArrowDownIcon, NotificationIcon, UserIcon } from './icons'
 
 // Make the entire Header act as the macOS title bar (draggable area).
@@ -15,10 +16,16 @@ export const HEADER_HEIGHT = 103
  * at fixed pixel sizes so it stays the same size regardless of window size.
  * Spans the full window width and doubles as the draggable title bar.
  */
-const createMenuItems = ['Meeting Minute', 'Team', 'Project', 'Task'] as const
+const createMenuItems: { label: string; type: CreateNewType }[] = [
+  { label: 'Meeting Minute', type: 'meeting' },
+  { label: 'Team', type: 'team' },
+  { label: 'Project', type: 'project' },
+  { label: 'Task', type: 'task' },
+]
 
 export default function Header() {
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
+  const [activeModal, setActiveModal] = useState<CreateNewType | null>(null)
   const createMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -34,6 +41,7 @@ export default function Header() {
   }, [createMenuOpen])
 
   return (
+    <>
     <header
       style={drag}
       className="fixed top-0 left-0 right-0 h-[103px] bg-[#efeff0] border-2 border-[#afb1b6] rounded-lg overflow-visible z-10"
@@ -78,14 +86,17 @@ export default function Header() {
           {createMenuOpen && (
             <div className="absolute right-0 top-full mt-[4px] w-[175px] bg-[#d9d9d9] flex flex-col items-center p-[20px] gap-[10px] z-50">
               {createMenuItems.map((item, idx) => (
-                <div key={item} className="w-full flex flex-col items-center gap-[10px]">
+                <div key={item.type} className="w-full flex flex-col items-center gap-[10px]">
                   {idx > 0 && <div className="w-full h-[1px] bg-[#afb1b6]" />}
                   <button
                     type="button"
-                    onClick={() => setCreateMenuOpen(false)}
+                    onClick={() => {
+                      setCreateMenuOpen(false)
+                      setActiveModal(item.type)
+                    }}
                     className="font-sans font-medium text-[20px] leading-[24px] tracking-[0.2px] text-black text-center whitespace-nowrap bg-transparent border-0 cursor-pointer w-full"
                   >
-                    {item}
+                    {item.label}
                   </button>
                 </div>
               ))}
@@ -113,5 +124,10 @@ export default function Header() {
         </button>
       </div>
     </header>
+
+    {activeModal && (
+      <CreateNewModal type={activeModal} onClose={() => setActiveModal(null)} />
+    )}
+    </>
   )
 }

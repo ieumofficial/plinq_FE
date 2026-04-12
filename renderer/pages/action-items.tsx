@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import Head from 'next/head'
 import AuthLayout from '../components/AuthLayout'
+import CreateNewModal from '../components/CreateNewModal'
 
 type ActionItem = {
   id: number
@@ -54,6 +56,8 @@ const filters: { label: FilterStatus; active: boolean }[] = [
 const totalItems = 100
 
 export default function ActionItemsPage() {
+  const [showCreateTask, setShowCreateTask] = useState(false)
+
   return (
     <>
       <Head>
@@ -68,6 +72,7 @@ export default function ActionItemsPage() {
             </h1>
             <button
               type="button"
+              onClick={() => setShowCreateTask(true)}
               className="px-[20px] py-[16px] bg-black text-white font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] rounded-[16px] cursor-pointer border-0 whitespace-nowrap"
             >
               Add new
@@ -151,6 +156,10 @@ export default function ActionItemsPage() {
           ))}
         </div>
       </AuthLayout>
+
+      {showCreateTask && (
+        <CreateNewModal type="task" onClose={() => setShowCreateTask(false)} />
+      )}
     </>
   )
 }

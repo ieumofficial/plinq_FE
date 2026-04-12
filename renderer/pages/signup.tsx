@@ -258,7 +258,7 @@ export default function SignupPage() {
                   type="checkbox"
                   checked={form.agreed}
                   onChange={(e) => update('agreed', e.target.checked)}
-                  className="mt-[2px] w-[20px] h-[20px] accent-black border-2 border-[#afb1b6] rounded-[4px] shrink-0"
+                  className="mt-[2px] w-[20px] h-[20px] accent-[#3A00E5] border-2 border-[#afb1b6] rounded-[4px] shrink-0"
                 />
                 <span className="flex-1 font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-[#19191b]">
                   I have read and agreed to the company&rsquo;s{' '}
@@ -281,7 +281,11 @@ export default function SignupPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex items-center justify-center bg-black text-white rounded-[16px] px-[20px] py-[16px] cursor-pointer overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed hover:bg-black/80 transition-colors"
+                className={`w-full flex items-center justify-center text-white rounded-[16px] px-[20px] py-[16px] cursor-pointer overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                  form.firstName && form.lastName && form.email && form.password && form.confirmPassword && form.agreed
+                    ? 'bg-black hover:bg-black/80'
+                    : 'bg-black/50'
+                }`}
               >
                 <span className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] whitespace-nowrap">
                   {loading ? 'Creating...' : 'Create Account'}

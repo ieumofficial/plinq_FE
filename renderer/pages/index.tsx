@@ -151,7 +151,9 @@ export default function LandingPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center bg-black text-white rounded-[16px] px-[20px] py-[16px] cursor-pointer overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed hover:bg-black/80 transition-colors"
+              className={`w-full flex items-center justify-center text-white rounded-[16px] px-[20px] py-[16px] cursor-pointer overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                (emailSubmitted ? password : email) ? 'bg-black hover:bg-black/80' : 'bg-black/50'
+              }`}
             >
               <span className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] whitespace-nowrap">
                 {loading ? 'Signing in...' : 'Sign In'}

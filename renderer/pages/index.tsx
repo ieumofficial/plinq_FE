@@ -3,18 +3,46 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import PublicLayout from '../components/PublicLayout'
+import { ShowIcon, HideIcon } from '../components/icons'
+import { supabase } from '../lib/supabase'
 
-/**
- * Landing page (=/). Doubles as the Log In screen — Figma node 122:1104.
- * Pre-auth page: no Header, no Sidebar (PublicLayout shell).
- * Submitting redirects to /personal-dashboard (no backend yet).
- */
 export default function LandingPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [emailSubmitted, setEmailSubmitted] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleSignIn = (e: FormEvent) => {
+  const handleEmailContinue = (e: FormEvent) => {
     e.preventDefault()
+    if (!email.trim()) return
+    setError('')
+    setEmailSubmitted(true)
+  }
+
+  const handleSignIn = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!password) return
+    setError('')
+    setLoading(true)
+
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (authError) {
+      setError(
+        authError.message === 'Invalid login credentials'
+          ? '이메일 또는 비밀번호가 올바르지 않습니다.'
+          : authError.message
+      )
+      setLoading(false)
+      return
+    }
+
     router.push('/personal-dashboard')
   }
 
@@ -41,7 +69,7 @@ export default function LandingPage() {
           </p>
 
           <form
-            onSubmit={handleSignIn}
+            onSubmit={emailSubmitted ? handleSignIn : handleEmailContinue}
             className="w-[486px] flex flex-col gap-[22px] bg-[#efeff0] border-2 border-[#afb1b6] rounded-lg px-[43px] py-[48px] overflow-hidden"
           >
             <button
@@ -70,24 +98,63 @@ export default function LandingPage() {
             </div>
 
             <label className="flex flex-col gap-[8px] w-full">
-              <span className="font-sans font-medium text-[14px] leading-[20px] tracking-[0.399px] text-[#afb1b6]">
+              <span className="font-sans font-medium text-[14px] leading-[20px] tracking-[0.4px] text-[#afb1b6]">
                 Email
               </span>
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  if (emailSubmitted) {
+                    setEmailSubmitted(false)
+                    setPassword('')
+                    setError('')
+                  }
+                }}
                 placeholder="janedoe@email.com"
                 className="w-full bg-white border border-[#afb1b6] rounded-lg p-[12px] font-sans font-normal text-[16px] leading-[24px] text-black placeholder:text-[#afb1b6] outline-none focus:border-black"
               />
             </label>
 
+            {emailSubmitted && (
+              <label className="flex flex-col gap-[8px] w-full">
+                <span className="font-sans font-medium text-[14px] leading-[20px] tracking-[0.4px] text-[#afb1b6]">
+                  Password
+                </span>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    autoFocus
+                    className="w-full bg-white border border-[#afb1b6] rounded-lg p-[12px] pr-[44px] font-sans font-normal text-[16px] leading-[24px] text-black placeholder:text-[#afb1b6] outline-none focus:border-black"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-[12px] top-1/2 -translate-y-1/2 text-[#afb1b6] hover:text-black cursor-pointer"
+                  >
+                    {showPassword ? <HideIcon size={20} /> : <ShowIcon size={20} />}
+                  </button>
+                </div>
+              </label>
+            )}
+
+            {error && (
+              <p className="font-sans text-[14px] leading-[20px] text-red-500">
+                {error}
+              </p>
+            )}
+
             <button
               type="submit"
-              className="w-full flex items-center justify-center bg-black/50 text-white rounded-[16px] px-[20px] py-[16px] cursor-pointer overflow-hidden hover:bg-black transition-colors"
+              disabled={loading}
+              className="w-full flex items-center justify-center bg-black text-white rounded-[16px] px-[20px] py-[16px] cursor-pointer overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed hover:bg-black/80 transition-colors"
             >
               <span className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] whitespace-nowrap">
-                Sign In
+                {loading ? 'Signing in...' : 'Sign In'}
               </span>
             </button>
           </form>
@@ -97,7 +164,8 @@ export default function LandingPage() {
             <Link href="/signup" className="underline">
               Create Account
             </Link>
-          </p>        </div>
+          </p>
+        </div>
       </PublicLayout>
     </>
   )

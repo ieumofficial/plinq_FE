@@ -120,3 +120,41 @@ export function SearchIcon({ className, size = 24 }: IconProps) {
     </svg>
   )
 }
+
+export function ChartIcon({ className, size = 24 }: IconProps) {
+  return (
+    <svg className={className} {...baseProps(size)} aria-hidden="true">
+      <path d="M3 21h18" />
+      <rect x="5" y="11" width="3.5" height="8" rx="1" />
+      <rect x="10.25" y="6" width="3.5" height="13" rx="1" />
+      <rect x="15.5" y="14" width="3.5" height="5" rx="1" />
+    </svg>
+  )
+}
+
+export function DatabaseIcon({ className, size = 24 }: IconProps) {
+  return (
+    <svg className={className} {...baseProps(size)} aria-hidden="true">
+      <ellipse cx="12" cy="5" rx="8" ry="2.5" />
+      <path d="M4 5v6c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5V5" />
+      <path d="M4 11v6c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5v-6" />
+    </svg>
+  )
+}
+
+export function ArrowRightIcon({ className, size = 24 }: IconProps) {
+  return (
+    <svg className={className} {...baseProps(size)} aria-hidden="true">
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  )
+}
+
+export function PlusIcon({ className, size = 24 }: IconProps) {
+  return (
+    <svg className={className} {...baseProps(size)} aria-hidden="true">
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  )
+}

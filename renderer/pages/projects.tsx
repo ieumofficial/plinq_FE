@@ -1,4 +1,5 @@
 import Head from 'next/head'
+import { useRouter } from 'next/router'
 import AuthLayout from '../components/AuthLayout'
 
 type Team = {
@@ -44,6 +45,7 @@ function ProfileAvatar({ className }: { className?: string }) {
 }
 
 export default function ProjectsPage() {
+  const router = useRouter()
   return (
     <>
       <Head>
@@ -80,6 +82,7 @@ export default function ProjectsPage() {
             {projects.map((project) => (
               <div
                 key={project.id}
+                onClick={() => router.push('/project-dashboard')}
                 className="w-full h-[99px] bg-[#efeff0] border-2 border-[#afb1b6] rounded-lg flex items-center px-[29px] relative cursor-pointer"
               >
                 {/* Project name + arrow */}

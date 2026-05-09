@@ -1,6 +1,6 @@
-appId: com.example.nextron
-productName: My Nextron App
-copyright: Copyright © 2026 Yoshihide Shiono
+appId: com.plinq.app
+productName: plinq
+copyright: Copyright © 2026 plinq
 directories:
   output: dist
   buildResources: resources
@@ -9,4 +9,10 @@ files:
     filter:
       - package.json
       - app
+protocols:
+  - name: plinq
+    schemes:
+      - plinq
 publish: null
+mac:
+  category: public.app-category.productivity

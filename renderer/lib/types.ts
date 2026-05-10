@@ -34,7 +34,6 @@ export type ProjectRow = {
   team_id: string | null
   lead_id: string | null
   status: ProjectStatusDb
-  category: string | null
   budget: number | null
   created_at: string
 }

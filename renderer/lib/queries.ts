@@ -63,7 +63,7 @@ export async function getUserProjects(
   // 2. Fetch the projects themselves
   let q = supabase
     .from('projects')
-    .select('id, name, description, team_id, lead_id, status, category, budget, created_at')
+    .select('id, name, description, team_id, lead_id, status, budget, created_at')
     .in('id', projectIds)
   if (opts?.statuses && opts.statuses.length > 0) {
     q = q.in('status', opts.statuses)
@@ -124,6 +124,46 @@ export async function getUserProjects(
       progressPct,
     }
   })
+}
+
+// ─── Project mutations ──────────────────────────────────────────────────────
+
+export type NewProjectInput = {
+  name: string
+  description?: string
+  team_id?: string | null
+  status?: ProjectRow['status']
+}
+
+/**
+ * Insert a project with the current user as `lead_id` so the
+ * `handle_new_project` trigger auto-adds them to project_members.
+ */
+export async function createProject(
+  input: NewProjectInput
+): Promise<{ id: string } | { error: string }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in' }
+
+  const { data, error } = await supabase
+    .from('projects')
+    .insert({
+      name: input.name.trim(),
+      description: input.description?.trim() || null,
+      team_id: input.team_id ?? null,
+      lead_id: user.id,
+      status: input.status ?? 'active',
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    console.error('[queries] createProject', error)
+    return { error: error.message }
+  }
+  return { id: (data as { id: string }).id }
 }
 
 // ─── Tasks (action items) ────────────────────────────────────────────────────

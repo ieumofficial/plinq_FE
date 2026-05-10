@@ -178,7 +178,6 @@ export default function PersonalDashboardPage() {
                       key={p.id}
                       name={p.name}
                       description={p.description ?? ''}
-                      tag={p.category ? { label: p.category, color: 'blue' } : undefined}
                       progress={p.progressPct ?? 0}
                       members={p.members.map(userToMember)}
                       onOpen={() => router.push(`/projects/${p.id}`)}

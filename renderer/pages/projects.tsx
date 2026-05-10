@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import PersonalAppShell from '../components/PersonalAppShell'
+import NewProjectModal from '../components/NewProjectModal'
 import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
-import Tag from '../components/ui/Tag'
 import UserGroup from '../components/ui/UserGroup'
 import Icon from '../components/ui/Icon'
 import {
@@ -16,10 +16,16 @@ import { formatDueDate, userToMember, type UserRow } from '../lib/types'
 
 export default function ProjectsPage() {
   const router = useRouter()
-  const [, setUser] = useState<UserRow | null>(null)
+  const [user, setUser] = useState<UserRow | null>(null)
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [modalOpen, setModalOpen] = useState(false)
+
+  const refreshProjects = async (uid: string) => {
+    const ps = await getUserProjects(uid)
+    setProjects(ps)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -48,8 +54,7 @@ export default function ProjectsPage() {
     return projects.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
-        p.description?.toLowerCase().includes(q) ||
-        p.category?.toLowerCase().includes(q)
+        p.description?.toLowerCase().includes(q)
     )
   }, [projects, search])
 
@@ -81,22 +86,33 @@ export default function ProjectsPage() {
               <Button size="compact" variant="secondary" iconLeft="Filter">
                 Sort
               </Button>
-              <Button size="compact" iconLeft="Add">
+              <Button size="compact" iconLeft="Add" onClick={() => setModalOpen(true)}>
                 New project
               </Button>
             </div>
           </div>
 
+          <NewProjectModal
+            open={modalOpen}
+            onClose={() => setModalOpen(false)}
+            onCreated={() => user && refreshProjects(user.id)}
+          />
+
           {/* Grid */}
           {loading ? (
             <p className="text-gray-secondary text-[12px]">Loading projects…</p>
           ) : filtered.length === 0 ? (
-            <div className="bg-white-white border border-gray-border-light rounded-[10px] p-12 text-center">
+            <div className="bg-white-white border border-gray-border-light rounded-[10px] p-12 text-center flex flex-col items-center gap-4">
               <p className="text-gray-secondary text-[14px]">
                 {projects.length === 0
-                  ? 'No projects yet. Create your first one above.'
+                  ? 'No projects yet.'
                   : 'No projects match your search.'}
               </p>
+              {projects.length === 0 && (
+                <Button iconLeft="Add" onClick={() => setModalOpen(true)}>
+                  Create your first project
+                </Button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-[10px]">
@@ -136,15 +152,8 @@ function ProjectListCard({
       onClick={onOpen}
       className="bg-white-white border border-gray-border-light rounded-[10px] p-[20px] flex flex-col gap-4 cursor-pointer hover:shadow-sm transition-shadow"
     >
-      {/* Header: tag + dot menu */}
-      <div className="flex items-start justify-between">
-        {project.category ? (
-          <Tag color="blue" size="sm">
-            {project.category}
-          </Tag>
-        ) : (
-          <span />
-        )}
+      {/* Header: dot menu */}
+      <div className="flex items-start justify-end">
         <button
           type="button"
           onClick={(e) => {

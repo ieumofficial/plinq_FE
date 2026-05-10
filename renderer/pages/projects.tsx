@@ -5,14 +5,13 @@ import PersonalAppShell from '../components/PersonalAppShell'
 import NewProjectModal from '../components/NewProjectModal'
 import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
-import UserGroup from '../components/ui/UserGroup'
-import Icon from '../components/ui/Icon'
+import ProjectListCard from '../components/ui/ProjectListCard'
 import {
   getCurrentUser,
   getUserProjects,
   type ProjectWithStats,
 } from '../lib/queries'
-import { formatDueDate, userToMember, type UserRow } from '../lib/types'
+import { dbStatusToUi, formatDueDate, userToMember, type UserRow } from '../lib/types'
 
 export default function ProjectsPage() {
   const router = useRouter()
@@ -116,120 +115,29 @@ export default function ProjectsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-[10px]">
-              {filtered.map((p) => (
-                <ProjectListCard
-                  key={p.id}
-                  project={p}
-                  onOpen={() => router.push(`/projects/${p.id}`)}
-                />
-              ))}
+              {filtered.map((p) => {
+                const lead = p.members.find((m) => m.id === p.lead_id)
+                const others = p.members.filter((m) => m.id !== p.lead_id)
+                return (
+                  <ProjectListCard
+                    key={p.id}
+                    name={p.name}
+                    description={p.description ?? undefined}
+                    status={dbStatusToUi(p.status)}
+                    progress={p.progressPct ?? 0}
+                    tasksDone={p.tasksDone}
+                    tasksTotal={p.tasksTotal}
+                    due={formatDueDate(p.nextDueDate)}
+                    lead={lead ? userToMember(lead) : undefined}
+                    members={others.map(userToMember)}
+                    onOpen={() => router.push(`/projects/${p.id}`)}
+                  />
+                )
+              })}
             </div>
           )}
         </div>
       </PersonalAppShell>
     </>
-  )
-}
-
-/**
- * Larger project card used on the dedicated Projects page.
- * Shows extra stats (progress, status, created) compared to the dashboard
- * widget's compact ProjectCard.
- */
-function ProjectListCard({
-  project,
-  onOpen,
-}: {
-  project: ProjectWithStats
-  onOpen: () => void
-}) {
-  const lead = project.members.find((m) => m.id === project.lead_id)
-  const others = project.members.filter((m) => m.id !== project.lead_id)
-  const pct = project.progressPct ?? 0
-
-  return (
-    <div
-      onClick={onOpen}
-      className="bg-white-white border border-gray-border-light rounded-[10px] p-[20px] flex flex-col gap-4 cursor-pointer hover:shadow-sm transition-shadow"
-    >
-      {/* Header: dot menu */}
-      <div className="flex items-start justify-end">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            // TODO: open project menu
-          }}
-          className="text-gray-secondary hover:text-black p-1 rounded"
-          aria-label="Project options"
-        >
-          <Icon name="Dot-Menu" size={15} />
-        </button>
-      </div>
-
-      {/* Title + description */}
-      <div className="flex items-center gap-[10px]">
-        <span className="bg-primary-main text-white rounded-[6px] w-[28px] h-[28px] inline-flex items-center justify-center text-[14px] font-bold uppercase shrink-0">
-          {project.name.charAt(0)}
-        </span>
-        <span className="text-black text-[20px] font-semibold truncate">{project.name}</span>
-      </div>
-      {project.description && (
-        <p
-          className="text-gray-main text-[12px] leading-snug line-clamp-2"
-          style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
-        >
-          {project.description}
-        </p>
-      )}
-
-      {/* Progress bar + stats */}
-      <div className="flex flex-col gap-[10px] mt-auto">
-        <div className="bg-gray-progress h-[3px] rounded-full overflow-hidden w-full">
-          <div className="bg-blue-med h-full" style={{ width: `${pct}%` }} />
-        </div>
-        <div className="flex items-center justify-between gap-3 text-[12px]">
-          <Stat label="Progress" value={`${pct}%`} />
-          <Stat label="Status" value={project.status.replace('_', ' ')} />
-          <Stat
-            label="Created"
-            value={formatDueDate(project.created_at.slice(0, 10)) ?? '—'}
-          />
-        </div>
-      </div>
-
-      {/* Lead + members */}
-      <div className="flex items-center justify-between border-t border-gray-border-light pt-3">
-        <div className="flex items-center gap-2 min-w-0">
-          {lead && (
-            <>
-              <UserGroup members={[userToMember(lead)]} size={15} />
-              <span className="text-gray-main text-[11px] uppercase tracking-[1px]">Lead</span>
-              <span className="text-gray-main">·</span>
-              <span className="text-black text-[12px] font-medium truncate">
-                {lead.nickname || `${lead.first_name} ${lead.last_name}`}
-              </span>
-            </>
-          )}
-        </div>
-        {others.length > 0 && (
-          <UserGroup members={others.map(userToMember)} size={15} max={5} />
-        )}
-      </div>
-    </div>
-  )
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-[2px]">
-      <span className="text-gray-main text-[10px] uppercase tracking-[1px]">{label}</span>
-      <span
-        className="text-black text-[14px] font-semibold capitalize"
-        style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
-      >
-        {value}
-      </span>
-    </div>
   )
 }

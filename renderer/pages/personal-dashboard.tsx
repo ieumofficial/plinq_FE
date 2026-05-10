@@ -19,6 +19,7 @@ import {
 } from '../lib/queries'
 import {
   dbPriorityToUi,
+  dbStatusToUi,
   formatDueDate,
   formatTimeRange,
   userToMember,
@@ -87,7 +88,10 @@ export default function PersonalDashboardPage() {
 
       const today = new Date()
       const [ps, ts, ms] = await Promise.all([
-        getUserProjects(u.id, { statuses: ['active'], limit: ACTIVE_PROJECTS_LIMIT }),
+        getUserProjects(u.id, {
+          statuses: ['planned', 'in_progress', 'review'],
+          limit: ACTIVE_PROJECTS_LIMIT,
+        }),
         getUserActionItems(u.id, { limit: ACTION_ITEMS_LIMIT }),
         getUserUpcomingMeetings(u.id, {
           from: startOfDay(today),
@@ -178,6 +182,7 @@ export default function PersonalDashboardPage() {
                       key={p.id}
                       name={p.name}
                       description={p.description ?? ''}
+                      status={dbStatusToUi(p.status)}
                       progress={p.progressPct ?? 0}
                       members={p.members.map(userToMember)}
                       onOpen={() => router.push(`/projects/${p.id}`)}

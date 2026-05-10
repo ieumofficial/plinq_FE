@@ -12,9 +12,9 @@ import type { Member } from '../components/ui/UserGroup'
 
 // ─── DB enums (mirror of Postgres enums) ─────────────────────────────────────
 
-export type TaskStatusDb = 'todo' | 'in_progress' | 'review' | 'blocked' | 'done'
+export type TaskStatusDb = 'planned' | 'in_progress' | 'review' | 'blocked' | 'done'
 export type TaskPriorityDb = 'low' | 'medium' | 'high' | 'urgent'
-export type ProjectStatusDb = 'planning' | 'active' | 'on_hold' | 'done'
+export type ProjectStatusDb = 'planned' | 'in_progress' | 'review' | 'blocked' | 'done'
 
 // ─── Row shapes ──────────────────────────────────────────────────────────────
 
@@ -69,7 +69,7 @@ export type MeetingRow = {
 
 export function dbStatusToUi(s: TaskStatusDb): Status {
   switch (s) {
-    case 'todo':
+    case 'planned':
       return 'planned'
     case 'in_progress':
       return 'in-progress'

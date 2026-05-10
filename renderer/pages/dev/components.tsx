@@ -12,6 +12,7 @@ import ActionItem from '../../components/ui/ActionItem'
 import Schedule from '../../components/ui/Schedule'
 import Task, { type TaskStatus } from '../../components/ui/Task'
 import ProjectCard from '../../components/ui/ProjectCard'
+import ProjectListCard from '../../components/ui/ProjectListCard'
 import MenuItem from '../../components/ui/MenuItem'
 import SideMenu, { type NavItem } from '../../components/ui/SideMenu'
 import Header from '../../components/ui/Header'
@@ -590,7 +591,7 @@ export default function ComponentsPage() {
               <ProjectCard
                 name="Apollo"
                 description="Auth migration · Identity SDK + cutover runbook for 1.2M accounts."
-                tag={{ label: 'EXEC', color: 'blue' }}
+                status="in-progress"
                 progress={73}
                 members={SAMPLE_MEMBERS}
                 onOpen={() => alert('Open')}
@@ -598,23 +599,71 @@ export default function ComponentsPage() {
               <ProjectCard
                 name="Pricing V2"
                 description="New tier matrix + billing flow updates."
-                tag={{ label: 'EXEC', color: 'amber' }}
+                status="review"
                 progress={48}
                 members={SAMPLE_MEMBERS.slice(0, 3)}
               />
               <ProjectCard
                 name="Design System"
                 description="Token migration to v4 and component library cleanup."
-                tag={{ label: 'EXEC', color: 'green' }}
+                status="done"
                 progress={91}
                 members={SAMPLE_MEMBERS.slice(0, 4)}
               />
               <ProjectCard
                 name="Theta"
                 description="Internal research project."
-                tag={{ label: 'R&D', color: 'purple' }}
+                status="planned"
                 progress={12}
                 members={SAMPLE_MEMBERS.slice(0, 2)}
+              />
+            </div>
+          </Section>
+
+          {/* PROJECT LIST CARD */}
+          <Section title="Project List Card (Projects 페이지용)">
+            <div className="grid grid-cols-2 gap-[10px]">
+              <ProjectListCard
+                name="Apollo"
+                description="Auth migration · Identity SDK + cutover runbook for 1.2M accounts."
+                status="in-progress"
+                progress={72}
+                tasksDone={94}
+                tasksTotal={130}
+                due="May 11"
+                lead={SAMPLE_MEMBERS[3]}
+                members={SAMPLE_MEMBERS}
+              />
+              <ProjectListCard
+                name="Pricing V2"
+                description="New tier matrix + billing flow updates."
+                status="review"
+                progress={48}
+                tasksDone={20}
+                tasksTotal={42}
+                due="May 30"
+                lead={SAMPLE_MEMBERS[0]}
+                members={SAMPLE_MEMBERS.slice(0, 4)}
+              />
+              <ProjectListCard
+                name="Theta"
+                status="planned"
+                progress={0}
+                tasksDone={0}
+                tasksTotal={0}
+                lead={SAMPLE_MEMBERS[1]}
+                members={SAMPLE_MEMBERS.slice(0, 2)}
+              />
+              <ProjectListCard
+                name="Design System"
+                description="Token migration to v4 and component library cleanup."
+                status="done"
+                progress={100}
+                tasksDone={56}
+                tasksTotal={56}
+                due="Apr 18"
+                lead={SAMPLE_MEMBERS[2]}
+                members={SAMPLE_MEMBERS.slice(0, 5)}
               />
             </div>
           </Section>

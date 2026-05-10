@@ -38,6 +38,10 @@ export type ProjectWithStats = ProjectRow & {
   members: UserRow[]
   /** done / total — null if no tasks yet. */
   progressPct: number | null
+  tasksTotal: number
+  tasksDone: number
+  /** Latest due_date among the project's tasks (YYYY-MM-DD), or null. */
+  nextDueDate: string | null
 }
 
 /**
@@ -87,7 +91,7 @@ export async function getUserProjects(
       .in('project_id', ids),
     supabase
       .from('tasks')
-      .select('project_id, status')
+      .select('project_id, status, due_date')
       .in('project_id', ids),
   ])
   if (membersRes.error) console.error('[queries] members for projects', membersRes.error)
@@ -105,23 +109,40 @@ export async function getUserProjects(
     membersByProject.set(pid, arr)
   }
 
-  const taskCountByProject = new Map<string, { total: number; done: number }>()
-  for (const t of (tasksRes.data ?? []) as { project_id: string; status: TaskStatusDb }[]) {
-    const c = taskCountByProject.get(t.project_id) ?? { total: 0, done: 0 }
+  const taskStatsByProject = new Map<
+    string,
+    { total: number; done: number; nextDueDate: string | null }
+  >()
+  for (const t of (tasksRes.data ?? []) as {
+    project_id: string
+    status: TaskStatusDb
+    due_date: string | null
+  }[]) {
+    const c = taskStatsByProject.get(t.project_id) ?? {
+      total: 0,
+      done: 0,
+      nextDueDate: null,
+    }
     c.total += 1
     if (t.status === 'done') c.done += 1
-    taskCountByProject.set(t.project_id, c)
+    if (t.due_date && (!c.nextDueDate || t.due_date < c.nextDueDate)) {
+      c.nextDueDate = t.due_date
+    }
+    taskStatsByProject.set(t.project_id, c)
   }
 
   return projectRows.map((p) => {
-    const counts = taskCountByProject.get(p.id)
-    const progressPct = counts && counts.total > 0
-      ? Math.round((counts.done / counts.total) * 100)
-      : null
+    const counts = taskStatsByProject.get(p.id)
+    const total = counts?.total ?? 0
+    const done = counts?.done ?? 0
+    const progressPct = total > 0 ? Math.round((done / total) * 100) : null
     return {
       ...p,
       members: membersByProject.get(p.id) ?? [],
       progressPct,
+      tasksTotal: total,
+      tasksDone: done,
+      nextDueDate: counts?.nextDueDate ?? null,
     }
   })
 }
@@ -154,7 +175,8 @@ export async function createProject(
       description: input.description?.trim() || null,
       team_id: input.team_id ?? null,
       lead_id: user.id,
-      status: input.status ?? 'active',
+      // status omitted → DB default 'planned' applies
+      ...(input.status ? { status: input.status } : {}),
     })
     .select('id')
     .single()

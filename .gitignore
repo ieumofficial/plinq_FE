@@ -13,6 +13,9 @@ next-env.d.ts
 .DS_Store
 Thumbs.db
 Icon?
+# macOS "Icon?" pattern matches our /public/icons/ on case-insensitive FS — re-include
+!**/icons
+!**/icons/**
 
 # environment variables
 .env

@@ -25,9 +25,20 @@
   --color-white-main: #F8F9FA;
   --color-white-white: #FFFFFF;
   --color-red-main: #9B3838;
+  --color-red-med: #D9534F;
+  --color-red-light: #F2DEDE;
   --color-red-dark-mode: #EB7373;
   --color-green-main: #2F6B45;
+  --color-green-med: #588F6E;
+  --color-green-light: #DCEBE0;
+  --color-brown-main: #8A5A1E;
+  --color-brown-med: #B68A48;
+  --color-brown-light: #F4E6CD;
   --color-purple-main: #5B3D8A;
+  --color-purple-light: #E5DEEF;
+  --color-white-item: #F8FAFB;
+  --color-white-secondary: #ECEEF1;
+  --color-gray-progress: #EEF1F4;
   --font-sans: "Wanted Sans Variable", "Wanted Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
 }

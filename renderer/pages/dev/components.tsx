@@ -1,0 +1,591 @@
+import { useState } from 'react'
+import Head from 'next/head'
+import Icon, { ALL_ICON_NAMES } from '../../components/ui/Icon'
+import Logo from '../../components/ui/Logo'
+import Button from '../../components/ui/Button'
+import Input from '../../components/ui/Input'
+import Tag, { type TagColor } from '../../components/ui/Tag'
+import Checkbox from '../../components/ui/Checkbox'
+import UserGroup, { type Member } from '../../components/ui/UserGroup'
+import PriorityTag, { type Priority } from '../../components/ui/PriorityTag'
+import ActionItem from '../../components/ui/ActionItem'
+import Schedule from '../../components/ui/Schedule'
+import Task, { type TaskStatus } from '../../components/ui/Task'
+import ProjectCard from '../../components/ui/ProjectCard'
+import MenuItem from '../../components/ui/MenuItem'
+import SideMenu, { type NavItem } from '../../components/ui/SideMenu'
+import Header from '../../components/ui/Header'
+import AppLayout from '../../components/ui/AppLayout'
+import Filter from '../../components/ui/Filter'
+import FilterChecklist from '../../components/ui/FilterChecklist'
+
+const TAG_COLORS: TagColor[] = ['blue', 'amber', 'green', 'red', 'gray', 'purple', 'dark']
+
+const SAMPLE_MEMBERS: Member[] = [
+  { name: 'Alice Park' },
+  { name: 'Brian Lee' },
+  { name: 'Cara Kim' },
+  { name: 'Daniel Park' },
+  { name: 'Eve Chen' },
+  { name: 'Frank Yoo' },
+]
+
+const PRIORITIES: Priority[] = ['highest', 'high', 'medium', 'low', 'lowest']
+const STATUSES: TaskStatus[] = ['planned', 'in-progress', 'review', 'done']
+
+const NAV_ITEMS: NavItem[] = [
+  { key: 'dashboard', icon: 'Dashboard', label: 'Dashboard' },
+  { key: 'projects', icon: 'Folder', label: 'Projects', count: 12 },
+  { key: 'messages', icon: 'Chat', label: 'Messages', count: 5 },
+  { key: 'calendar', icon: 'Calendar', label: 'Calendar' },
+  { key: 'tasks', icon: 'Task', label: 'Action Items', count: 7 },
+  { key: 'organization', icon: 'Organization', label: 'Organization' },
+]
+const FOOTER_ITEMS: NavItem[] = [{ key: 'settings', icon: 'Settings', label: 'Settings' }]
+
+function Section({
+  title,
+  background = 'light',
+  children,
+}: {
+  title: string
+  background?: 'light' | 'dark'
+  children: React.ReactNode
+}) {
+  const bg = background === 'dark' ? 'bg-primary-dark text-white-main' : 'bg-white text-black'
+  return (
+    <section className="border border-gray-border-light rounded-lg overflow-hidden">
+      <header className="px-6 py-3 bg-white-main border-b border-gray-border-light">
+        <h2 className="text-[14px] font-semibold text-black tracking-[-0.2px]">{title}</h2>
+      </header>
+      <div className={`p-6 ${bg}`}>{children}</div>
+    </section>
+  )
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-4 py-3 first:pt-0 last:pb-0 border-b last:border-b-0 border-gray-border-light/50">
+      <div className="w-[140px] shrink-0 text-[11px] font-medium uppercase tracking-[1px] text-gray-secondary mt-1">
+        {label}
+      </div>
+      <div className="flex flex-wrap items-center gap-3 flex-1">{children}</div>
+    </div>
+  )
+}
+
+export default function ComponentsPage() {
+  const [actionChecked, setActionChecked] = useState(false)
+  const [cb1, setCb1] = useState(false)
+  const [cb2, setCb2] = useState(true)
+  const [activeNav, setActiveNav] = useState('dashboard')
+  const [filterSel, setFilterSel] = useState('all')
+  const [calChecks, setCalChecks] = useState<Record<string, boolean>>({
+    meetings: true,
+    tasks: true,
+    deadlines: false,
+  })
+  return (
+    <>
+      <Head>
+        <title>plinq · components</title>
+      </Head>
+      <main className="min-h-screen bg-gray-extra-light p-8">
+        <div className="max-w-[1100px] mx-auto flex flex-col gap-6">
+          <header className="flex items-center justify-between">
+            <h1 className="text-[24px] font-semibold text-black">Component Showcase</h1>
+            <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-gray-secondary">
+              Phase 1 · atomic + Phase 2 · domain + Phase 3 · layout
+            </span>
+          </header>
+
+          {/* LOGO */}
+          <Section title="Logo">
+            <div className="flex flex-col gap-0">
+              <Row label="On light · 28">
+                <Logo variant="on-light" size={28} />
+              </Row>
+              <Row label="On light · 40">
+                <Logo variant="on-light" size={40} />
+              </Row>
+              <Row label="Icon only · 32">
+                <Logo variant="icon-only" size={32} />
+              </Row>
+            </div>
+          </Section>
+
+          <Section title="Logo · on dark" background="dark">
+            <div className="flex flex-col gap-0">
+              <Row label="On dark · 28">
+                <Logo variant="on-dark" size={28} />
+              </Row>
+              <Row label="On dark · 40">
+                <Logo variant="on-dark" size={40} />
+              </Row>
+            </div>
+          </Section>
+
+          {/* ICONS */}
+          <Section title={`Icons (${ALL_ICON_NAMES.length})`}>
+            <div className="grid grid-cols-6 gap-4">
+              {ALL_ICON_NAMES.map((name) => (
+                <div
+                  key={name}
+                  className="flex flex-col items-center gap-2 p-3 border border-gray-border-light rounded-md"
+                >
+                  <span className="text-black">
+                    <Icon name={name} size={20} />
+                  </span>
+                  <span className="text-[10px] text-gray-main font-mono truncate w-full text-center">
+                    {name}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6">
+              <p className="text-[11px] uppercase tracking-[1px] text-gray-secondary mb-2">
+                Color follows currentColor
+              </p>
+              <div className="flex items-center gap-4 text-[24px]">
+                <span className="text-black">
+                  <Icon name="Calendar" size={24} />
+                </span>
+                <span className="text-blue-main">
+                  <Icon name="Calendar" size={24} />
+                </span>
+                <span className="text-red-main">
+                  <Icon name="Calendar" size={24} />
+                </span>
+                <span className="text-green-main">
+                  <Icon name="Calendar" size={24} />
+                </span>
+                <span className="text-gray-secondary">
+                  <Icon name="Calendar" size={24} />
+                </span>
+              </div>
+            </div>
+          </Section>
+
+          {/* BUTTONS */}
+          <Section title="Button">
+            <div className="flex flex-col gap-0">
+              <Row label="Primary">
+                <Button>Button</Button>
+                <Button iconLeft="Add">Button</Button>
+                <Button iconRight="ArrowRight">Button</Button>
+                <Button iconOnly="Add" />
+                <Button disabled>Disabled</Button>
+              </Row>
+              <Row label="Secondary">
+                <Button variant="secondary">Button</Button>
+                <Button variant="secondary" iconLeft="Add">
+                  Button
+                </Button>
+                <Button variant="secondary" iconRight="ArrowRight">
+                  Button
+                </Button>
+                <Button variant="secondary" iconOnly="Dot-Menu" />
+                <Button variant="secondary" disabled>
+                  Disabled
+                </Button>
+              </Row>
+              <Row label="Subtle">
+                <Button variant="subtle">Button</Button>
+                <Button variant="subtle" iconLeft="Filter">
+                  Filter
+                </Button>
+              </Row>
+              <Row label="Tertiary">
+                <Button variant="tertiary">Button</Button>
+                <Button variant="tertiary" iconLeft="Add">
+                  Button
+                </Button>
+              </Row>
+              <Row label="Compact">
+                <Button size="compact">Button</Button>
+                <Button size="compact" variant="secondary">
+                  Button
+                </Button>
+                <Button size="compact" iconOnly="Search" />
+              </Row>
+              <Row label="Mini">
+                <Button size="mini" variant="secondary">
+                  Button
+                </Button>
+                <Button size="mini" variant="secondary" iconLeft="Add">
+                  Button
+                </Button>
+                <Button size="mini" variant="subtle" iconRight="ArrowRight">
+                  View all
+                </Button>
+              </Row>
+            </div>
+          </Section>
+
+          {/* INPUTS */}
+          <Section title="Input">
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-wrap gap-6">
+                <Input label="Default" placeholder="Enter value" />
+                <Input label="Disabled" variant="disabled" defaultValue="Locked value" />
+              </div>
+              <div className="flex flex-wrap gap-6">
+                <Input label="Error" variant="error" defaultValue="bad@" errorMessage="Invalid email" />
+                <Input variant="search" placeholder="Search…" />
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Input · translucent" background="dark">
+            <div className="flex flex-wrap gap-6">
+              <Input label="Email" variant="translucent" defaultValue="yujin@company.co" />
+              <Input label="Password" variant="translucent" type="password" placeholder="••••••" />
+            </div>
+          </Section>
+
+          {/* TAG */}
+          <Section title="Tag">
+            <div className="flex flex-col gap-0">
+              {(['sm', 'md', 'lg'] as const).map((s) => (
+                <Row key={s} label={`Size · ${s}`}>
+                  {TAG_COLORS.map((c) => (
+                    <Tag key={c} color={c} size={s}>
+                      {c}
+                    </Tag>
+                  ))}
+                </Row>
+              ))}
+              <Row label="With icon">
+                <Tag color="blue" icon="Sparkle">Now in beta</Tag>
+                <Tag color="red" icon="Highest">Highest</Tag>
+                <Tag color="amber" icon="High">High</Tag>
+                <Tag color="green" icon="Low">Low</Tag>
+                <Tag color="gray" icon="Lowest">Lowest</Tag>
+              </Row>
+              <Row label="No uppercase">
+                <Tag color="blue" uppercase={false}>Apollo</Tag>
+                <Tag color="purple" uppercase={false} size="lg">Project Theta</Tag>
+              </Row>
+            </div>
+          </Section>
+
+          {/* CHECKBOX */}
+          <Section title="Checkbox">
+            <Row label="States">
+              <Checkbox checked={cb1} onChange={setCb1} />
+              <Checkbox checked={cb2} onChange={setCb2} />
+              <Checkbox checked={cb1} onChange={setCb1} label="Click me" />
+              <Checkbox checked={cb2} onChange={setCb2} label="Send notifications" />
+            </Row>
+          </Section>
+
+          {/* PRIORITY TAG */}
+          <Section title="Priority Tag">
+            <Row label="All priorities">
+              {PRIORITIES.map((p) => (
+                <PriorityTag key={p} priority={p} />
+              ))}
+            </Row>
+            <Row label="Sizes">
+              <PriorityTag priority="highest" size="sm" />
+              <PriorityTag priority="highest" size="md" />
+              <PriorityTag priority="highest" size="lg" />
+            </Row>
+          </Section>
+
+          {/* USER GROUP */}
+          <Section title="User Group">
+            <Row label="1 — 5 members">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <UserGroup key={n} members={SAMPLE_MEMBERS.slice(0, n)} />
+              ))}
+            </Row>
+            <Row label="6 members (overflow)">
+              <UserGroup members={SAMPLE_MEMBERS} max={5} />
+            </Row>
+            <Row label="Sizes (15, 20, 28)">
+              <UserGroup members={SAMPLE_MEMBERS.slice(0, 4)} size={15} />
+              <UserGroup members={SAMPLE_MEMBERS.slice(0, 4)} size={20} />
+              <UserGroup members={SAMPLE_MEMBERS.slice(0, 4)} size={28} />
+            </Row>
+            <Row label="Blue overflow">
+              <UserGroup members={SAMPLE_MEMBERS} max={3} overflowVariant="blue" borderColor="#FFFFFF" />
+            </Row>
+          </Section>
+
+          {/* ACTION ITEM */}
+          <Section title="Action Item">
+            <div className="flex flex-col gap-[5px]">
+              <ActionItem
+                title="Vendor SOC2 questionnaire"
+                date="Apr 16"
+                priority="high"
+                projectTag={{ label: 'Project name', color: 'purple' }}
+                checked={actionChecked}
+                onCheckedChange={setActionChecked}
+              />
+              <ActionItem
+                title="Review Q4 roadmap"
+                date="Apr 18"
+                priority="medium"
+                projectTag={{ label: 'Apollo', color: 'blue' }}
+              />
+              <ActionItem
+                title="Done — submit timesheets"
+                date="Apr 10"
+                priority="lowest"
+                projectTag={{ label: 'Internal', color: 'gray' }}
+                checked
+              />
+            </div>
+          </Section>
+
+          {/* SCHEDULE */}
+          <Section title="Schedule · full">
+            <div className="flex flex-col gap-[10px]">
+              <Schedule
+                title="Apollo standup"
+                time="9:00 — 9:30 AM"
+                isCurrent
+                location="Zoom"
+                attendees={SAMPLE_MEMBERS}
+                attendeesLabel="Jane Doe, Stuart Smith, …"
+                onJoin={() => alert('Join clicked')}
+              />
+              <Schedule
+                title="Design Critique"
+                time="10:00 — 11:30 AM"
+                location="Conference Room B"
+                attendees={SAMPLE_MEMBERS.slice(0, 4)}
+                attendeesLabel="Cara Kim, Daniel Park"
+              />
+            </div>
+          </Section>
+          <Section title="Schedule · mini">
+            <Row label="Mini">
+              <Schedule size="mini" title="Apollo standup" time="9:00 AM" initial="A" />
+              <Schedule size="mini" title="Pricing review" time="2:00 PM" isCurrent initial="P" />
+            </Row>
+          </Section>
+
+          {/* TASK */}
+          <Section title="Task (Kanban card)">
+            <div className="flex flex-wrap gap-3">
+              {STATUSES.map((status, i) => (
+                <Task
+                  key={status}
+                  id={`APO-${235 + i}`}
+                  title="Email template: account migration notice"
+                  status={status}
+                  priority={(['highest', 'high', 'medium', 'low'] as Priority[])[i] ?? 'medium'}
+                  dueDate="Apr 22"
+                  assignees={SAMPLE_MEMBERS.slice(0, 3 + i)}
+                />
+              ))}
+            </div>
+          </Section>
+
+          {/* MENU ITEM */}
+          <Section title="Menu Item">
+            <Row label="Default">
+              <div className="bg-[#F4F6F8] p-3 rounded-md inline-flex flex-col gap-1">
+                <MenuItem icon="Dashboard" label="Dashboard" />
+                <MenuItem icon="Folder" label="Projects" count={12} />
+                <MenuItem icon="Chat" label="Messages" count={5} />
+              </div>
+            </Row>
+            <Row label="Selected">
+              <div className="bg-[#F4F6F8] p-3 rounded-md inline-flex flex-col gap-1">
+                <MenuItem icon="Dashboard" label="Dashboard" selected />
+                <MenuItem icon="Folder" label="Projects" count={12} selected />
+              </div>
+            </Row>
+            <Row label="Thin">
+              <div className="bg-[#F4F6F8] p-3 rounded-md inline-flex flex-col gap-1">
+                <MenuItem icon="Dashboard" label="Dashboard" thin />
+                <MenuItem icon="Folder" label="Projects" count={12} thin selected />
+              </div>
+            </Row>
+            <Row label="Stacked (icon-only rail)">
+              <div className="bg-[#F4F6F8] p-3 rounded-md inline-flex flex-col gap-1 items-center">
+                <MenuItem icon="Dashboard" label="Dashboard" stacked selected />
+                <MenuItem icon="Folder" label="Projects" stacked />
+                <MenuItem icon="Calendar" label="Calendar" stacked />
+                <MenuItem icon="Settings" label="Settings" stacked />
+              </div>
+            </Row>
+          </Section>
+
+          {/* SIDE MENU */}
+          <Section title="Side Menu (full + stacked)">
+            <div className="flex gap-6 items-start">
+              <div className="border border-gray-border-light rounded-md overflow-hidden h-[600px]">
+                <SideMenu
+                  orgName="Plinq"
+                  sectionLabel="Personal Space"
+                  items={NAV_ITEMS}
+                  footerItems={FOOTER_ITEMS}
+                  activeKey={activeNav}
+                  onItemClick={setActiveNav}
+                  onCreateNew={() => alert('Create new')}
+                  userInitials="YP"
+                  userName="Yujin Park"
+                />
+              </div>
+              <div className="border border-gray-border-light rounded-md overflow-hidden h-[600px]">
+                <SideMenu
+                  orgName="Plinq"
+                  items={NAV_ITEMS}
+                  footerItems={FOOTER_ITEMS}
+                  activeKey={activeNav}
+                  onItemClick={setActiveNav}
+                  onCreateNew={() => alert('Create new')}
+                  userInitials="YP"
+                  userName="Yujin Park"
+                  stacked
+                />
+              </div>
+            </div>
+          </Section>
+
+          {/* HEADER */}
+          <Section title="Header">
+            <div className="flex flex-col gap-4">
+              <div className="border border-gray-border-light rounded-md bg-white">
+                <Header
+                  eyebrow="Workspace · Friday, April 10"
+                  title="Good morning, Yujin"
+                  hasNotifications
+                  onAskAi={() => alert('AI')}
+                  onCreateNew={() => alert('Create')}
+                />
+              </div>
+              <div className="border border-gray-border-light rounded-md bg-white">
+                <Header hasNotifications={false} />
+              </div>
+            </div>
+          </Section>
+
+          {/* APP LAYOUT */}
+          <Section title="App Layout (composition demo)">
+            <div className="border border-gray-border-light rounded-md overflow-hidden h-[600px]">
+              <AppLayout
+                sidebar={
+                  <SideMenu
+                    orgName="Plinq"
+                    sectionLabel="Personal Space"
+                    items={NAV_ITEMS}
+                    footerItems={FOOTER_ITEMS}
+                    activeKey={activeNav}
+                    onItemClick={setActiveNav}
+                    onCreateNew={() => undefined}
+                    userInitials="YP"
+                    userName="Yujin Park"
+                  />
+                }
+                header={
+                  <div className="bg-white border-b border-gray-border-light">
+                    <Header
+                      eyebrow="Workspace · Friday, April 10"
+                      title="Good morning, Yujin"
+                      hasNotifications
+                    />
+                  </div>
+                }
+              >
+                <div className="p-8">
+                  <p className="text-black text-[14px]">
+                    Page content goes here. Active item: <b>{activeNav}</b>.
+                  </p>
+                </div>
+              </AppLayout>
+            </div>
+          </Section>
+
+          {/* FILTER */}
+          <Section title="Filter chip">
+            <Row label="Toolbar">
+              <div className="bg-[#EFF1F4] p-2 rounded-md inline-flex gap-1">
+                {[
+                  { k: 'all', l: 'All', c: 12 },
+                  { k: 'mine', l: 'Mine', c: 4 },
+                  { k: 'overdue', l: 'Overdue', c: 2 },
+                ].map((f) => (
+                  <Filter
+                    key={f.k}
+                    label={f.l}
+                    count={f.c}
+                    selected={filterSel === f.k}
+                    onClick={() => setFilterSel(f.k)}
+                  />
+                ))}
+              </div>
+            </Row>
+          </Section>
+
+          {/* FILTER CHECKLIST */}
+          <Section title="Filter Checklist (calendar sidebar)">
+            <div className="border border-gray-border-light rounded-md p-4 bg-white inline-block">
+              <FilterChecklist
+                label="Meetings"
+                count={14}
+                color="#5B7FB6"
+                checked={calChecks.meetings}
+                onChange={(v) => setCalChecks((s) => ({ ...s, meetings: v }))}
+              />
+              <FilterChecklist
+                label="Tasks"
+                count={28}
+                color="#588F6E"
+                checked={calChecks.tasks}
+                onChange={(v) => setCalChecks((s) => ({ ...s, tasks: v }))}
+              />
+              <FilterChecklist
+                label="Deadlines"
+                count={6}
+                color="#9B3838"
+                checked={calChecks.deadlines}
+                onChange={(v) => setCalChecks((s) => ({ ...s, deadlines: v }))}
+              />
+            </div>
+          </Section>
+
+          {/* PROJECT CARD */}
+          <Section title="Project Card">
+            <div className="flex flex-wrap gap-3">
+              <ProjectCard
+                name="Apollo"
+                description="Auth migration · Identity SDK + cutover runbook for 1.2M accounts."
+                tag={{ label: 'EXEC', color: 'blue' }}
+                progress={73}
+                members={SAMPLE_MEMBERS}
+                onOpen={() => alert('Open')}
+              />
+              <ProjectCard
+                name="Pricing V2"
+                description="New tier matrix + billing flow updates."
+                tag={{ label: 'EXEC', color: 'amber' }}
+                progress={48}
+                members={SAMPLE_MEMBERS.slice(0, 3)}
+              />
+              <ProjectCard
+                name="Design System"
+                description="Token migration to v4 and component library cleanup."
+                tag={{ label: 'EXEC', color: 'green' }}
+                progress={91}
+                members={SAMPLE_MEMBERS.slice(0, 4)}
+              />
+              <ProjectCard
+                name="Theta"
+                description="Internal research project."
+                tag={{ label: 'R&D', color: 'purple' }}
+                progress={12}
+                members={SAMPLE_MEMBERS.slice(0, 2)}
+              />
+            </div>
+          </Section>
+        </div>
+      </main>
+    </>
+  )
+}

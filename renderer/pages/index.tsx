@@ -2,7 +2,8 @@ import { useEffect, type CSSProperties } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import DarkBackground from '../components/DarkBackground'
-import PlinqLogo from '../components/PlinqLogo'
+import Logo from '../components/ui/Logo'
+import Button from '../components/ui/Button'
 import { supabase } from '../lib/supabase'
 
 const noDrag: CSSProperties = { WebkitAppRegion: 'no-drag' } as CSSProperties
@@ -46,28 +47,26 @@ export default function LoginPage() {
       </Head>
       <DarkBackground>
         <div className="flex-1 flex flex-col items-center justify-center gap-6 px-10 py-16">
-          {/* Logo */}
-          <PlinqLogo size="big" />
+          <Logo variant="on-dark" size={48} />
 
-          {/* Subtitle */}
-          <p className="text-[#6B7B86] text-[14px]">
+          <p className="text-gray-main text-[14px]">
             Your AI co-pilot for every project.
           </p>
 
-          {/* Get Started button */}
-          <button
-            type="button"
-            onClick={handleGetStarted}
-            style={noDrag}
-            className="w-full max-w-[309px] bg-white border border-[#E6EAEE] rounded-[10px] px-4 py-3 text-[#16242E] text-[12px] font-semibold hover:bg-white/90 transition-colors cursor-pointer"
-          >
-            Get Started
-          </button>
+          <div className="w-full max-w-[309px]" style={noDrag}>
+            <Button
+              variant="secondary"
+              onClick={handleGetStarted}
+              className="w-full"
+            >
+              Get Started
+            </Button>
+          </div>
         </div>
 
         {/* Footer */}
         <div className="text-center pb-6 px-6">
-          <p className="text-[#6B7B86] text-[10px]">
+          <p className="text-gray-main text-[10px]">
             &copy; 2026 plinq. All rights reserved.
           </p>
         </div>

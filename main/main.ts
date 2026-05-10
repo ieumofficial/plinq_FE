@@ -73,10 +73,18 @@ app.on('open-url', (event, url) => {
 
   await app.whenReady()
 
+  // macOS: hiddenInset draws traffic lights inside our custom header.
+  // Windows/Linux: frameless so we can render our own caption controls.
+  const isMac = process.platform === 'darwin'
   mainWindow = createWindow('main', {
     width: 1440,
     height: 900,
-    titleBarStyle: 'hiddenInset',
+    minWidth: 960,
+    minHeight: 600,
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    frame: isMac, // Windows/Linux: frameless
+    // Center traffic lights vertically in the 64px header (lights are ~14px tall).
+    trafficLightPosition: isMac ? { x: 16, y: 25 } : undefined,
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.js'),
     },
@@ -98,6 +106,19 @@ app.on('window-all-closed', () => {
 // IPC: open URL in system browser
 ipcMain.on('open-external', (_event, url: string) => {
   shell.openExternal(url)
+})
+
+// IPC: window controls (used by custom Windows caption buttons)
+ipcMain.on('window-minimize', () => {
+  mainWindow?.minimize()
+})
+ipcMain.on('window-maximize', () => {
+  if (!mainWindow) return
+  if (mainWindow.isMaximized()) mainWindow.unmaximize()
+  else mainWindow.maximize()
+})
+ipcMain.on('window-close', () => {
+  mainWindow?.close()
 })
 
 // IPC: open login in a separate BrowserWindow (fallback for deep link issues)

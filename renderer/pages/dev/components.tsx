@@ -458,7 +458,6 @@ export default function ComponentsPage() {
             <div className="flex gap-6 items-start">
               <div className="border border-gray-border-light rounded-md overflow-hidden h-[600px]">
                 <SideMenu
-                  orgName="Plinq"
                   sectionLabel="Personal Space"
                   items={NAV_ITEMS}
                   footerItems={FOOTER_ITEMS}
@@ -471,7 +470,6 @@ export default function ComponentsPage() {
               </div>
               <div className="border border-gray-border-light rounded-md overflow-hidden h-[600px]">
                 <SideMenu
-                  orgName="Plinq"
                   items={NAV_ITEMS}
                   footerItems={FOOTER_ITEMS}
                   activeKey={activeNav}
@@ -509,7 +507,6 @@ export default function ComponentsPage() {
               <AppLayout
                 sidebar={
                   <SideMenu
-                    orgName="Plinq"
                     sectionLabel="Personal Space"
                     items={NAV_ITEMS}
                     footerItems={FOOTER_ITEMS}

@@ -11,8 +11,6 @@ export type NavItem = {
 }
 
 type Props = {
-  /** Organization label shown at top. */
-  orgName: string
   /** Section header (e.g., "Personal Space" / "Project · Apollo"). */
   sectionLabel?: string
   /** Active item key. */
@@ -36,7 +34,6 @@ type Props = {
 }
 
 export default function SideMenu({
-  orgName,
   sectionLabel,
   activeKey,
   items,
@@ -49,63 +46,49 @@ export default function SideMenu({
   sectionExtra,
 }: Props) {
   const widthClass = stacked ? 'w-[59px]' : 'w-[200px]'
-  const padding = stacked ? 'px-[12px] py-[18px]' : 'px-[12px] py-[18px]'
+  // Less top padding now that the org block lives in the header above.
+  const padding = 'pt-[5px] pb-[18px] px-[12px]'
 
   return (
     <aside
       className={`bg-[#F4F6F8] h-full flex flex-col ${stacked ? 'items-center' : 'items-start'} justify-between ${padding} ${widthClass} shrink-0`}
     >
-      {/* Top */}
-      <div className={`flex flex-col gap-[20px] w-full ${stacked ? 'items-center' : 'items-start'}`}>
-        {/* Org */}
-        <div className={`flex items-center ${stacked ? 'flex-col justify-center' : 'gap-[5px]'}`}>
-          <span className="bg-primary-main text-white rounded-[2px] w-[23px] h-[23px] inline-flex items-center justify-center text-[12px] font-semibold uppercase">
-            {orgName.charAt(0)}
-          </span>
-          {!stacked && (
-            <span className="text-black text-[12px] font-semibold capitalize whitespace-nowrap">
-              {orgName}
-            </span>
-          )}
-        </div>
-
-        {/* Section + Nav */}
-        <div className={`flex flex-col gap-[10px] w-full ${stacked ? 'items-center' : 'items-start'}`}>
-          {!stacked && sectionLabel && (
-            <p className="text-primary-main text-[10px] font-medium uppercase tracking-[1.5px] w-full">
-              {sectionLabel}
-            </p>
-          )}
-          {!stacked && sectionExtra}
-          <nav className={`flex flex-col gap-[5px] w-full ${stacked ? 'items-center' : 'items-start'}`}>
-            {items.map((it) => (
-              <MenuItem
-                key={it.key}
-                icon={it.icon}
-                label={it.label}
-                count={it.count}
-                selected={it.key === activeKey}
-                stacked={stacked}
-                onClick={() => onItemClick?.(it.key)}
-              />
-            ))}
-          </nav>
-          {onCreateNew && (
-            stacked ? (
-              <Button size="compact" variant="secondary" iconOnly="Add" onClick={onCreateNew} />
-            ) : (
-              <Button
-                variant="secondary"
-                size="compact"
-                iconLeft="Add"
-                onClick={onCreateNew}
-                className="w-full"
-              >
-                Create new
-              </Button>
-            )
-          )}
-        </div>
+      {/* Top: Section + Nav */}
+      <div className={`flex flex-col gap-[10px] w-full ${stacked ? 'items-center' : 'items-start'}`}>
+        {!stacked && sectionLabel && (
+          <p className="text-primary-main text-[10px] font-medium uppercase tracking-[1.5px] w-full">
+            {sectionLabel}
+          </p>
+        )}
+        {!stacked && sectionExtra}
+        <nav className={`flex flex-col gap-[5px] w-full ${stacked ? 'items-center' : 'items-start'}`}>
+          {items.map((it) => (
+            <MenuItem
+              key={it.key}
+              icon={it.icon}
+              label={it.label}
+              count={it.count}
+              selected={it.key === activeKey}
+              stacked={stacked}
+              onClick={() => onItemClick?.(it.key)}
+            />
+          ))}
+        </nav>
+        {onCreateNew && (
+          stacked ? (
+            <Button size="compact" variant="secondary" iconOnly="Add" onClick={onCreateNew} />
+          ) : (
+            <Button
+              variant="secondary"
+              size="compact"
+              iconLeft="Add"
+              onClick={onCreateNew}
+              className="w-full"
+            >
+              Create new
+            </Button>
+          )
+        )}
       </div>
 
       {/* Footer */}

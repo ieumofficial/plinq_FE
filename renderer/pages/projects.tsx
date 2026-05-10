@@ -1,131 +1,226 @@
+import { useEffect, useMemo, useState } from 'react'
 import Head from 'next/head'
-import AuthLayout from '../components/AuthLayout'
+import { useRouter } from 'next/router'
+import PersonalAppShell from '../components/PersonalAppShell'
+import Input from '../components/ui/Input'
+import Button from '../components/ui/Button'
+import Tag from '../components/ui/Tag'
+import UserGroup from '../components/ui/UserGroup'
+import Icon from '../components/ui/Icon'
+import {
+  getCurrentUser,
+  getUserProjects,
+  type ProjectWithStats,
+} from '../lib/queries'
+import { formatDueDate, userToMember, type UserRow } from '../lib/types'
 
-type Team = {
-  id: number
-  name: string
-  active: boolean
+export default function ProjectsPage() {
+  const router = useRouter()
+  const [, setUser] = useState<UserRow | null>(null)
+  const [projects, setProjects] = useState<ProjectWithStats[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const u = await getCurrentUser()
+      if (cancelled) return
+      if (!u) {
+        router.push('/')
+        return
+      }
+      setUser(u)
+      const ps = await getUserProjects(u.id)
+      if (cancelled) return
+      setProjects(ps)
+      setLoading(false)
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [router])
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return projects
+    const q = search.toLowerCase()
+    return projects.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.description?.toLowerCase().includes(q) ||
+        p.category?.toLowerCase().includes(q)
+    )
+  }, [projects, search])
+
+  return (
+    <>
+      <Head>
+        <title>plinq · Projects</title>
+      </Head>
+      <PersonalAppShell active="projects">
+        <div className="p-6 flex flex-col gap-6">
+          {/* Toolbar */}
+          <div className="flex items-end justify-between gap-4">
+            <h1 className="text-black text-[28px] font-semibold leading-tight">
+              Open a project to{' '}
+              <em
+                className="not-italic italic text-blue-main font-medium"
+                style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
+              >
+                focus.
+              </em>
+            </h1>
+            <div className="flex items-center gap-[10px]">
+              <Input
+                variant="search"
+                placeholder="Search projects"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <Button size="compact" variant="secondary" iconLeft="Filter">
+                Sort
+              </Button>
+              <Button size="compact" iconLeft="Add">
+                New project
+              </Button>
+            </div>
+          </div>
+
+          {/* Grid */}
+          {loading ? (
+            <p className="text-gray-secondary text-[12px]">Loading projects…</p>
+          ) : filtered.length === 0 ? (
+            <div className="bg-white-white border border-gray-border-light rounded-[10px] p-12 text-center">
+              <p className="text-gray-secondary text-[14px]">
+                {projects.length === 0
+                  ? 'No projects yet. Create your first one above.'
+                  : 'No projects match your search.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-[10px]">
+              {filtered.map((p) => (
+                <ProjectListCard
+                  key={p.id}
+                  project={p}
+                  onOpen={() => router.push(`/projects/${p.id}`)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </PersonalAppShell>
+    </>
+  )
 }
 
-type Project = {
-  id: number
-  name: string
-  teamTag: string
-  teamTagBg: string
-  members: number
-  totalTasks: number
-  progress: number
-}
+/**
+ * Larger project card used on the dedicated Projects page.
+ * Shows extra stats (progress, status, created) compared to the dashboard
+ * widget's compact ProjectCard.
+ */
+function ProjectListCard({
+  project,
+  onOpen,
+}: {
+  project: ProjectWithStats
+  onOpen: () => void
+}) {
+  const lead = project.members.find((m) => m.id === project.lead_id)
+  const others = project.members.filter((m) => m.id !== project.lead_id)
+  const pct = project.progressPct ?? 0
 
-const teams: Team[] = [
-  { id: 1, name: 'Team A', active: true },
-  { id: 2, name: 'Team B', active: false },
-  { id: 3, name: '', active: false },
-  { id: 4, name: '', active: false },
-]
-
-const projects: Project[] = [
-  { id: 1, name: 'Project 1', teamTag: '# teamA', teamTagBg: '#ffffff', members: 4, totalTasks: 20, progress: 80 },
-  { id: 2, name: 'Project 1', teamTag: '# teamB', teamTagBg: '#c9c9c9', members: 4, totalTasks: 20, progress: 80 },
-  { id: 3, name: 'Project 1', teamTag: '# teamB', teamTagBg: '#c9c9c9', members: 4, totalTasks: 20, progress: 80 },
-]
-
-function ProfileAvatar({ className }: { className?: string }) {
   return (
     <div
-      className={`w-[35px] h-[36px] bg-white border border-black rounded-full flex items-center justify-center ${className || ''}`}
+      onClick={onOpen}
+      className="bg-white-white border border-gray-border-light rounded-[10px] p-[20px] flex flex-col gap-4 cursor-pointer hover:shadow-sm transition-shadow"
     >
-      <svg width="18" height="22" viewBox="0 0 18 22" fill="none">
-        <circle cx="9" cy="6" r="5.5" stroke="black" strokeWidth="1.1" />
-        <path d="M0.5 21C0.5 17.4 4.3 14.5 9 14.5C13.7 14.5 17.5 17.4 17.5 21" stroke="black" strokeWidth="1.1" />
-      </svg>
+      {/* Header: tag + dot menu */}
+      <div className="flex items-start justify-between">
+        {project.category ? (
+          <Tag color="blue" size="sm">
+            {project.category}
+          </Tag>
+        ) : (
+          <span />
+        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            // TODO: open project menu
+          }}
+          className="text-gray-secondary hover:text-black p-1 rounded"
+          aria-label="Project options"
+        >
+          <Icon name="Dot-Menu" size={15} />
+        </button>
+      </div>
+
+      {/* Title + description */}
+      <div className="flex items-center gap-[10px]">
+        <span className="bg-primary-main text-white rounded-[6px] w-[28px] h-[28px] inline-flex items-center justify-center text-[14px] font-bold uppercase shrink-0">
+          {project.name.charAt(0)}
+        </span>
+        <span className="text-black text-[20px] font-semibold truncate">{project.name}</span>
+      </div>
+      {project.description && (
+        <p
+          className="text-gray-main text-[12px] leading-snug line-clamp-2"
+          style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
+        >
+          {project.description}
+        </p>
+      )}
+
+      {/* Progress bar + stats */}
+      <div className="flex flex-col gap-[10px] mt-auto">
+        <div className="bg-gray-progress h-[3px] rounded-full overflow-hidden w-full">
+          <div className="bg-blue-med h-full" style={{ width: `${pct}%` }} />
+        </div>
+        <div className="flex items-center justify-between gap-3 text-[12px]">
+          <Stat label="Progress" value={`${pct}%`} />
+          <Stat label="Status" value={project.status.replace('_', ' ')} />
+          <Stat
+            label="Created"
+            value={formatDueDate(project.created_at.slice(0, 10)) ?? '—'}
+          />
+        </div>
+      </div>
+
+      {/* Lead + members */}
+      <div className="flex items-center justify-between border-t border-gray-border-light pt-3">
+        <div className="flex items-center gap-2 min-w-0">
+          {lead && (
+            <>
+              <UserGroup members={[userToMember(lead)]} size={15} />
+              <span className="text-gray-main text-[11px] uppercase tracking-[1px]">Lead</span>
+              <span className="text-gray-main">·</span>
+              <span className="text-black text-[12px] font-medium truncate">
+                {lead.nickname || `${lead.first_name} ${lead.last_name}`}
+              </span>
+            </>
+          )}
+        </div>
+        {others.length > 0 && (
+          <UserGroup members={others.map(userToMember)} size={15} max={5} />
+        )}
+      </div>
     </div>
   )
 }
 
-export default function ProjectsPage() {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <>
-      <Head>
-        <title>Projects - Plow</title>
-      </Head>
-      <AuthLayout>
-        <div className="absolute top-[46px] left-[36px] right-[36px] flex flex-col gap-[30px]">
-          {/* Page title */}
-          <h1 className="font-sans font-medium text-[50px] leading-[24px] tracking-[0.2px] text-black">
-            Projects
-          </h1>
-
-          {/* Team filter tabs */}
-          <div className="flex items-center gap-[16px]">
-            {teams.map((team) => (
-              <button
-                key={team.id}
-                type="button"
-                className={`w-[183px] h-[71px] rounded-lg border-2 border-[#afb1b6] font-sans font-medium text-[20px] leading-[24px] tracking-[0.2px] text-black text-center cursor-pointer ${
-                  team.active
-                    ? 'bg-white'
-                    : team.name
-                      ? 'bg-[#c9c9c9]'
-                      : 'bg-[#efeff0]'
-                }`}
-              >
-                {team.name}
-              </button>
-            ))}
-          </div>
-
-          {/* Project list */}
-          <div className="flex flex-col gap-[28px]">
-            {projects.map((project) => (
-              <div
-                key={project.id}
-                className="w-full h-[99px] bg-[#efeff0] border-2 border-[#afb1b6] rounded-lg flex items-center px-[29px] relative cursor-pointer"
-              >
-                {/* Project name + arrow */}
-                <div className="flex items-center gap-[5px]">
-                  <span className="font-sans font-medium text-[24px] leading-[24px] tracking-[0.2px] text-black whitespace-nowrap">
-                    {project.name}
-                  </span>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                    <path d="M9 6L15 12L9 18" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-
-                {/* Member avatars */}
-                <div className="flex items-center ml-[200px] -space-x-[13px]">
-                  {Array.from({ length: Math.min(project.members, 4) }).map((_, i) => (
-                    <ProfileAvatar key={i} />
-                  ))}
-                </div>
-
-                {/* Progress section */}
-                <div className="flex flex-col gap-[3px] ml-auto mr-[180px] w-[456px]">
-                  <span className="font-sans font-medium text-[16px] leading-[normal] tracking-[0.2px] text-black">
-                    {project.totalTasks} Tasks | {project.progress}%
-                  </span>
-                  <div className="relative w-full h-[21px] bg-[#d9d9d9]">
-                    <div
-                      className="absolute left-0 top-0 h-full bg-black"
-                      style={{ width: `${(project.progress / 100) * 456}px` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Team tag */}
-                <div
-                  className="absolute right-[40px] top-1/2 -translate-y-1/2 w-[114px] h-[40px] rounded-[30px] flex items-center justify-center"
-                  style={{ backgroundColor: project.teamTagBg }}
-                >
-                  <span className="font-sans font-medium text-[14px] leading-[24px] tracking-[0.2px] text-[#414040]">
-                    {project.teamTag}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </AuthLayout>
-    </>
+    <div className="flex flex-col gap-[2px]">
+      <span className="text-gray-main text-[10px] uppercase tracking-[1px]">{label}</span>
+      <span
+        className="text-black text-[14px] font-semibold capitalize"
+        style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+      >
+        {value}
+      </span>
+    </div>
   )
 }

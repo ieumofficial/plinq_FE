@@ -77,13 +77,24 @@ function Section({
   background?: 'light' | 'dark'
   children: React.ReactNode
 }) {
-  const bg = background === 'dark' ? 'bg-primary-dark text-white-main' : 'bg-white text-black'
+  const isDark = background === 'dark'
   return (
-    <section className="border border-gray-border-light rounded-lg overflow-hidden">
-      <header className="px-6 py-3 bg-white-main border-b border-gray-border-light">
-        <h2 className="text-[14px] font-semibold text-black tracking-[-0.2px]">{title}</h2>
+    <section
+      className="border border-gray-border-light rounded-lg overflow-hidden"
+      style={{ backgroundColor: isDark ? '#2E434E' : '#FFFFFF' }}
+    >
+      <header
+        className="px-6 py-3 border-b border-gray-border-light"
+        style={{
+          backgroundColor: isDark ? '#1F2F38' : '#F8F9FA',
+          color: isDark ? '#F8F9FA' : '#16242E',
+        }}
+      >
+        <h2 className="text-[14px] font-semibold tracking-[-0.2px]">{title}</h2>
       </header>
-      <div className={`p-6 ${bg}`}>{children}</div>
+      <div className="p-6" style={{ color: isDark ? '#F8F9FA' : '#16242E' }}>
+        {children}
+      </div>
     </section>
   )
 }

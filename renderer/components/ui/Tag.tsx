@@ -28,7 +28,7 @@ const colorStyles: Record<TagColor, { bg: string; text: string }> = {
   green: { bg: 'bg-[#DCEBE0]', text: 'text-green-main' },
   red: { bg: 'bg-[#F2DEDE]', text: 'text-red-main' },
   gray: { bg: 'bg-gray-extra-light', text: 'text-gray-main' },
-  purple: { bg: 'bg-[#E5DCEF]', text: 'text-purple-main' },
+  purple: { bg: 'bg-purple-light', text: 'text-purple-main' },
   dark: { bg: 'bg-primary-dark', text: 'text-white-main' },
 }
 

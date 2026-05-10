@@ -18,6 +18,12 @@ import Header from '../../components/ui/Header'
 import AppLayout from '../../components/ui/AppLayout'
 import Filter from '../../components/ui/Filter'
 import FilterChecklist from '../../components/ui/FilterChecklist'
+import Event from '../../components/ui/Event'
+import Day from '../../components/ui/Day'
+import Calendar, { type CalendarEvent } from '../../components/ui/Calendar'
+import StatusLabelBig, { type Status } from '../../components/ui/StatusLabelBig'
+import FileLabel from '../../components/ui/FileLabel'
+import Table, { TableHeader, TableRow, TableCell, type Column } from '../../components/ui/Table'
 
 const TAG_COLORS: TagColor[] = ['blue', 'amber', 'green', 'red', 'gray', 'purple', 'dark']
 
@@ -42,6 +48,25 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'organization', icon: 'Organization', label: 'Organization' },
 ]
 const FOOTER_ITEMS: NavItem[] = [{ key: 'settings', icon: 'Settings', label: 'Settings' }]
+
+const STATUSES_BIG: Status[] = ['planned', 'in-progress', 'review', 'blocked', 'done', 'all']
+
+const CALENDAR_MONTH = new Date(2026, 4, 1) // May 2026
+const CALENDAR_TODAY = new Date(2026, 4, 10)
+
+const SAMPLE_CAL_EVENTS: CalendarEvent[] = [
+  { id: '1', date: '2026-05-04', title: 'Apollo standup', type: 'meeting' },
+  { id: '2', date: '2026-05-05', title: 'Design crit', type: 'meeting' },
+  { id: '3', date: '2026-05-05', title: 'Push v1.2', type: 'task' },
+  { id: '4', date: '2026-05-10', title: 'Standup', type: 'meeting' },
+  { id: '5', date: '2026-05-10', title: 'Auth deadline', type: 'deadline' },
+  { id: '6', date: '2026-05-10', title: 'Code review', type: 'task' },
+  { id: '7', date: '2026-05-10', title: 'Pricing review', type: 'project' },
+  { id: '8', date: '2026-05-12', title: '1:1 with Daniel', type: 'meeting' },
+  { id: '9', date: '2026-05-15', title: 'Sprint demo', type: 'meeting' },
+  { id: '10', date: '2026-05-15', title: 'QA pass', type: 'task' },
+  { id: '11', date: '2026-05-22', title: 'Q2 retro', type: 'meeting' },
+]
 
 function Section({
   title,
@@ -85,6 +110,7 @@ export default function ComponentsPage() {
     tasks: true,
     deadlines: false,
   })
+  const [calMonth, setCalMonth] = useState(CALENDAR_MONTH)
   return (
     <>
       <Head>
@@ -95,7 +121,7 @@ export default function ComponentsPage() {
           <header className="flex items-center justify-between">
             <h1 className="text-[24px] font-semibold text-black">Component Showcase</h1>
             <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-gray-secondary">
-              Phase 1 · atomic + Phase 2 · domain + Phase 3 · layout
+              Phase 1 · atomic + Phase 2 · domain + Phase 3 · layout + Phase 4 · calendar/table
             </span>
           </header>
 
@@ -583,6 +609,219 @@ export default function ComponentsPage() {
                 members={SAMPLE_MEMBERS.slice(0, 2)}
               />
             </div>
+          </Section>
+
+          {/* EVENT */}
+          <Section title="Event chip">
+            <Row label="Small (Day cell)">
+              <div style={{ width: 70 }}>
+                <Event size="small" type="meeting" title="Apollo standup" />
+              </div>
+              <div style={{ width: 70 }}>
+                <Event size="small" type="task" title="Review PR" />
+              </div>
+              <div style={{ width: 70 }}>
+                <Event size="small" type="deadline" title="Auth ship" />
+              </div>
+              <div style={{ width: 70 }}>
+                <Event size="small" type="project" title="Apollo" />
+              </div>
+            </Row>
+            <Row label="Big (Monthly view)">
+              <Event size="big" type="meeting" title="Apollo standup" />
+              <Event size="big" type="task" title="Push v1.2" />
+              <Event size="big" type="deadline" title="Auth ship" />
+              <Event size="big" type="project" title="Pricing review" />
+            </Row>
+          </Section>
+
+          {/* DAY */}
+          <Section title="Day cell · small (Dashboard)">
+            <Row label="Default · 0/1/2/3+ events">
+              <Day size="small" date={1} />
+              <Day size="small" date={2} events={SAMPLE_CAL_EVENTS.slice(0, 1)} />
+              <Day size="small" date={3} events={SAMPLE_CAL_EVENTS.slice(0, 2)} />
+              <Day size="small" date={4} events={SAMPLE_CAL_EVENTS.slice(0, 4)} />
+            </Row>
+            <Row label="Today">
+              <Day size="small" date={10} isToday />
+              <Day size="small" date={10} isToday events={SAMPLE_CAL_EVENTS.slice(0, 1)} />
+              <Day size="small" date={10} isToday events={SAMPLE_CAL_EVENTS.slice(0, 4)} />
+            </Row>
+            <Row label="Out of bound">
+              <Day size="small" date={31} outOfBound />
+            </Row>
+          </Section>
+
+          <Section title="Day cell · big (Monthly)">
+            <Row label="Default · 0/1/3+ events">
+              <Day size="big" date={1} />
+              <Day size="big" date={2} events={SAMPLE_CAL_EVENTS.slice(0, 1)} />
+              <Day size="big" date={3} events={SAMPLE_CAL_EVENTS.slice(0, 5)} />
+            </Row>
+            <Row label="Today / Out of bound">
+              <Day size="big" date={10} isToday events={SAMPLE_CAL_EVENTS.slice(0, 1)} />
+              <Day size="big" date={11} isToday events={SAMPLE_CAL_EVENTS.slice(0, 6)} />
+              <Day size="big" date={31} outOfBound />
+            </Row>
+          </Section>
+
+          {/* CALENDAR */}
+          <Section title="Calendar · Dashboard view">
+            <div className="bg-white-white p-4 rounded-md inline-block">
+              <Calendar
+                view="dashboard"
+                month={calMonth}
+                today={CALENDAR_TODAY}
+                events={SAMPLE_CAL_EVENTS}
+                onPrevMonth={() =>
+                  setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))
+                }
+                onNextMonth={() =>
+                  setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))
+                }
+              />
+            </div>
+          </Section>
+
+          <Section title="Calendar · Monthly view">
+            <div className="bg-white-white p-4 rounded-md overflow-auto">
+              <Calendar
+                view="monthly"
+                month={calMonth}
+                today={CALENDAR_TODAY}
+                events={SAMPLE_CAL_EVENTS}
+                onPrevMonth={() =>
+                  setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))
+                }
+                onNextMonth={() =>
+                  setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))
+                }
+              />
+            </div>
+          </Section>
+
+          {/* STATUS LABEL BIG */}
+          <Section title="Status Label (Kanban column header)">
+            <Row label="All statuses">
+              {STATUSES_BIG.map((s) => (
+                <StatusLabelBig key={s} status={s} />
+              ))}
+            </Row>
+            <Row label="Sizes">
+              <StatusLabelBig status="in-progress" size="md" />
+              <StatusLabelBig status="in-progress" size="lg" />
+            </Row>
+          </Section>
+
+          {/* FILE LABEL */}
+          <Section title="File Label (Knowledge Base)">
+            <Row label="Icon · default">
+              <FileLabel variant="icon" category="project-context" />
+              <FileLabel variant="icon" category="decisions" />
+              <FileLabel variant="icon" category="references" />
+            </Row>
+            <Row label="Icon · large">
+              <FileLabel variant="icon" category="project-context" size="lg" />
+              <FileLabel variant="icon" category="decisions" size="lg" />
+              <FileLabel variant="icon" category="references" size="lg" />
+            </Row>
+            <Row label="Text">
+              <FileLabel variant="text" category="project-context" />
+              <FileLabel variant="text" category="decisions" />
+              <FileLabel variant="text" category="references" />
+            </Row>
+          </Section>
+
+          {/* TABLE */}
+          <Section title="Table · Personal Tasks">
+            {(() => {
+              const cols: Column[] = [
+                { key: 'task', label: 'Action', width: 'flex-[2]' },
+                { key: 'source', label: 'Source', width: 'w-[150px]' },
+                { key: 'status', label: 'Status', width: 'w-[120px]' },
+                { key: 'priority', label: 'Priority', width: 'w-[90px]' },
+                { key: 'due', label: 'Due', width: 'w-[80px]' },
+              ]
+              const rows = [
+                { task: 'Review site safety protocols', source: 'Standup, Apr 10', status: 'in-progress' as Status, priority: 'highest' as Priority, due: 'Today' },
+                { task: 'Approve Q4 resource allocation', source: 'Email, Apr 9', status: 'planned' as Status, priority: 'high' as Priority, due: 'Tomorrow' },
+                { task: 'Draft client feedback response', source: 'Slack, Apr 8', status: 'review' as Status, priority: 'medium' as Priority, due: 'Apr 14' },
+              ]
+              return (
+                <Table>
+                  <TableHeader columns={cols} />
+                  {rows.map((r, i) => (
+                    <TableRow key={i} isLast={i === rows.length - 1}>
+                      <TableCell width="flex-[2]">
+                        <Checkbox />
+                        <span className="text-black text-[14px]">{r.task}</span>
+                      </TableCell>
+                      <TableCell width="w-[150px]">
+                        <span className="text-gray-main text-[14px]">{r.source}</span>
+                      </TableCell>
+                      <TableCell width="w-[120px]">
+                        <StatusLabelBig status={r.status} size="md" />
+                      </TableCell>
+                      <TableCell width="w-[90px]">
+                        <PriorityTag priority={r.priority} size="sm" />
+                      </TableCell>
+                      <TableCell width="w-[80px]">
+                        <span
+                          className="text-red-main text-[14px] font-semibold tracking-[-0.2px]"
+                          style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+                        >
+                          {r.due}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </Table>
+              )
+            })()}
+          </Section>
+
+          <Section title="Table · Project Knowledge">
+            {(() => {
+              const cols: Column[] = [
+                { key: 'title', label: 'Title', width: 'flex-[2]' },
+                { key: 'type', label: 'Type', width: 'w-[90px]' },
+                { key: 'tag', label: 'Tag', width: 'w-[180px]' },
+                { key: 'size', label: 'Size', width: 'w-[80px]' },
+                { key: 'edited', label: 'Edited', width: 'w-[150px]' },
+              ]
+              const rows = [
+                { title: 'Onboarding deck', cat: 'project-context' as const, type: 'Whiteboard', size: '6.7MB', edited: 'Yesterday' },
+                { title: 'Q3 decisions log', cat: 'decisions' as const, type: 'Doc', size: '1.2MB', edited: '2d ago' },
+                { title: 'Compliance refs', cat: 'references' as const, type: 'PDF', size: '4.1MB', edited: 'Last week' },
+              ]
+              return (
+                <Table>
+                  <TableHeader columns={cols} />
+                  {rows.map((r, i) => (
+                    <TableRow key={i} isLast={i === rows.length - 1}>
+                      <TableCell width="flex-[2]">
+                        <FileLabel variant="icon" category={r.cat} />
+                        <span className="text-black text-[14px]">{r.title}</span>
+                      </TableCell>
+                      <TableCell width="w-[90px]">
+                        <span className="text-gray-main text-[14px]">{r.type}</span>
+                      </TableCell>
+                      <TableCell width="w-[180px]">
+                        <FileLabel variant="text" category={r.cat} />
+                      </TableCell>
+                      <TableCell width="w-[80px]">
+                        <span className="text-gray-main text-[14px]">{r.size}</span>
+                      </TableCell>
+                      <TableCell width="w-[150px]">
+                        <UserGroup members={SAMPLE_MEMBERS.slice(0, 2)} />
+                        <span className="text-gray-main text-[14px]">{r.edited}</span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </Table>
+              )
+            })()}
           </Section>
         </div>
       </main>

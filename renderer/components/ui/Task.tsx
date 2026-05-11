@@ -40,7 +40,7 @@ export default function Task({
       </p>
       <p className="font-sans text-[12px] font-semibold text-black leading-snug">{title}</p>
       <div className="flex items-center justify-between">
-        {priority ? <PriorityTag priority={priority} size="sm" /> : <span />}
+        {priority ? <PriorityTag priority={priority} /> : <span />}
         <div className="flex items-center gap-[10px]">
           {dueDate && (
             <span

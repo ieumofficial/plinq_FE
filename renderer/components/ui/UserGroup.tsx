@@ -94,7 +94,7 @@ export default function UserGroup({
             backgroundColor: overflowBg,
             borderColor,
             color: overflowColor,
-            fontSize: Math.max(8, size * 0.55),
+            fontSize: Math.max(10, Math.round(size * 0.67)),
           }}
           className="rounded-full border border-solid inline-flex items-center justify-center font-sans select-none shrink-0"
         >

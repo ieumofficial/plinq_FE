@@ -26,8 +26,8 @@ const PALETTE: Record<ProjectColorKey, { bg: string; fg: string }> = {
 }
 
 const SIZES = {
-  sm: { box: 20, text: '12px' },
-  md: { box: 28, text: '16px' },
+  sm: { box: 20, text: '12px', rounded: '3px' },
+  md: { box: 28, text: '14px', rounded: '5px' },
 } as const
 
 type Size = keyof typeof SIZES
@@ -76,9 +76,10 @@ export default function ProjectLabel({
           backgroundColor: tint(color, 0.78),
           color,
           fontSize: dim.text,
+          borderRadius: dim.rounded,
           fontFamily: 'Geist Mono, ui-monospace, monospace',
         }}
-        className={`inline-flex items-center justify-center rounded-[3px] font-bold uppercase shrink-0 ${className ?? ''}`}
+        className={`inline-flex items-center justify-center font-bold uppercase shrink-0 ${className ?? ''}`}
       >
         {initial}
       </span>
@@ -93,9 +94,10 @@ export default function ProjectLabel({
         width: dim.box,
         height: dim.box,
         fontSize: dim.text,
+        borderRadius: dim.rounded,
         fontFamily: 'Geist Mono, ui-monospace, monospace',
       }}
-      className={`inline-flex items-center justify-center rounded-[3px] font-bold uppercase shrink-0 ${c.bg} ${c.fg} ${className ?? ''}`}
+      className={`inline-flex items-center justify-center font-bold uppercase shrink-0 ${c.bg} ${c.fg} ${className ?? ''}`}
     >
       {initial}
     </span>

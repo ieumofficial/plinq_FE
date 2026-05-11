@@ -81,7 +81,7 @@ export default function ActionItemsPage() {
             <h1 className="text-black text-[28px] font-semibold leading-tight">
               Grouped by{' '}
               <em
-                className="not-italic italic text-blue-main font-medium"
+                className="italic text-blue-main font-medium"
                 style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
               >
                 project.
@@ -167,7 +167,7 @@ export default function ActionItemsPage() {
                           <StatusLabelBig status={dbStatusToUi(t.status)} size="md" />
                         </TableCell>
                         <TableCell width="w-[90px]">
-                          <PriorityTag priority={dbPriorityToUi(t.priority)} size="sm" />
+                          <PriorityTag priority={dbPriorityToUi(t.priority)} />
                         </TableCell>
                         <TableCell width="w-[100px]">
                           <span

@@ -51,7 +51,7 @@ export default function SideMenu({
 
   return (
     <aside
-      className={`bg-[#F4F6F8] h-full flex flex-col ${stacked ? 'items-center' : 'items-start'} justify-between ${padding} ${widthClass} shrink-0`}
+      className={`bg-[#F8F9FA] border-r border-solid border-gray-border h-full flex flex-col ${stacked ? 'items-center' : 'items-start'} justify-between ${padding} ${widthClass} shrink-0`}
     >
       {/* Top: Section + Nav */}
       <div className={`flex flex-col gap-[10px] w-full ${stacked ? 'items-center' : 'items-start'}`}>

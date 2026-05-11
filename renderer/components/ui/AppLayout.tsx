@@ -25,7 +25,7 @@ type Props = {
  */
 export default function AppLayout({ header, sidebar, panel, children }: Props) {
   return (
-    <div className="flex flex-col h-screen bg-[#F4F6F8] overflow-hidden">
+    <div className="flex flex-col h-screen bg-background overflow-hidden">
       {header}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {sidebar}

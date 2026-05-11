@@ -107,7 +107,7 @@ export default function MembersPage() {
               <h1 className="text-black text-[28px] font-semibold leading-tight">
                 {stats.total} {stats.total === 1 ? 'talent' : 'talents'} across{' '}
                 <em
-                  className="not-italic italic text-blue-main font-medium"
+                  className="italic text-blue-main font-medium"
                   style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
                 >
                   {stats.roles} {stats.roles === 1 ? 'role' : 'roles'}.

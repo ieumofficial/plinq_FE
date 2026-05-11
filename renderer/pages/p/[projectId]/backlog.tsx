@@ -96,7 +96,7 @@ function BacklogBody({ projectId }: { projectId: string }) {
               <h1 className="text-black text-[28px] font-semibold leading-tight">
                 {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} in{' '}
                 <em
-                  className="not-italic italic text-blue-main font-medium"
+                  className="italic text-blue-main font-medium"
                   style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
                 >
                   {project?.name ?? 'project'}.
@@ -196,7 +196,7 @@ function BacklogBody({ projectId }: { projectId: string }) {
                       <StatusLabelBig status={dbStatusToUi(t.status)} size="md" />
                     </TableCell>
                     <TableCell width="w-[100px]">
-                      <PriorityTag priority={dbPriorityToUi(t.priority)} size="sm" />
+                      <PriorityTag priority={dbPriorityToUi(t.priority)} />
                     </TableCell>
                   </TableRow>
                 )

@@ -106,7 +106,7 @@ function MiniTaskCard({
         {task.title}
       </p>
       <div className="flex items-center justify-between">
-        <PriorityTag priority={dbPriorityToUi(task.priority)} size="sm" />
+        <PriorityTag priority={dbPriorityToUi(task.priority)} />
         {task.assignees.length > 0 && (
           <UserGroup members={[userToMember(task.assignees[0])]} size={15} />
         )}
@@ -198,7 +198,7 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
               <h1 className="text-black text-[28px] font-semibold leading-tight">
                 {project?.name ?? 'Project'} is{' '}
                 <em
-                  className="not-italic italic text-blue-main font-medium"
+                  className="italic text-blue-main font-medium"
                   style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
                 >
                   on track.

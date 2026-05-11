@@ -8,7 +8,7 @@ export type EventColor = {
 
 export const EVENT_COLORS: Record<EventType, EventColor> = {
   meeting: { bg: '#E5DEEF', bar: '#5B3D8A', text: '#5B3D8A' },
-  task: { bg: '#E6ECEF', bar: '#16242E', text: '#16242E' },
+  task: { bg: '#F2DEDE', bar: '#9B3838', text: '#9B3838' },
   deadline: { bg: '#F2DEDE', bar: '#9B3838', text: '#9B3838' },
   project: { bg: '#DDE7F4', bar: '#2D5A9E', text: '#2D5A9E' },
 }

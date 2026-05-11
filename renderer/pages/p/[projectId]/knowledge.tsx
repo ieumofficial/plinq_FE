@@ -94,7 +94,7 @@ export default function KnowledgePage() {
               <h1 className="text-black text-[28px] font-semibold leading-tight">
                 The project's{' '}
                 <em
-                  className="not-italic italic text-blue-main font-medium"
+                  className="italic text-blue-main font-medium"
                   style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
                 >
                   memory.

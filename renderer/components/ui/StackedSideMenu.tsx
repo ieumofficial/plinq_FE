@@ -66,7 +66,7 @@ export default function StackedSideMenu({
   const sectionLabel = isProject ? 'Project' : 'Organization'
 
   return (
-    <aside className="bg-[#F4F6F8] border-t border-r border-[#E6EAEE] w-[210px] shrink-0 h-full flex flex-col relative">
+    <aside className="bg-[#F8F9FA] border-t border-r border-[#E6EAEE] w-[210px] shrink-0 h-full flex flex-col relative">
       {/* BACK */}
       <div className="flex flex-col items-start py-[5px]">
         <button

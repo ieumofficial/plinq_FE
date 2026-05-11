@@ -88,7 +88,7 @@ function MeetingsBody({ projectId }: { projectId: string }) {
               <h1 className="text-black text-[28px] font-semibold leading-tight">
                 Every conversation,{' '}
                 <em
-                  className="not-italic italic text-blue-main font-medium"
+                  className="italic text-blue-main font-medium"
                   style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
                 >
                   indexed.

@@ -119,8 +119,8 @@ export default function Header({
 
   return (
     <header
-      className="h-[64px] w-full flex items-stretch shrink-0"
-      style={{ ...drag, backgroundColor: '#F4F6F8' }}
+      className="h-[64px] w-full flex items-stretch shrink-0 border-b border-solid border-gray-border"
+      style={{ ...drag, backgroundColor: '#F8F9FA' }}
     >
       {/* LEFT 200px — Mac: traffic lights (left) + Org block (right) via justify-between.
           Windows: org block left-aligned. macOS draws its own traffic lights via

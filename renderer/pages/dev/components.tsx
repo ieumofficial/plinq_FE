@@ -341,15 +341,15 @@ export default function ComponentsPage() {
 
           {/* PRIORITY TAG */}
           <Section title="Priority Tag">
-            <Row label="All priorities">
+            <Row label="With text">
               {PRIORITIES.map((p) => (
                 <PriorityTag key={p} priority={p} />
               ))}
             </Row>
-            <Row label="Sizes">
-              <PriorityTag priority="highest" size="sm" />
-              <PriorityTag priority="highest" size="md" />
-              <PriorityTag priority="highest" size="lg" />
+            <Row label="Icon only">
+              {PRIORITIES.map((p) => (
+                <PriorityTag key={p} priority={p} isText={false} />
+              ))}
             </Row>
           </Section>
 
@@ -865,7 +865,7 @@ export default function ComponentsPage() {
           </Section>
 
           <Section title="Calendar · Monthly view">
-            <div className="bg-white-white p-4 rounded-md overflow-auto">
+            <div className="bg-white-white p-4 rounded-md h-[700px]">
               <Calendar
                 view="monthly"
                 month={calMonth}
@@ -944,7 +944,7 @@ export default function ComponentsPage() {
                         <StatusLabelBig status={r.status} size="md" />
                       </TableCell>
                       <TableCell width="w-[90px]">
-                        <PriorityTag priority={r.priority} size="sm" />
+                        <PriorityTag priority={r.priority} />
                       </TableCell>
                       <TableCell width="w-[80px]">
                         <span

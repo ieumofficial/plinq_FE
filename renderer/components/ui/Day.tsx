@@ -26,6 +26,8 @@ type BigProps = CommonProps & {
   size: 'big'
   /** Max events to show before "+N more" overflow chip. */
   maxEvents?: number
+  /** When true, the cell uses `w-full h-full` instead of the default 132×144. */
+  fillParent?: boolean
 }
 
 type Props = SmallProps | BigProps
@@ -80,29 +82,41 @@ export default function Day(props: Props) {
   const max = props.maxEvents ?? BIG_MAX_DEFAULT
   const visible = events.slice(0, max)
   const overflow = events.length - visible.length
+  const fill = props.fillParent ?? false
+  const sizeClass = fill ? 'w-full h-full min-h-[80px]' : 'w-[132px] h-[144px]'
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col items-start gap-[5px] p-[9px] w-[132px] h-[144px] border-b border-r border-solid border-[#F4F6F8] text-left transition-colors ${
-        isToday ? 'bg-primary-dark/10' : ''
-      } ${outOfBound ? 'opacity-35' : ''}`}
+      className={`flex flex-col items-start gap-[5px] p-[9px] ${sizeClass} border-b border-r border-solid border-[#EDEEF0] text-left transition-colors ${
+        isToday ? 'bg-primary-dark' : ''
+      }`}
     >
-      {isToday ? (
-        <span className="bg-primary-dark text-white rounded-full w-[22px] h-[22px] inline-flex items-center justify-center text-[14px] font-semibold shrink-0">
+      <div
+        className={`flex flex-col items-start gap-[5px] w-full min-h-0 ${
+          outOfBound ? 'opacity-35' : ''
+        }`}
+      >
+        <span
+          className={`text-[14px] font-semibold ${isToday ? 'text-white' : 'text-primary-dark'}`}
+        >
           {date}
         </span>
-      ) : (
-        <span className="text-primary-dark text-[14px] font-semibold">{date}</span>
-      )}
-      <div className="flex flex-col gap-[2px] w-full overflow-hidden">
-        {visible.map((e) => (
-          <Event key={e.id} title={e.title} type={e.type} color={e.color} size="big" />
-        ))}
-        {overflow > 0 && (
-          <span className="text-primary-main text-[12px] font-semibold">+{overflow}</span>
-        )}
+        <div className="flex flex-col gap-[2px] w-full overflow-hidden">
+          {visible.map((e) => (
+            <Event key={e.id} title={e.title} type={e.type} color={e.color} size="big" />
+          ))}
+          {overflow > 0 && (
+            <span
+              className={`text-[12px] font-semibold ${
+                isToday ? 'text-gray-extra-light' : 'text-primary-main'
+              }`}
+            >
+              +{overflow}
+            </span>
+          )}
+        </div>
       </div>
     </button>
   )

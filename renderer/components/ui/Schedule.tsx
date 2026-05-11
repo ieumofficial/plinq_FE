@@ -2,12 +2,16 @@ import Icon, { type IconName } from './Icon'
 import UserGroup, { type Member } from './UserGroup'
 import Button from './Button'
 
+export type ScheduleType = 'planning' | 'check_in' | 'review' | 'retrospective'
+
 type FullProps = {
   size?: 'full'
   title: string
   /** Time range, e.g. "9:00 — 9:30 AM". Geist Mono. */
   time: string
   isCurrent?: boolean
+  /** Meeting type — drives the colored rail on the left. */
+  type?: ScheduleType
   location?: string
   locationIcon?: IconName
   attendees?: Member[]
@@ -59,12 +63,28 @@ export default function Schedule(props: Props) {
   }
 
   // Full
-  const { isCurrent, time, title, location, locationIcon = 'Meeting', attendees, attendeesLabel, onJoin } = props
+  const {
+    isCurrent,
+    time,
+    title,
+    type = 'planning',
+    location,
+    locationIcon = 'Meeting',
+    attendees,
+    attendeesLabel,
+    onJoin,
+  } = props
   const bg = isCurrent ? 'bg-[#E6ECEF]' : 'bg-white-item'
+  const railColor: Record<ScheduleType, string> = {
+    planning: 'bg-blue-main',
+    check_in: 'bg-green-main',
+    review: 'bg-brown-med',
+    retrospective: 'bg-purple-main',
+  }
   return (
     <div className={`flex items-center justify-between gap-3 p-[10px] rounded-[5px] w-full ${bg}`}>
       <div className="flex items-stretch gap-[20px] min-w-0 flex-1">
-        <div className="w-[4px] rounded-[1px] bg-blue-main shrink-0" />
+        <div className={`w-[4px] rounded-[1px] shrink-0 ${railColor[type]}`} />
         <div className="flex flex-col gap-[10px] min-w-0 flex-1">
           <div className="flex flex-col gap-[3px]">
             <div

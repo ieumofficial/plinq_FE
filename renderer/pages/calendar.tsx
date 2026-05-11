@@ -12,8 +12,8 @@ import {
 
 type FilterKey = 'meetings' | 'tasks'
 const FILTER_COLORS: Record<FilterKey, string> = {
-  meetings: '#5B7FB6',
-  tasks: '#588F6E',
+  meetings: '#5B3D8A', // purple-main — matches Event meeting color
+  tasks: '#9B3838', // red-main — matches Event task color
 }
 
 function startOfMonth(d: Date) {
@@ -91,9 +91,9 @@ export default function CalendarPage() {
         <title>plinq · Calendar</title>
       </Head>
       <PersonalAppShell active="calendar">
-        <div className="p-6 flex gap-[10px]">
+        <div className="p-6 flex gap-[10px] h-full overflow-hidden">
           {/* Calendar */}
-          <section className="flex-1 bg-white-white rounded-[10px] border border-gray-border-light p-[20px] min-w-0">
+          <section className="flex-1 bg-white-white rounded-[10px] border border-gray-border-light p-[20px] min-w-0 flex flex-col">
             <Calendar
               view="monthly"
               month={calMonth}
@@ -104,6 +104,7 @@ export default function CalendarPage() {
               onNextMonth={() =>
                 setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))
               }
+              onToday={() => setCalMonth(startOfMonth(new Date()))}
             />
           </section>
 

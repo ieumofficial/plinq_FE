@@ -3,11 +3,11 @@ import Tag, { type TagColor } from './Tag'
 export type Status = 'planned' | 'in-progress' | 'review' | 'blocked' | 'done' | 'all'
 
 const config: Record<Status, { color: TagColor; label: string; overrideClass?: string }> = {
-  // Spec: bg #E6ECEF (white-secondary-ish), text #16242E (black) — not the standard gray Tag.
+  // Spec: bg #E6ECEF, text Primary/Main #455E6A — not the standard gray Tag.
   planned: {
     color: 'gray',
     label: 'Planned',
-    overrideClass: 'bg-[#E6ECEF] text-black',
+    overrideClass: 'bg-[#E6ECEF] text-primary-main',
   },
   'in-progress': { color: 'blue', label: 'In Progress' },
   review: { color: 'amber', label: 'Review' },

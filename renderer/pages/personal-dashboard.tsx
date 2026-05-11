@@ -66,7 +66,7 @@ export default function PersonalDashboardPage() {
   const { data: user } = useCurrentUser()
   const userId = user?.id
 
-  const [calMonth, setCalMonth] = useState(startOfMonth(new Date()))
+  const [calMonth] = useState(startOfMonth(new Date()))
   const today = useMemo(() => new Date(), [])
 
   const { data: projects = [], isLoading: projectsLoading } = useUserProjects(userId, {
@@ -204,13 +204,7 @@ export default function PersonalDashboardPage() {
                 view="dashboard"
                 month={calMonth}
                 events={calEvents}
-                onPrevMonth={() =>
-                  setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))
-                }
-                onNextMonth={() =>
-                  setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))
-                }
-                onDayClick={() => router.push('/calendar')}
+                onOpen={() => router.push('/calendar')}
               />
             </section>
 

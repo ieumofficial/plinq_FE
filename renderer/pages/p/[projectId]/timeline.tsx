@@ -24,7 +24,7 @@ export default function TimelinePage() {
             <h1 className="text-black text-[28px] font-semibold leading-tight">
               12 tracks toward{' '}
               <em
-                className="not-italic italic text-blue-main font-medium"
+                className="italic text-blue-main font-medium"
                 style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
               >
                 cutover.

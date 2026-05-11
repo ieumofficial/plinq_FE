@@ -9,7 +9,13 @@ import { useQuery } from '@tanstack/react-query'
 import {
   getCurrentUser,
   getOrgMembers,
+  getProject,
+  getProjectCounts,
+  getProjectDocs,
+  getProjectMeetings,
   getProjectMembers,
+  getProjectMembersWithRoles,
+  getProjectTasks,
   getUserActionItems,
   getUserCalendarEvents,
   getUserProjects,
@@ -132,5 +138,57 @@ export function useProjectMembers(projectId: string | null | undefined) {
     queryFn: () => getProjectMembers(projectId!),
     enabled: !!projectId,
     staleTime: 60 * 1000,
+  })
+}
+
+// ─── Single project (header info, nav counts, page data) ───────────────────
+
+export function useProject(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.project.one(projectId ?? ''),
+    queryFn: () => getProject(projectId!),
+    enabled: !!projectId,
+    staleTime: 60 * 1000,
+  })
+}
+
+export function useProjectCounts(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.project.counts(projectId ?? ''),
+    queryFn: () => getProjectCounts(projectId!),
+    enabled: !!projectId,
+  })
+}
+
+export function useProjectTasks(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.project.tasks(projectId ?? ''),
+    queryFn: () => getProjectTasks(projectId!),
+    enabled: !!projectId,
+  })
+}
+
+export function useProjectMeetings(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.project.meetings(projectId ?? ''),
+    queryFn: () => getProjectMeetings(projectId!),
+    enabled: !!projectId,
+  })
+}
+
+export function useProjectMembersWithRoles(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.members.projectWithRoles(projectId ?? ''),
+    queryFn: () => getProjectMembersWithRoles(projectId!),
+    enabled: !!projectId,
+    staleTime: 60 * 1000,
+  })
+}
+
+export function useProjectDocs(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.project.docs(projectId ?? ''),
+    queryFn: () => getProjectDocs(projectId!),
+    enabled: !!projectId,
   })
 }

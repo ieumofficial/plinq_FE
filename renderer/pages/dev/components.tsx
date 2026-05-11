@@ -15,6 +15,7 @@ import ProjectCard from '../../components/ui/ProjectCard'
 import ProjectListCard from '../../components/ui/ProjectListCard'
 import MenuItem from '../../components/ui/MenuItem'
 import SideMenu, { type NavItem } from '../../components/ui/SideMenu'
+import StackedSideMenu, { type StackedNavItem } from '../../components/ui/StackedSideMenu'
 import Header from '../../components/ui/Header'
 import AppLayout from '../../components/ui/AppLayout'
 import Filter from '../../components/ui/Filter'
@@ -49,6 +50,24 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'organization', icon: 'Organization', label: 'Organization' },
 ]
 const FOOTER_ITEMS: NavItem[] = [{ key: 'settings', icon: 'Settings', label: 'Settings' }]
+
+const PROJECT_NAV_ITEMS: StackedNavItem[] = [
+  { key: 'dashboard', icon: 'Dashboard', label: 'Project Dashboard' },
+  { key: 'kanban', icon: 'Kanban', label: 'Kanban Board' },
+  { key: 'backlog', icon: 'Task', label: 'Backlog', count: 12 },
+  { key: 'timeline', icon: 'Calendar', label: 'Timeline' },
+  { key: 'meetings', icon: 'Meeting', label: 'Meetings' },
+  { key: 'members', icon: 'People', label: 'Members', count: 12 },
+  { key: 'knowledge', icon: 'File', label: 'Knowledge Base', count: 12 },
+]
+
+const ORG_NAV_ITEMS: StackedNavItem[] = [
+  { key: 'dashboard', icon: 'Dashboard', label: 'Dashboard' },
+  { key: 'projects', icon: 'Folder', label: 'Projects', count: 12 },
+  { key: 'members', icon: 'People', label: 'Members', count: 108 },
+  { key: 'knowledge', icon: 'File', label: 'Knowledge/ Governance' },
+  { key: 'orgchart', icon: 'Organization', label: 'Org Chart' },
+]
 
 const STATUSES_BIG: Status[] = ['planned', 'in-progress', 'review', 'blocked', 'done', 'all']
 
@@ -479,6 +498,43 @@ export default function ComponentsPage() {
                   userInitials="YP"
                   userName="Yujin Park"
                   stacked
+                />
+              </div>
+            </div>
+          </Section>
+
+          {/* STACKED SIDE MENU */}
+          <Section title="Stacked Side Menu (Project + Org)">
+            <div className="flex gap-6 items-start">
+              <div className="border border-gray-border-light rounded-md overflow-hidden h-[600px] bg-[#F4F6F8]">
+                <StackedSideMenu
+                  header={{
+                    kind: 'project',
+                    initial: 'A',
+                    color: '#2D5A9E',
+                    name: 'Apollo',
+                    subtitle: 'Auth migration · Q2 2026',
+                    status: 'in-progress',
+                  }}
+                  items={PROJECT_NAV_ITEMS}
+                  activeKey="dashboard"
+                  onItemClick={(k) => alert(k)}
+                  onBack={() => alert('back')}
+                />
+              </div>
+              <div className="border border-gray-border-light rounded-md overflow-hidden h-[600px] bg-[#F4F6F8]">
+                <StackedSideMenu
+                  header={{
+                    kind: 'org',
+                    initial: 'A',
+                    color: '#9B3838',
+                    name: 'Org Name',
+                    subtitle: '108 members total',
+                  }}
+                  items={ORG_NAV_ITEMS}
+                  activeKey="dashboard"
+                  onItemClick={(k) => alert(k)}
+                  onBack={() => alert('back')}
                 />
               </div>
             </div>

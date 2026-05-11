@@ -100,7 +100,7 @@ function ProjectsPageBody() {
                 due={formatDueDate(p.nextDueDate)}
                 lead={lead ? userToMember(lead) : undefined}
                 members={others.map(userToMember)}
-                onOpen={() => router.push(`/projects/${p.id}`)}
+                onOpen={() => router.push(`/p/${p.id}/dashboard`)}
               />
             )
           })}

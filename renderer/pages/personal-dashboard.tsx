@@ -151,7 +151,7 @@ export default function PersonalDashboardPage() {
                       status={dbStatusToUi(p.status)}
                       progress={p.progressPct ?? 0}
                       members={p.members.map(userToMember)}
-                      onOpen={() => router.push(`/projects/${p.id}`)}
+                      onOpen={() => router.push(`/p/${p.id}/dashboard`)}
                     />
                   ))}
                 </div>

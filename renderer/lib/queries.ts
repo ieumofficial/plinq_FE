@@ -595,6 +595,224 @@ export async function getUserUpcomingMeetings(
   return ms.map((m) => ({ ...m, attendees: attendeesByMeeting.get(m.id) ?? [] }))
 }
 
+// ─── Project (single) ───────────────────────────────────────────────────────
+
+export async function getProject(projectId: string): Promise<ProjectRow | null> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id, name, description, team_id, lead_id, status, color, budget, created_at')
+    .eq('id', projectId)
+    .single()
+  if (error) {
+    console.error('[queries] getProject', error)
+    return null
+  }
+  return data as ProjectRow
+}
+
+/** Counts shown in the StackedSideMenu nav for a single project. */
+export async function getProjectCounts(projectId: string): Promise<{
+  tasks: number
+  meetings: number
+  members: number
+  docs: number
+}> {
+  const [tasks, meetings, members, docs] = await Promise.all([
+    supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
+    supabase
+      .from('meetings')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId),
+    supabase
+      .from('project_members')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('project_id', projectId),
+    supabase
+      .from('knowledge_documents')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId),
+  ])
+  return {
+    tasks: tasks.count ?? 0,
+    meetings: meetings.count ?? 0,
+    members: members.count ?? 0,
+    docs: docs.count ?? 0,
+  }
+}
+
+export type ProjectTask = TaskRow & {
+  assignees: UserRow[]
+}
+
+/** All tasks (top-level only) in the project, with assignees. */
+export async function getProjectTasks(projectId: string): Promise<ProjectTask[]> {
+  const { data: rows, error } = await supabase
+    .from('tasks')
+    .select(
+      'id, project_id, team_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, created_by, created_at, updated_at'
+    )
+    .eq('project_id', projectId)
+    .is('parent_task_id', null)
+    .order('created_at', { ascending: false })
+  if (error) {
+    console.error('[queries] getProjectTasks', error)
+    return []
+  }
+  const tasks = (rows ?? []) as TaskRow[]
+  if (tasks.length === 0) return []
+
+  const taskIds = tasks.map((t) => t.id)
+  const { data: assignRows, error: aErr } = await supabase
+    .from('task_assignees')
+    .select('task_id, users(id, email, first_name, last_name, nickname, job_title)')
+    .in('task_id', taskIds)
+  if (aErr) console.error('[queries] task assignees', aErr)
+
+  const byTask = new Map<string, UserRow[]>()
+  for (const row of assignRows ?? []) {
+    const r = row as unknown as { task_id: string; users: UserRow | UserRow[] | null }
+    if (!r.users) continue
+    const us = Array.isArray(r.users) ? r.users : [r.users]
+    const arr = byTask.get(r.task_id) ?? []
+    arr.push(...us)
+    byTask.set(r.task_id, arr)
+  }
+  return tasks.map((t) => ({ ...t, assignees: byTask.get(t.id) ?? [] }))
+}
+
+export type ProjectMember = UserRow & {
+  role: import('./types').ProjectRoleDb
+  joined_at: string
+}
+
+export async function getProjectMembersWithRoles(
+  projectId: string
+): Promise<ProjectMember[]> {
+  const { data, error } = await supabase
+    .from('project_members')
+    .select(
+      'role, joined_at, users(id, email, first_name, last_name, nickname, job_title)'
+    )
+    .eq('project_id', projectId)
+    .order('joined_at', { ascending: true })
+  if (error) {
+    console.error('[queries] getProjectMembersWithRoles', error)
+    return []
+  }
+  const out: ProjectMember[] = []
+  for (const row of data ?? []) {
+    const r = row as unknown as {
+      role: import('./types').ProjectRoleDb
+      joined_at: string
+      users: UserRow | UserRow[] | null
+    }
+    if (!r.users) continue
+    const us = Array.isArray(r.users) ? r.users : [r.users]
+    for (const u of us) out.push({ ...u, role: r.role, joined_at: r.joined_at })
+  }
+  return out
+}
+
+export type ProjectMeeting = MeetingRow & {
+  attendees: UserRow[]
+  action_count: number
+}
+
+/** Meetings for a project, with attendee list and AI-extracted action item count. */
+export async function getProjectMeetings(projectId: string): Promise<ProjectMeeting[]> {
+  const { data: meetingRows, error } = await supabase
+    .from('meetings')
+    .select(
+      'id, project_id, name, scheduled_at, duration_min, location_or_url, status, meeting_type, recurrence, recurrence_until, recurrence_group_id'
+    )
+    .eq('project_id', projectId)
+    .order('scheduled_at', { ascending: false })
+  if (error) {
+    console.error('[queries] getProjectMeetings', error)
+    return []
+  }
+  const meetings = (meetingRows ?? []) as MeetingRow[]
+  if (meetings.length === 0) return []
+
+  const ids = meetings.map((m) => m.id)
+  const [attRes, actionRes] = await Promise.all([
+    supabase
+      .from('meeting_attendees')
+      .select('meeting_id, users(id, email, first_name, last_name, nickname, job_title)')
+      .in('meeting_id', ids),
+    supabase.from('tasks').select('source_meeting_id').in('source_meeting_id', ids),
+  ])
+  if (attRes.error) console.error('[queries] meeting attendees', attRes.error)
+  if (actionRes.error) console.error('[queries] meeting actions', actionRes.error)
+
+  const byMeeting = new Map<string, UserRow[]>()
+  for (const row of attRes.data ?? []) {
+    const r = row as unknown as {
+      meeting_id: string
+      users: UserRow | UserRow[] | null
+    }
+    if (!r.users) continue
+    const us = Array.isArray(r.users) ? r.users : [r.users]
+    const arr = byMeeting.get(r.meeting_id) ?? []
+    arr.push(...us)
+    byMeeting.set(r.meeting_id, arr)
+  }
+  const actionCounts = new Map<string, number>()
+  for (const row of actionRes.data ?? []) {
+    const r = row as { source_meeting_id: string | null }
+    if (!r.source_meeting_id) continue
+    actionCounts.set(r.source_meeting_id, (actionCounts.get(r.source_meeting_id) ?? 0) + 1)
+  }
+  return meetings.map((m) => ({
+    ...m,
+    attendees: byMeeting.get(m.id) ?? [],
+    action_count: actionCounts.get(m.id) ?? 0,
+  }))
+}
+
+export type ProjectDoc = {
+  id: string
+  project_id: string
+  name: string
+  file_url: string | null
+  file_type: string | null
+  source: 'uploaded' | 'meeting' | 'auto_generated'
+  uploaded_by: string | null
+  uploaded_at: string
+  uploader: UserRow | null
+}
+
+export async function getProjectDocs(projectId: string): Promise<ProjectDoc[]> {
+  const { data, error } = await supabase
+    .from('knowledge_documents')
+    .select(
+      'id, project_id, name, file_url, file_type, source, uploaded_by, uploaded_at, users:uploaded_by(id, email, first_name, last_name, nickname, job_title)'
+    )
+    .eq('project_id', projectId)
+    .order('uploaded_at', { ascending: false })
+  if (error) {
+    console.error('[queries] getProjectDocs', error)
+    return []
+  }
+  return (data ?? []).map((row) => {
+    const r = row as unknown as ProjectDoc & {
+      users: UserRow | UserRow[] | null
+    }
+    const u = Array.isArray(r.users) ? r.users[0] : r.users
+    return {
+      id: r.id,
+      project_id: r.project_id,
+      name: r.name,
+      file_url: r.file_url,
+      file_type: r.file_type,
+      source: r.source,
+      uploaded_by: r.uploaded_by,
+      uploaded_at: r.uploaded_at,
+      uploader: u ?? null,
+    }
+  })
+}
+
 // ─── Calendar (month-range events) ───────────────────────────────────────────
 
 export type CalendarSourceEvents = {

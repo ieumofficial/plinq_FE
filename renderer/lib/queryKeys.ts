@@ -43,5 +43,15 @@ export const queryKeys = {
   members: {
     org: (orgId: string) => ['members', 'org', orgId] as const,
     project: (projectId: string) => ['members', 'project', projectId] as const,
+    projectWithRoles: (projectId: string) =>
+      ['members', 'project', projectId, 'roles'] as const,
+  },
+
+  project: {
+    one: (projectId: string) => ['project', projectId] as const,
+    counts: (projectId: string) => ['project', projectId, 'counts'] as const,
+    tasks: (projectId: string) => ['project', projectId, 'tasks'] as const,
+    meetings: (projectId: string) => ['project', projectId, 'meetings'] as const,
+    docs: (projectId: string) => ['project', projectId, 'docs'] as const,
   },
 }

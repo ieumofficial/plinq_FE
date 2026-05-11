@@ -28,12 +28,12 @@ export default function Event({ title, type = 'meeting', color, size = 'small' }
   if (size === 'big') {
     return (
       <div
-        className="flex items-stretch gap-[5px] pr-[5px] rounded-[2px] w-full max-w-[114px] overflow-hidden"
+        className="flex items-stretch gap-[5px] pr-[5px] rounded-[2px] w-full overflow-hidden shrink-0"
         style={{ backgroundColor: c.bg }}
       >
         <div className="w-[3px] rounded-l-[2px] shrink-0" style={{ backgroundColor: c.bar }} />
         <p
-          className="font-sans text-[12px] font-semibold py-[3px] truncate"
+          className="font-sans text-[12px] font-semibold py-[3px] truncate min-w-0"
           style={{ color: c.text }}
         >
           {title}

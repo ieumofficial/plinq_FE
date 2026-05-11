@@ -56,12 +56,6 @@ const PERSONAL_ROUTE: Record<string, string> = {
   organization: '/organization',
 }
 
-const ROUTE_AFTER_CREATE: Record<CreateType, string> = {
-  project: '/projects',
-  task: '/action-items',
-  meeting: '/calendar',
-}
-
 type Props = {
   projectId: string
   active: ProjectActiveKey
@@ -116,12 +110,9 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
     setMenuOpen(false)
     setCreateType(null)
   }
-  const onCreated = (type: CreateType) => () => {
-    closeAll()
-    const target = ROUTE_AFTER_CREATE[type]
-    if (target && target !== router.pathname) router.push(target)
-    else router.replace(router.asPath)
-  }
+  // Stay on current page; TanStack Query invalidation in the create modals
+  // refreshes the data automatically.
+  const onCreated = () => closeAll()
 
   const api: CreateNewApi = { openMenu, open: (t) => setCreateType(t) }
 
@@ -201,19 +192,21 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
         orgId={org?.id ?? null}
         orgName={org?.name ?? null}
         onClose={closeAll}
-        onCreated={onCreated('project')}
+        onCreated={onCreated}
       />
       <CreateTaskModal
         open={createType === 'task'}
         defaultProjectId={projectId}
+        lockProject
         onClose={closeAll}
-        onCreated={onCreated('task')}
+        onCreated={onCreated}
       />
       <CreateMeetingModal
         open={createType === 'meeting'}
         defaultProjectId={projectId}
+        lockProject
         onClose={closeAll}
-        onCreated={onCreated('meeting')}
+        onCreated={onCreated}
       />
     </CreateNewContext.Provider>
   )

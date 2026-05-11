@@ -51,12 +51,6 @@ const ROUTE_BY_KEY: Record<ActiveKey, string> = {
   organization: '/organization',
 }
 
-const ROUTE_AFTER_CREATE: Record<CreateType, string> = {
-  project: '/projects',
-  task: '/action-items',
-  meeting: '/calendar',
-}
-
 type Props = {
   active: ActiveKey
   /** Shown above the header title. Format: "Workspace · Friday, April 10". */
@@ -131,16 +125,9 @@ export default function PersonalAppShell({
     setMenuOpen(false)
     setCreateType(null)
   }
-  const onCreated = (type: CreateType) => () => {
-    closeAll()
-    const target = ROUTE_AFTER_CREATE[type]
-    if (target && target !== router.pathname) {
-      router.push(target)
-    } else {
-      // Same-page reload to refresh data
-      router.replace(router.asPath)
-    }
-  }
+  // Stay on current page; TanStack Query invalidation in the create modals
+  // refreshes the data automatically.
+  const onCreated = () => closeAll()
 
   const api: CreateNewApi = {
     openMenu,
@@ -187,17 +174,17 @@ export default function PersonalAppShell({
         orgId={orgId}
         orgName={orgName}
         onClose={closeAll}
-        onCreated={onCreated('project')}
+        onCreated={onCreated}
       />
       <CreateTaskModal
         open={createType === 'task'}
         onClose={closeAll}
-        onCreated={onCreated('task')}
+        onCreated={onCreated}
       />
       <CreateMeetingModal
         open={createType === 'meeting'}
         onClose={closeAll}
-        onCreated={onCreated('meeting')}
+        onCreated={onCreated}
       />
     </CreateNewContext.Provider>
   )

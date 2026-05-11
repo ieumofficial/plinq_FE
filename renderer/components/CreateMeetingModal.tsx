@@ -12,6 +12,8 @@ import InviteByEmailModal from './InviteByEmailModal'
 type Props = {
   open: boolean
   defaultProjectId?: string | null
+  /** When true, project picker is locked to defaultProjectId (cannot be changed). */
+  lockProject?: boolean
   onClose: () => void
   onCreated?: (id: string) => void
 }
@@ -88,6 +90,7 @@ function dayDiffFromToday(iso: string): string {
 export default function CreateMeetingModal({
   open,
   defaultProjectId,
+  lockProject = false,
   onClose,
   onCreated,
 }: Props) {
@@ -332,8 +335,11 @@ export default function CreateMeetingModal({
               </label>
               <button
                 type="button"
-                onClick={() => setProjectPickerOpen((v) => !v)}
-                className="bg-white-white border border-gray-border rounded-lg px-3 py-2 text-left flex items-center gap-2 h-[39px] hover:border-primary-main"
+                onClick={() => !lockProject && setProjectPickerOpen((v) => !v)}
+                disabled={lockProject}
+                className={`bg-white-white border border-gray-border rounded-lg px-3 py-2 text-left flex items-center gap-2 h-[39px] ${
+                  lockProject ? 'cursor-not-allowed opacity-90' : 'hover:border-primary-main'
+                }`}
               >
                 {project ? (
                   <>
@@ -352,15 +358,17 @@ export default function CreateMeetingModal({
                       {project.name}
                     </span>
                     <span className="text-[12px] text-gray-secondary truncate">· Org name</span>
-                    <span className="ml-auto text-gray-secondary shrink-0">
-                      <Icon name="ArrowRight" size={12} />
-                    </span>
+                    {!lockProject && (
+                      <span className="ml-auto text-gray-secondary shrink-0">
+                        <Icon name="ArrowRight" size={12} />
+                      </span>
+                    )}
                   </>
                 ) : (
                   <span className="text-gray-secondary text-[12px]">— select project —</span>
                 )}
               </button>
-              {projectPickerOpen && (
+              {projectPickerOpen && !lockProject && (
                 <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white-white border border-gray-border rounded-lg shadow-lg z-10 max-h-[200px] overflow-y-auto">
                   {projects.length === 0 ? (
                     <p className="px-3 py-2 text-gray-secondary text-[11px]">No projects yet</p>

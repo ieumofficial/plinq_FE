@@ -1,11 +1,33 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/router'
 import AppLayout from './ui/AppLayout'
 import SideMenu, { type NavItem } from './ui/SideMenu'
 import Header from './ui/Header'
+import CreateNewMenu, { type CreateType } from './CreateNewMenu'
+import CreateProjectModal from './CreateProjectModal'
+import CreateTaskModal from './CreateTaskModal'
+import CreateMeetingModal from './CreateMeetingModal'
 import { supabase } from '../lib/supabase'
 import { getCurrentUser } from '../lib/queries'
 import type { UserRow } from '../lib/types'
+
+// ─── Create New context ─────────────────────────────────────────────────────
+
+type CreateNewApi = {
+  /** Open the type-picker menu. */
+  openMenu: () => void
+  /** Skip the menu and jump straight into a specific create modal. */
+  open: (type: CreateType) => void
+}
+
+const CreateNewContext = createContext<CreateNewApi | null>(null)
+
+/** Use inside any page wrapped by PersonalAppShell to trigger the global Create New flow. */
+export function useCreateNew(): CreateNewApi {
+  const ctx = useContext(CreateNewContext)
+  if (!ctx) throw new Error('useCreateNew must be used inside PersonalAppShell')
+  return ctx
+}
 
 type ActiveKey = 'dashboard' | 'projects' | 'messages' | 'calendar' | 'tasks' | 'organization'
 
@@ -29,6 +51,12 @@ const ROUTE_BY_KEY: Record<ActiveKey, string> = {
   calendar: '/calendar',
   tasks: '/action-items',
   organization: '/organization',
+}
+
+const ROUTE_AFTER_CREATE: Record<CreateType, string> = {
+  project: '/projects',
+  task: '/action-items',
+  meeting: '/calendar',
 }
 
 type Props = {
@@ -58,10 +86,9 @@ function greeting(): string {
 
 /**
  * Layout shell for all post-login Personal Space pages.
- * Fetches the current user + the user's first organization once on mount,
- * then composes AppLayout + SideMenu + Header.
- *
- * Pages just declare their `active` nav key and content.
+ * Owns:
+ *  - current user / org context (single fetch)
+ *  - "Create new" flow (menu → 3 modals → DB write → route)
  */
 export default function PersonalAppShell({
   active,
@@ -71,7 +98,12 @@ export default function PersonalAppShell({
 }: Props) {
   const router = useRouter()
   const [user, setUser] = useState<UserRow | null>(null)
+  const [orgId, setOrgId] = useState<string | null>(null)
   const [orgName, setOrgName] = useState<string | null>(null)
+
+  // Create New flow state
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [createType, setCreateType] = useState<CreateType | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -92,7 +124,9 @@ export default function PersonalAppShell({
         .limit(1)
         .maybeSingle()
       if (!cancelled) {
-        const org = (data as { organizations: { name: string } | null } | null)?.organizations
+        const org = (data as { organizations: { id: string; name: string } | null } | null)
+          ?.organizations
+        setOrgId(org?.id ?? null)
         setOrgName(org?.name ?? null)
       }
     }
@@ -112,35 +146,86 @@ export default function PersonalAppShell({
   const eyebrow = headerEyebrow ?? buildEyebrow(orgName)
   const title = headerTitle ?? (user ? `${greeting()}, ${user.first_name}` : '')
 
+  const openMenu = () => {
+    setCreateType(null)
+    setMenuOpen(true)
+  }
+  const pickType = (t: CreateType) => {
+    setMenuOpen(false)
+    setCreateType(t)
+  }
+  const closeAll = () => {
+    setMenuOpen(false)
+    setCreateType(null)
+  }
+  const onCreated = (type: CreateType) => () => {
+    closeAll()
+    const target = ROUTE_AFTER_CREATE[type]
+    if (target && target !== router.pathname) {
+      router.push(target)
+    } else {
+      // Same-page reload to refresh data
+      router.replace(router.asPath)
+    }
+  }
+
+  const api: CreateNewApi = {
+    openMenu,
+    open: (t) => setCreateType(t),
+  }
+
   return (
-    <AppLayout
-      header={
-        <Header
-          orgName={orgName ?? 'Plinq'}
-          eyebrow={eyebrow}
-          title={title}
-          userInitials={initials}
-          hasNotifications={false}
-          onBack={() => router.back()}
-          onForward={() => window.history.forward()}
-        />
-      }
-      sidebar={
-        <SideMenu
-          sectionLabel="Personal Space"
-          items={NAV_ITEMS}
-          footerItems={FOOTER_ITEMS}
-          activeKey={active}
-          userInitials={initials}
-          userName={userName}
-          onItemClick={(key) => {
-            const route = ROUTE_BY_KEY[key as ActiveKey]
-            if (route && route !== router.pathname) router.push(route)
-          }}
-        />
-      }
-    >
-      {children}
-    </AppLayout>
+    <CreateNewContext.Provider value={api}>
+      <AppLayout
+        header={
+          <Header
+            orgName={orgName ?? 'Plinq'}
+            eyebrow={eyebrow}
+            title={title}
+            userInitials={initials}
+            hasNotifications={false}
+            onBack={() => router.back()}
+            onForward={() => window.history.forward()}
+            onCreateNew={openMenu}
+          />
+        }
+        sidebar={
+          <SideMenu
+            sectionLabel="Personal Space"
+            items={NAV_ITEMS}
+            footerItems={FOOTER_ITEMS}
+            activeKey={active}
+            userInitials={initials}
+            userName={userName}
+            onItemClick={(key) => {
+              const route = ROUTE_BY_KEY[key as ActiveKey]
+              if (route && route !== router.pathname) router.push(route)
+            }}
+            onCreateNew={openMenu}
+          />
+        }
+      >
+        {children}
+      </AppLayout>
+
+      <CreateNewMenu open={menuOpen} onClose={closeAll} onPick={pickType} />
+      <CreateProjectModal
+        open={createType === 'project'}
+        orgId={orgId}
+        orgName={orgName}
+        onClose={closeAll}
+        onCreated={onCreated('project')}
+      />
+      <CreateTaskModal
+        open={createType === 'task'}
+        onClose={closeAll}
+        onCreated={onCreated('task')}
+      />
+      <CreateMeetingModal
+        open={createType === 'meeting'}
+        onClose={closeAll}
+        onCreated={onCreated('meeting')}
+      />
+    </CreateNewContext.Provider>
   )
 }

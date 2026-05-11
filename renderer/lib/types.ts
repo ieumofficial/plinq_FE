@@ -34,9 +34,16 @@ export type ProjectRow = {
   team_id: string | null
   lead_id: string | null
   status: ProjectStatusDb
+  color: string
   budget: number | null
   created_at: string
 }
+
+export type MeetingType = 'planning' | 'check_in' | 'review' | 'retrospective'
+
+export type MeetingRecurrence = 'once' | 'every_day' | 'every_week' | 'every_year'
+
+export type ProjectRoleDb = 'editor' | 'admin' | 'readonly'
 
 export type TaskRow = {
   id: string
@@ -63,6 +70,10 @@ export type MeetingRow = {
   duration_min: number
   location_or_url: string | null
   status: 'planned' | 'recording' | 'processed'
+  meeting_type: MeetingType
+  recurrence: MeetingRecurrence
+  recurrence_until: string | null
+  recurrence_group_id: string | null
 }
 
 // ─── Mappers: DB → component props ──────────────────────────────────────────

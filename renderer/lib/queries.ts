@@ -67,7 +67,7 @@ export async function getUserProjects(
   // 2. Fetch the projects themselves
   let q = supabase
     .from('projects')
-    .select('id, name, description, team_id, lead_id, status, budget, created_at')
+    .select('id, name, description, team_id, lead_id, status, color, budget, created_at')
     .in('id', projectIds)
   if (opts?.statuses && opts.statuses.length > 0) {
     q = q.in('status', opts.statuses)
@@ -152,8 +152,13 @@ export async function getUserProjects(
 export type NewProjectInput = {
   name: string
   description?: string
+  color?: string
   team_id?: string | null
   status?: ProjectRow['status']
+  /** Members to add (besides the lead, who is auto-added by trigger as admin). */
+  members?: { user_id: string; role: import('./types').ProjectRoleDb }[]
+  /** Email-only invites (user not yet registered). */
+  emailInvites?: { email: string; role: import('./types').ProjectRoleDb }[]
 }
 
 /**
@@ -175,6 +180,7 @@ export async function createProject(
       description: input.description?.trim() || null,
       team_id: input.team_id ?? null,
       lead_id: user.id,
+      ...(input.color ? { color: input.color } : {}),
       // status omitted → DB default 'planned' applies
       ...(input.status ? { status: input.status } : {}),
     })
@@ -185,7 +191,290 @@ export async function createProject(
     console.error('[queries] createProject', error)
     return { error: error.message }
   }
-  return { id: (data as { id: string }).id }
+  const projectId = (data as { id: string }).id
+
+  // Bulk insert additional members (skip the lead — trigger added them as admin).
+  if (input.members && input.members.length > 0) {
+    const rows = input.members
+      .filter((m) => m.user_id !== user.id)
+      .map((m) => ({ project_id: projectId, user_id: m.user_id, role: m.role }))
+    if (rows.length > 0) {
+      const { error: mErr } = await supabase.from('project_members').insert(rows)
+      if (mErr) console.error('[queries] add project members', mErr)
+    }
+  }
+
+  // Email invites (pending until they register)
+  if (input.emailInvites && input.emailInvites.length > 0) {
+    const rows = input.emailInvites.map((i) => ({
+      project_id: projectId,
+      email: i.email.trim().toLowerCase(),
+      role: i.role,
+      invited_by: user.id,
+    }))
+    const { error: iErr } = await supabase.from('project_invites').insert(rows)
+    if (iErr) console.error('[queries] add project invites', iErr)
+  }
+
+  return { id: projectId }
+}
+
+export async function addProjectInvite(input: {
+  project_id: string
+  email: string
+  role?: import('./types').ProjectRoleDb
+}): Promise<{ ok: true } | { error: string }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in' }
+  const { error } = await supabase.from('project_invites').insert({
+    project_id: input.project_id,
+    email: input.email.trim().toLowerCase(),
+    role: input.role ?? 'editor',
+    invited_by: user.id,
+  })
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
+// ─── Task mutations ─────────────────────────────────────────────────────────
+
+export type NewTaskInput = {
+  title: string
+  description?: string
+  project_id: string
+  status?: TaskStatusDb
+  priority?: 'low' | 'medium' | 'high' | 'urgent'
+  due_date?: string | null
+  /** User IDs to assign (each becomes a contributor). */
+  assigneeIds?: string[]
+}
+
+export async function createTask(
+  input: NewTaskInput
+): Promise<{ id: string } | { error: string }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in' }
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .insert({
+      title: input.title.trim(),
+      description: input.description?.trim() || null,
+      project_id: input.project_id,
+      status: input.status ?? 'planned',
+      priority: input.priority ?? 'medium',
+      due_date: input.due_date ?? null,
+      created_by: user.id,
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    console.error('[queries] createTask', error)
+    return { error: error.message }
+  }
+  const taskId = (data as { id: string }).id
+
+  if (input.assigneeIds && input.assigneeIds.length > 0) {
+    const rows = input.assigneeIds.map((uid) => ({
+      task_id: taskId,
+      user_id: uid,
+      role: 'contributor' as const,
+      assigned_by: user.id,
+    }))
+    const { error: aErr } = await supabase.from('task_assignees').insert(rows)
+    if (aErr) console.error('[queries] add task assignees', aErr)
+  }
+
+  return { id: taskId }
+}
+
+// ─── Meeting mutations ──────────────────────────────────────────────────────
+
+export type NewMeetingInput = {
+  name: string
+  project_id: string
+  scheduled_at: string // ISO timestamp
+  duration_min: number
+  location_or_url?: string | null
+  meeting_type?: import('./types').MeetingType
+  recurrence?: import('./types').MeetingRecurrence
+  /** Required when recurrence != 'once'. ISO date string. */
+  recurrence_until?: string | null
+  attendeeIds?: string[]
+  emailInvites?: string[]
+  /** Ordered agenda titles. */
+  agenda?: string[]
+}
+
+function generateRecurrenceDates(
+  startIso: string,
+  recurrence: import('./types').MeetingRecurrence,
+  until: string
+): Date[] {
+  const start = new Date(startIso)
+  const untilDate = new Date(until + 'T23:59:59')
+  const out: Date[] = [start]
+  if (recurrence === 'once') return out
+
+  const stepDays =
+    recurrence === 'every_day' ? 1 : recurrence === 'every_week' ? 7 : 365
+  let cursor = new Date(start)
+  while (true) {
+    cursor = new Date(cursor)
+    if (recurrence === 'every_year') {
+      cursor.setFullYear(cursor.getFullYear() + 1)
+    } else {
+      cursor.setDate(cursor.getDate() + stepDays)
+    }
+    if (cursor > untilDate) break
+    out.push(new Date(cursor))
+    if (out.length > 500) break // safety cap
+  }
+  return out
+}
+
+export async function createMeeting(
+  input: NewMeetingInput
+): Promise<{ id: string; instances?: number } | { error: string }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in' }
+
+  const recurrence = input.recurrence ?? 'once'
+  const isRecurring = recurrence !== 'once' && !!input.recurrence_until
+  const groupId = isRecurring ? crypto.randomUUID() : null
+  const dates = isRecurring
+    ? generateRecurrenceDates(input.scheduled_at, recurrence, input.recurrence_until!)
+    : [new Date(input.scheduled_at)]
+
+  // Insert all instances (single insert if 'once', many if recurring)
+  const meetingRows = dates.map((d) => ({
+    name: input.name.trim(),
+    project_id: input.project_id,
+    scheduled_at: d.toISOString(),
+    duration_min: input.duration_min,
+    location_or_url: input.location_or_url ?? null,
+    meeting_type: input.meeting_type ?? 'planning',
+    recurrence,
+    recurrence_until: input.recurrence_until ?? null,
+    recurrence_group_id: groupId,
+    created_by: user.id,
+  }))
+  const { data: insertedMeetings, error } = await supabase
+    .from('meetings')
+    .insert(meetingRows)
+    .select('id')
+
+  if (error) {
+    console.error('[queries] createMeeting', error)
+    return { error: error.message }
+  }
+  const meetingIds = (insertedMeetings ?? []).map((r) => (r as { id: string }).id)
+  const firstId = meetingIds[0]
+
+  // Attendees + agenda for each instance
+  if (input.attendeeIds && input.attendeeIds.length > 0) {
+    const rows = meetingIds.flatMap((mid) =>
+      input.attendeeIds!.map((uid) => ({
+        meeting_id: mid,
+        user_id: uid,
+        attendance: 'invited' as const,
+      }))
+    )
+    const { error: aErr } = await supabase.from('meeting_attendees').insert(rows)
+    if (aErr) console.error('[queries] add meeting attendees', aErr)
+  }
+
+  if (input.agenda && input.agenda.length > 0) {
+    const cleanAgenda = input.agenda
+      .map((title, i) => ({ title: title.trim(), order: i }))
+      .filter((r) => r.title.length > 0)
+    if (cleanAgenda.length > 0) {
+      const rows = meetingIds.flatMap((mid) =>
+        cleanAgenda.map((a) => ({ meeting_id: mid, title: a.title, order: a.order }))
+      )
+      const { error: gErr } = await supabase.from('meeting_agendas').insert(rows)
+      if (gErr) console.error('[queries] add meeting agendas', gErr)
+    }
+  }
+
+  // Email invites (only on the first/parent instance — when they register, they
+  // get added to all instances via the recurrence_group_id lookup)
+  if (input.emailInvites && input.emailInvites.length > 0 && firstId) {
+    const rows = input.emailInvites.map((email) => ({
+      meeting_id: firstId,
+      email: email.trim().toLowerCase(),
+      invited_by: user.id,
+    }))
+    const { error: iErr } = await supabase.from('meeting_invites').insert(rows)
+    if (iErr) console.error('[queries] add meeting invites', iErr)
+  }
+
+  return { id: firstId, instances: meetingIds.length }
+}
+
+export async function addMeetingInvite(input: {
+  meeting_id: string
+  email: string
+}): Promise<{ ok: true } | { error: string }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in' }
+  const { error } = await supabase.from('meeting_invites').insert({
+    meeting_id: input.meeting_id,
+    email: input.email.trim().toLowerCase(),
+    invited_by: user.id,
+  })
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
+// ─── Member helpers ─────────────────────────────────────────────────────────
+
+/** All users that are members of any organization the current user belongs to. */
+export async function getOrgMembers(orgId: string): Promise<UserRow[]> {
+  const { data, error } = await supabase
+    .from('organization_members')
+    .select('users(id, email, first_name, last_name, nickname, job_title)')
+    .eq('org_id', orgId)
+  if (error) {
+    console.error('[queries] getOrgMembers', error)
+    return []
+  }
+  const out: UserRow[] = []
+  for (const row of data ?? []) {
+    const u = (row as unknown as { users: UserRow | UserRow[] | null }).users
+    if (!u) continue
+    if (Array.isArray(u)) out.push(...u)
+    else out.push(u)
+  }
+  return out
+}
+
+export async function getProjectMembers(projectId: string): Promise<UserRow[]> {
+  const { data, error } = await supabase
+    .from('project_members')
+    .select('users(id, email, first_name, last_name, nickname, job_title)')
+    .eq('project_id', projectId)
+  if (error) {
+    console.error('[queries] getProjectMembers', error)
+    return []
+  }
+  const out: UserRow[] = []
+  for (const row of data ?? []) {
+    const u = (row as unknown as { users: UserRow | UserRow[] | null }).users
+    if (!u) continue
+    if (Array.isArray(u)) out.push(...u)
+    else out.push(u)
+  }
+  return out
 }
 
 // ─── Tasks (action items) ────────────────────────────────────────────────────

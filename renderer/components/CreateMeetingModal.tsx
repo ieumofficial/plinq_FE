@@ -94,7 +94,7 @@ export default function CreateMeetingModal({
   onClose,
   onCreated,
 }: Props) {
-  const [, setMe] = useState<UserRow | null>(null)
+  const [me, setMe] = useState<UserRow | null>(null)
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [members, setMembers] = useState<UserRow[]>([])
 
@@ -139,7 +139,7 @@ export default function CreateMeetingModal({
     setSubmitting(false)
   }, [open, defaultProjectId])
 
-  // Load projects + me
+  // Load projects + me. Pre-fill self as attendee.
   useEffect(() => {
     if (!open) return
     let cancelled = false
@@ -148,6 +148,8 @@ export default function CreateMeetingModal({
       if (cancelled) return
       setMe(u)
       if (!u) return
+      // Add self to attendees by default (user can remove if unwanted)
+      setAttendeeIds((prev) => (prev.includes(u.id) ? prev : [u.id, ...prev]))
       const ps = await getUserProjects(u.id)
       if (cancelled) return
       setProjects(ps)
@@ -208,18 +210,36 @@ export default function CreateMeetingModal({
     [projects, projectId]
   )
 
+  // Pool of users to choose from = project members + current user (in case
+  // the user isn't a project member yet, they're still pre-selected as creator).
+  const pool = useMemo(() => {
+    const seen = new Set<string>()
+    const out: UserRow[] = []
+    if (me) {
+      out.push(me)
+      seen.add(me.id)
+    }
+    for (const m of members) {
+      if (!seen.has(m.id)) {
+        out.push(m)
+        seen.add(m.id)
+      }
+    }
+    return out
+  }, [me, members])
+
   const candidateMembers = useMemo(() => {
     const q = attendeeSearch.toLowerCase().trim()
-    return members.filter((u) => {
+    return pool.filter((u) => {
       if (attendeeIds.includes(u.id)) return false
       if (!q) return true
       return memberLabel(u).toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
     })
-  }, [members, attendeeIds, attendeeSearch])
+  }, [pool, attendeeIds, attendeeSearch])
 
   const addedAttendees = useMemo(
-    () => members.filter((u) => attendeeIds.includes(u.id)),
-    [members, attendeeIds]
+    () => pool.filter((u) => attendeeIds.includes(u.id)),
+    [pool, attendeeIds]
   )
 
   const totalMin = durationMinutes(startTime, endTime)

@@ -378,7 +378,7 @@ export async function createMeeting(
   const meetingIds = (insertedMeetings ?? []).map((r) => (r as { id: string }).id)
   const firstId = meetingIds[0]
 
-  // Attendees + agenda for each instance
+  // Attendees + agenda for each instance.
   if (input.attendeeIds && input.attendeeIds.length > 0) {
     const rows = meetingIds.flatMap((mid) =>
       input.attendeeIds!.map((uid) => ({

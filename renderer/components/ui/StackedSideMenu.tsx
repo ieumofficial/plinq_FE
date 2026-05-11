@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import Icon, { type IconName } from './Icon'
+import ProjectLabel from './ProjectLabel'
 import StatusLabelBig, { type Status } from './StatusLabelBig'
 
 export type StackedNavItem = {
@@ -95,15 +96,7 @@ export default function StackedSideMenu({
             onClick={header.onSwitch}
             className="flex items-center gap-[5px] h-[19.32px] -mx-[2px] px-[2px] rounded hover:bg-white-white/60"
           >
-            <span
-              className="inline-flex items-center justify-center w-[20px] h-[20px] rounded-[3px] text-[12px] font-bold text-white"
-              style={{
-                backgroundColor: header.color,
-                fontFamily: 'Geist Mono, ui-monospace, monospace',
-              }}
-            >
-              {header.initial}
-            </span>
+            <ProjectLabel name={header.initial} color={header.color} size="sm" />
             <span className="text-black text-[14px] font-semibold">
               {header.name}
             </span>

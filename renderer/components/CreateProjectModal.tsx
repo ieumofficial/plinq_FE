@@ -31,7 +31,7 @@ const COLORS: { key: ColorKey; bg: string; fg: string; ring: string }[] = [
 
 // Status pill colors (matches StatusLabelBig at md size)
 const STATUSES: { key: ProjectStatusDb; label: string; activeBg: string; activeText: string }[] = [
-  { key: 'planned', label: 'Planned', activeBg: 'bg-[#E6ECEF]', activeText: 'text-black' },
+  { key: 'planned', label: 'Planned', activeBg: 'bg-[#E6ECEF]', activeText: 'text-primary-main' },
   { key: 'in_progress', label: 'In progress', activeBg: 'bg-blue-light', activeText: 'text-blue-main' },
   { key: 'review', label: 'Review', activeBg: 'bg-brown-light', activeText: 'text-brown-med' },
   { key: 'blocked', label: 'Blocked', activeBg: 'bg-red-light', activeText: 'text-red-main' },
@@ -95,11 +95,24 @@ export default function CreateProjectModal({
     if (open && me && !leadId) setLeadId(me.id)
   }, [open, me, leadId])
 
-  // Esc / Cmd+Enter
+  // Esc / Cmd+Enter — Esc closes any open dropdown / sub-modal first; only
+  // closes the modal when nothing transient is showing.
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        if (inviteOpen) return // InviteByEmailModal owns its own Esc handling
+        if (hexInputOpen) {
+          setHexInputOpen(false)
+          return
+        }
+        if (leadPickerOpen) {
+          setLeadPickerOpen(false)
+          return
+        }
+        onClose()
+        return
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault()
         void submit()
@@ -108,7 +121,18 @@ export default function CreateProjectModal({
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, name, color, description, status, leadId, memberIds])
+  }, [
+    open,
+    name,
+    color,
+    description,
+    status,
+    leadId,
+    memberIds,
+    hexInputOpen,
+    leadPickerOpen,
+    inviteOpen,
+  ])
 
   const addedMembers = useMemo(
     () => orgMembers.filter((u) => memberIds.includes(u.id)),
@@ -394,21 +418,24 @@ export default function CreateProjectModal({
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
                 Status *
               </label>
-              <div className="flex items-center gap-[6px] h-[39px]">
-                {STATUSES.map((s) => (
-                  <button
-                    key={s.key}
-                    type="button"
-                    onClick={() => setStatus(s.key)}
-                    className={`text-[12px] font-semibold uppercase tracking-[1px] whitespace-nowrap rounded-[2px] transition-colors ${
-                      status === s.key
-                        ? `${s.activeBg} ${s.activeText} px-[7px] py-[3px]`
-                        : 'text-gray-secondary hover:text-black px-[2px]'
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
+              <div className="bg-white-item flex items-start gap-[5px] p-[5px] rounded-[5px] h-[39px]">
+                {STATUSES.map((s) => {
+                  const selected = status === s.key
+                  return (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setStatus(s.key)}
+                      className={`flex items-center justify-center px-[10px] py-[5px] rounded-[5px] text-[12px] font-semibold whitespace-nowrap transition-colors ${
+                        selected
+                          ? `${s.activeBg} ${s.activeText}`
+                          : 'bg-white-item text-black hover:bg-white-white'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>

@@ -5,6 +5,7 @@ import ProjectAppShell from '../../../components/ProjectAppShell'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import UserGroup from '../../../components/ui/UserGroup'
+import MemberStatus from '../../../components/ui/MemberStatus'
 import Table, {
   TableHeader,
   TableRow,
@@ -12,19 +13,7 @@ import Table, {
   type Column,
 } from '../../../components/ui/Table'
 import { useProject, useProjectMembersWithRoles } from '../../../lib/hooks'
-import { userToMember, type ProjectRoleDb } from '../../../lib/types'
-
-const PERMISSION_STYLES: Record<ProjectRoleDb, string> = {
-  admin: 'bg-primary-main text-white',
-  editor: 'bg-gray-main text-white',
-  readonly: 'bg-gray-extra-light text-gray-main',
-}
-
-const PERMISSION_LABEL: Record<ProjectRoleDb, string> = {
-  admin: 'Admin',
-  editor: 'Editor',
-  readonly: 'Read-only',
-}
+import { userToMember } from '../../../lib/types'
 
 const COLS: Column[] = [
   { key: 'member', label: 'Member', width: 'flex-[2]' },
@@ -197,17 +186,10 @@ export default function MembersPage() {
                     <span className="text-[14px] text-black">{m.email}</span>
                   </TableCell>
                   <TableCell width="w-[120px]">
-                    <span
-                      className={`px-[10px] py-[3px] rounded-[3px] text-[12px] font-semibold ${PERMISSION_STYLES[m.role]}`}
-                    >
-                      {PERMISSION_LABEL[m.role]}
-                    </span>
+                    <MemberStatus variant="permission" status={m.role} />
                   </TableCell>
                   <TableCell width="w-[140px]">
-                    <span className="flex items-center gap-[6px]">
-                      <span className="w-[6px] h-[6px] rounded-full bg-green-main" />
-                      <span className="text-[12px] text-black">Available</span>
-                    </span>
+                    <MemberStatus variant="presence" status="available" />
                   </TableCell>
                   <TableCell width="w-[40px]">
                     <button

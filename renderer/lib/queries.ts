@@ -716,6 +716,8 @@ export async function getProjectMembersWithRoles(
 export type ProjectMeeting = MeetingRow & {
   attendees: UserRow[]
   action_count: number
+  /** AI-generated summary from `meeting_minutes.summary`, if processed. */
+  summary: string | null
 }
 
 /** Meetings for a project, with attendee list and AI-extracted action item count. */
@@ -735,15 +737,17 @@ export async function getProjectMeetings(projectId: string): Promise<ProjectMeet
   if (meetings.length === 0) return []
 
   const ids = meetings.map((m) => m.id)
-  const [attRes, actionRes] = await Promise.all([
+  const [attRes, actionRes, minRes] = await Promise.all([
     supabase
       .from('meeting_attendees')
       .select('meeting_id, users(id, email, first_name, last_name, nickname, job_title)')
       .in('meeting_id', ids),
     supabase.from('tasks').select('source_meeting_id').in('source_meeting_id', ids),
+    supabase.from('meeting_minutes').select('meeting_id, summary').in('meeting_id', ids),
   ])
   if (attRes.error) console.error('[queries] meeting attendees', attRes.error)
   if (actionRes.error) console.error('[queries] meeting actions', actionRes.error)
+  if (minRes.error) console.error('[queries] meeting minutes', minRes.error)
 
   const byMeeting = new Map<string, UserRow[]>()
   for (const row of attRes.data ?? []) {
@@ -763,10 +767,16 @@ export async function getProjectMeetings(projectId: string): Promise<ProjectMeet
     if (!r.source_meeting_id) continue
     actionCounts.set(r.source_meeting_id, (actionCounts.get(r.source_meeting_id) ?? 0) + 1)
   }
+  const summaryByMeeting = new Map<string, string>()
+  for (const row of minRes.data ?? []) {
+    const r = row as { meeting_id: string; summary: string | null }
+    if (r.summary) summaryByMeeting.set(r.meeting_id, r.summary)
+  }
   return meetings.map((m) => ({
     ...m,
     attendees: byMeeting.get(m.id) ?? [],
     action_count: actionCounts.get(m.id) ?? 0,
+    summary: summaryByMeeting.get(m.id) ?? null,
   }))
 }
 

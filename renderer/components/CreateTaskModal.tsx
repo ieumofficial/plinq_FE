@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Input from './ui/Input'
 import Button from './ui/Button'
 import Icon from './ui/Icon'
+import ProjectLabel from './ui/ProjectLabel'
 import { useQueryClient } from '@tanstack/react-query'
 import { createTask } from '../lib/queries'
 import { useCurrentUser, useProjectMembers, useUserProjects } from '../lib/hooks'
@@ -21,7 +22,7 @@ type Props = {
 type Priority = 'highest' | 'high' | 'medium' | 'low' | 'lowest'
 
 const STATUSES: { key: TaskStatusDb; label: string; activeBg: string; activeText: string }[] = [
-  { key: 'planned', label: 'Planned', activeBg: 'bg-[#E6ECEF]', activeText: 'text-black' },
+  { key: 'planned', label: 'Planned', activeBg: 'bg-[#E6ECEF]', activeText: 'text-primary-main' },
   { key: 'in_progress', label: 'In progress', activeBg: 'bg-blue-light', activeText: 'text-blue-main' },
   { key: 'review', label: 'Review', activeBg: 'bg-brown-light', activeText: 'text-brown-med' },
   { key: 'blocked', label: 'Blocked', activeBg: 'bg-red-light', activeText: 'text-red-main' },
@@ -36,23 +37,11 @@ const PRIORITIES: {
   activeText: string
 }[] = [
   { key: 'highest', label: 'Highest', iconName: 'Highest', activeBg: 'bg-red-light', activeText: 'text-red-main' },
-  { key: 'high', label: 'High', iconName: 'High', activeBg: 'bg-brown-light', activeText: 'text-brown-med' },
+  { key: 'high', label: 'High', iconName: 'High', activeBg: 'bg-red-light', activeText: 'text-red-main' },
   { key: 'medium', label: 'Medium', iconName: 'Medium', activeBg: 'bg-brown-light', activeText: 'text-brown-med' },
   { key: 'low', label: 'Low', iconName: 'Low', activeBg: 'bg-blue-light', activeText: 'text-blue-main' },
-  { key: 'lowest', label: 'Lowest', iconName: 'Lowest', activeBg: 'bg-gray-extra-light', activeText: 'text-gray-main' },
+  { key: 'lowest', label: 'Lowest', iconName: 'Lowest', activeBg: 'bg-blue-light', activeText: 'text-blue-main' },
 ]
-
-const PROJECT_COLOR_BY_DB_KEY: Record<string, { bg: string; fg: string }> = {
-  blue: { bg: 'bg-blue-light', fg: 'text-blue-main' },
-  green: { bg: 'bg-[#DCEBE0]', fg: 'text-green-main' },
-  amber: { bg: 'bg-brown-light', fg: 'text-brown-med' },
-  red: { bg: 'bg-red-light', fg: 'text-red-main' },
-  purple: { bg: 'bg-purple-light', fg: 'text-purple-main' },
-  turquoise: { bg: 'bg-turquoise-light', fg: 'text-turquoise-main' },
-}
-function projectColor(key: string | null | undefined) {
-  return PROJECT_COLOR_BY_DB_KEY[key ?? 'blue'] ?? PROJECT_COLOR_BY_DB_KEY.blue
-}
 
 // UI 5단계 → DB 4단계
 function uiPriorityToDb(p: Priority): 'low' | 'medium' | 'high' | 'urgent' {
@@ -64,13 +53,6 @@ function uiPriorityToDb(p: Priority): 'low' | 'medium' | 'high' | 'urgent' {
 
 function memberLabel(u: UserRow) {
   return u.nickname || `${u.first_name} ${u.last_name}`.trim() || u.email
-}
-
-function formatDateLabel(iso: string) {
-  if (!iso) return ''
-  const d = new Date(iso + 'T00:00:00')
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function dayDiffFromToday(iso: string): string {
@@ -129,11 +111,23 @@ export default function CreateTaskModal({
 
   const { data: members = [] } = useProjectMembers(projectId)
 
-  // Esc / Cmd+Enter
+  // Esc / Cmd+Enter — Esc closes any open dropdown first; only closes the modal
+  // when no dropdown is showing.
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        if (projectPickerOpen) {
+          setProjectPickerOpen(false)
+          return
+        }
+        if (assigneePickerOpen) {
+          setAssigneePickerOpen(false)
+          return
+        }
+        onClose()
+        return
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault()
         void submit()
@@ -142,7 +136,18 @@ export default function CreateTaskModal({
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, title, projectId, description, assigneeId, status, dueDate, priority])
+  }, [
+    open,
+    title,
+    projectId,
+    description,
+    assigneeId,
+    status,
+    dueDate,
+    priority,
+    projectPickerOpen,
+    assigneePickerOpen,
+  ])
 
   const project = useMemo(
     () => projects.find((p) => p.id === projectId),
@@ -235,17 +240,7 @@ export default function CreateTaskModal({
             >
               {project ? (
                 <>
-                  {(() => {
-                    const c = projectColor(project.color)
-                    return (
-                      <span
-                        className={`w-[20px] h-[20px] rounded-[3px] inline-flex items-center justify-center text-[11px] font-bold uppercase shrink-0 ${c.bg} ${c.fg}`}
-                        style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
-                      >
-                        {project.name.charAt(0)}
-                      </span>
-                    )
-                  })()}
+                  <ProjectLabel name={project.name} color={project.color} size="sm" />
                   <span className="text-[13px] text-black font-semibold">{project.name}</span>
                   <span className="text-[12px] text-gray-secondary">· Org name</span>
                   {!lockProject && (
@@ -263,30 +258,22 @@ export default function CreateTaskModal({
                 {projects.length === 0 ? (
                   <p className="px-3 py-2 text-gray-secondary text-[11px]">No projects yet</p>
                 ) : (
-                  projects.map((p) => {
-                    const c = projectColor(p.color)
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          setProjectId(p.id)
-                          setProjectPickerOpen(false)
-                        }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-white-item text-left ${
-                          projectId === p.id ? 'bg-blue-light/30' : ''
-                        }`}
-                      >
-                        <span
-                          className={`w-[20px] h-[20px] rounded-[3px] inline-flex items-center justify-center text-[11px] font-bold uppercase shrink-0 ${c.bg} ${c.fg}`}
-                          style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
-                        >
-                          {p.name.charAt(0)}
-                        </span>
-                        <span className="text-[12px] text-black">{p.name}</span>
-                      </button>
-                    )
-                  })
+                  projects.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setProjectId(p.id)
+                        setProjectPickerOpen(false)
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-white-item text-left ${
+                        projectId === p.id ? 'bg-blue-light/30' : ''
+                      }`}
+                    >
+                      <ProjectLabel name={p.name} color={p.color} size="sm" />
+                      <span className="text-[12px] text-black">{p.name}</span>
+                    </button>
+                  ))
                 )}
               </div>
             )}
@@ -316,7 +303,7 @@ export default function CreateTaskModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-[283.5px_1fr] gap-[15px]">
+          <div className="grid grid-cols-[1fr_355px] gap-[15px]">
             <div className="flex flex-col gap-1 relative">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
                 Assignee
@@ -392,67 +379,76 @@ export default function CreateTaskModal({
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
                 Status *
               </label>
-              <div className="flex items-center gap-[6px] h-[39px]">
-                {STATUSES.map((s) => (
-                  <button
-                    key={s.key}
-                    type="button"
-                    onClick={() => setStatus(s.key)}
-                    className={`text-[12px] font-semibold uppercase tracking-[1px] whitespace-nowrap rounded-[2px] transition-colors ${
-                      status === s.key
-                        ? `${s.activeBg} ${s.activeText} px-[7px] py-[3px]`
-                        : 'text-gray-secondary hover:text-black px-[2px]'
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
+              <div className="bg-white-item flex items-start gap-[5px] p-[5px] rounded-[5px] h-[39px]">
+                {STATUSES.map((s) => {
+                  const selected = status === s.key
+                  return (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setStatus(s.key)}
+                      className={`flex items-center justify-center px-[10px] py-[5px] rounded-[5px] text-[12px] font-semibold whitespace-nowrap transition-colors ${
+                        selected
+                          ? `${s.activeBg} ${s.activeText}`
+                          : 'bg-white-item text-black hover:bg-white-white'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-[283.5px_1fr] gap-[15px]">
+          <div className="grid grid-cols-[1fr_436px] gap-[15px]">
             <div className="flex flex-col gap-1">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
                 Due Date *
               </label>
               <div className="relative">
+                <Icon
+                  name="Calendar"
+                  size={13}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                  style={{ color: '#94A0AA' }}
+                />
                 <input
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full bg-white-white border border-gray-border rounded-lg px-3 py-2 pr-14 text-[12px] text-black outline-none focus:border-primary-main h-[39px]"
+                  className="w-full bg-white-white border border-gray-border rounded-lg pl-9 pr-12 py-2 text-[12px] text-black outline-none focus:border-primary-main h-[39px]"
                 />
                 {dueDate && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-secondary text-[11px]">
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-secondary text-[10px]">
                     {dayDiffFromToday(dueDate)}
                   </span>
                 )}
               </div>
-              {dueDate && (
-                <p className="text-gray-secondary text-[10px]">{formatDateLabel(dueDate)}</p>
-              )}
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
                 Priority *
               </label>
-              <div className="flex items-center gap-[4px] h-[39px]">
-                {PRIORITIES.map((p) => (
-                  <button
-                    key={p.key}
-                    type="button"
-                    onClick={() => setPriority(p.key)}
-                    className={`text-[12px] font-semibold uppercase tracking-[0.5px] rounded-[2px] transition-colors whitespace-nowrap inline-flex items-center gap-[3px] ${
-                      priority === p.key
-                        ? `${p.activeBg} ${p.activeText} px-[6px] py-[3px]`
-                        : 'text-gray-secondary hover:text-black px-[2px]'
-                    }`}
-                  >
-                    <Icon name={p.iconName} size={11} />
-                    {p.label}
-                  </button>
-                ))}
+              <div className="bg-white-item flex items-start gap-[5px] p-[5px] rounded-[5px] h-[39px]">
+                {PRIORITIES.map((p) => {
+                  const selected = priority === p.key
+                  return (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => setPriority(p.key)}
+                      className={`flex items-center justify-center gap-[10px] px-[10px] py-[5px] rounded-[5px] text-[12px] font-semibold whitespace-nowrap transition-colors ${
+                        selected
+                          ? `${p.activeBg} ${p.activeText}`
+                          : 'bg-white-item text-black hover:bg-white-white'
+                      }`}
+                    >
+                      <Icon name={p.iconName} size={15} />
+                      {p.label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>

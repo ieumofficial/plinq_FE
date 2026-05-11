@@ -11,8 +11,8 @@ type Props = {
 type CardSpec = {
   type: CreateType
   letter: string
-  bg: string
-  fg: string
+  badgeBg: string
+  badgeFg: string
   shortcut: string
   title: string
   blurb: string
@@ -23,8 +23,8 @@ const CARDS: CardSpec[] = [
   {
     type: 'project',
     letter: 'P',
-    bg: 'bg-purple-light',
-    fg: 'text-purple-main',
+    badgeBg: 'bg-[#DDE7F4]',
+    badgeFg: 'text-[#2D5A9E]',
     shortcut: '⌘ P',
     title: 'Project',
     blurb: 'A workstream with members, status, and more.',
@@ -33,8 +33,8 @@ const CARDS: CardSpec[] = [
   {
     type: 'task',
     letter: 'T',
-    bg: 'bg-[#DCEBE0]',
-    fg: 'text-green-main',
+    badgeBg: 'bg-[#DCEBE0]',
+    badgeFg: 'text-[#2F6B45]',
     shortcut: '⌘ T',
     title: 'Task',
     blurb: 'A unit of work that can hold subtasks.',
@@ -43,8 +43,8 @@ const CARDS: CardSpec[] = [
   {
     type: 'meeting',
     letter: 'M',
-    bg: 'bg-purple-light',
-    fg: 'text-purple-main',
+    badgeBg: 'bg-[#E5DEEF]',
+    badgeFg: 'text-[#5B3D8A]',
     shortcut: '⌘ M',
     title: 'Meeting',
     blurb: 'A scheduled session with agenda and attendees.',
@@ -85,13 +85,14 @@ export default function CreateNewMenu({ open, onClose, onPick }: Props) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white-white rounded-[10px] shadow-xl p-[20px] w-[717px] max-w-[92vw] flex flex-col gap-[20px]"
+        className="bg-white-white rounded-[10px] shadow-2xl w-[780px] max-w-[95vw] flex flex-col"
       >
-        <div className="flex flex-col gap-[5px]">
+        {/* Header */}
+        <div className="px-[30px] pt-[30px] pb-[25px] flex flex-col gap-[10px]">
           <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
             Create New
           </p>
-          <h2 className="text-black text-[24px] font-semibold leading-tight">
+          <h2 className="text-black text-[28px] font-semibold leading-tight">
             What would you like to create?
           </h2>
           <p className="text-gray-main text-[12px]">
@@ -99,41 +100,56 @@ export default function CreateNewMenu({ open, onClose, onPick }: Props) {
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-[10px]">
-          {CARDS.map((c) => (
-            <button
-              key={c.type}
-              type="button"
-              onClick={() => onPick(c.type)}
-              className="text-left bg-white-white border border-gray-border-light rounded-[10px] p-[20px] flex flex-col gap-[15px] cursor-pointer hover:shadow-md hover:border-gray-border transition-all"
-            >
-              <div className="flex items-start justify-between">
-                <span
-                  className={`w-[28px] h-[28px] rounded-[4px] inline-flex items-center justify-center text-[14px] font-bold uppercase ${c.bg} ${c.fg}`}
-                  style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
-                >
-                  {c.letter}
-                </span>
-                <span
-                  className="bg-white-item border border-gray-border-light text-gray-main text-[11px] px-[6px] py-[2px] rounded-[4px] tracking-[0.2px]"
-                  style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
-                >
-                  {c.shortcut}
-                </span>
-              </div>
-              <h3 className="text-black text-[20px] font-semibold leading-tight">{c.title}</h3>
-              <p className="text-gray-main text-[12px] leading-[1.4]">{c.blurb}</p>
-              <ul className="flex flex-col gap-[3px] mt-[5px] text-[12px] text-gray-main">
-                {c.bullets.map((b) => (
-                  <li key={b}>• {b}</li>
-                ))}
-              </ul>
-            </button>
-          ))}
+        {/* Cards */}
+        <div className="px-[30px] pb-[20px]">
+          <div className="grid grid-cols-3 gap-[15px]">
+            {CARDS.map((c) => (
+              <button
+                key={c.type}
+                type="button"
+                onClick={() => onPick(c.type)}
+                className="bg-white-item border border-gray-border-light rounded-[10px] p-[20px] h-[210px] flex flex-col justify-between text-left hover:border-gray-border hover:shadow-sm transition-all"
+              >
+                {/* Top: badge + shortcut, then title + blurb */}
+                <div className="flex flex-col gap-[15px]">
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`w-[28px] h-[28px] rounded-[5px] inline-flex items-center justify-center text-[14px] font-bold ${c.badgeBg} ${c.badgeFg}`}
+                      style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+                    >
+                      {c.letter}
+                    </span>
+                    <span
+                      className="bg-white-white border border-gray-border-light text-black text-[10px] px-[5px] py-[5px] rounded-[5px]"
+                    >
+                      {c.shortcut}
+                    </span>
+                  </div>
+                  <h3 className="text-black text-[20px] font-semibold leading-none">
+                    {c.title}
+                  </h3>
+                  <p className="text-[#6B7B86] text-[10px] leading-[1.5]">
+                    {c.blurb}
+                  </p>
+                </div>
+
+                {/* Bottom: bullet list */}
+                <ul className="flex flex-col gap-[7px]">
+                  {c.bullets.map((b) => (
+                    <li key={b} className="flex items-center gap-[5px]">
+                      <span className="w-[3px] h-[3px] rounded-full bg-black shrink-0" />
+                      <span className="text-black text-[10px] leading-[1.5]">{b}</span>
+                    </li>
+                  ))}
+                </ul>
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="border-t border-gray-border-light pt-[15px]">
-          <p className="text-gray-secondary text-[11px]">press esc · click away to cancel</p>
+        {/* Footer */}
+        <div className="border-t border-gray-border-light px-[30px] py-[20px]">
+          <p className="text-[#6B7B86] text-[10px]">press esc · click away to cancel</p>
         </div>
       </div>
     </div>

@@ -8,17 +8,7 @@ import Icon from '../../../components/ui/Icon'
 import UserGroup from '../../../components/ui/UserGroup'
 import { useProject, useProjectMeetings } from '../../../lib/hooks'
 import { userToMember, type MeetingType } from '../../../lib/types'
-
-const TYPE_STYLES: Record<MeetingType, { bg: string; text: string; label: string }> = {
-  planning: { bg: 'bg-blue-light', text: 'text-blue-main', label: 'Planning' },
-  check_in: { bg: 'bg-green-light', text: 'text-green-main', label: 'Check-In' },
-  review: { bg: 'bg-amber-light', text: 'text-amber-main', label: 'Review' },
-  retrospective: {
-    bg: 'bg-purple-light',
-    text: 'text-purple-main',
-    label: 'Retrospective',
-  },
-}
+import MeetingTypeLabel from '../../../components/ui/MeetingTypeLabel'
 
 function dateBlock(iso: string): { top: string; bottom: string } {
   const d = new Date(iso)
@@ -36,15 +26,25 @@ function dateBlock(iso: string): { top: string; bottom: string } {
   return { top, bottom }
 }
 
-function whenLabel(iso: string): string {
+function metaLabel(iso: string, durationMin: number): string {
   const d = new Date(iso)
   const today = new Date()
   const isToday =
     d.getFullYear() === today.getFullYear() &&
     d.getMonth() === today.getMonth() &&
     d.getDate() === today.getDate()
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-  return isToday ? `Today · ${time}` : `${d.toLocaleDateString('en-US')} · ${time}`
+  const time = d
+    .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    .toUpperCase()
+  const dayLabel = isToday ? 'Today' : d.toLocaleDateString('en-US')
+  return `${dayLabel} · ${time} · ${durationMin} min`
+}
+
+const DATE_BLOCK_STYLES: Record<MeetingType, { bg: string; text: string }> = {
+  planning: { bg: 'bg-[#E6ECEF]', text: 'text-[#6B7B86]' },
+  check_in: { bg: 'bg-[#E6ECEF]', text: 'text-[#6B7B86]' },
+  review: { bg: 'bg-[#E6ECEF]', text: 'text-[#6B7B86]' },
+  retrospective: { bg: 'bg-[#E5DEEF]', text: 'text-[#5B3D8A]' },
 }
 
 export default function MeetingsPage() {
@@ -148,65 +148,124 @@ function MeetingsBody({ projectId }: { projectId: string }) {
               </div>
             ) : (
               filtered.map((m) => {
-                const t = TYPE_STYLES[m.meeting_type]
                 const block = dateBlock(m.scheduled_at)
                 const isLive = m.status === 'recording'
+                const isUpcoming = new Date(m.scheduled_at).getTime() >= Date.now()
+                const showJoin = isLive || isUpcoming
+                const dateStyle = DATE_BLOCK_STYLES[m.meeting_type]
                 return (
                   <article
                     key={m.id}
-                    className="bg-white-white border border-gray-border-light rounded-[10px] p-[15px] flex items-stretch gap-[15px]"
+                    className="bg-white-white border border-gray-border-light rounded-[10px] p-[15px] flex items-center gap-[15px]"
                   >
-                    {/* Date block */}
-                    <div className="bg-purple-light rounded-[5px] w-[55px] flex flex-col items-center justify-center gap-[2px] shrink-0">
-                      <span className="text-purple-main text-[10px] font-semibold tracking-[1px]">
+                    {/* Date block — 60×50 */}
+                    <div
+                      className={`w-[60px] h-[50px] rounded-[3px] py-[5px] flex flex-col items-center justify-center shrink-0 ${dateStyle.bg}`}
+                    >
+                      <p
+                        className={`opacity-70 text-[10px] uppercase tracking-[1px] text-center ${dateStyle.text}`}
+                        style={{ fontFamily: 'Geist Mono, ui-monospace, monospace', fontWeight: 600 }}
+                      >
                         {block.top}
-                      </span>
-                      <span
-                        className="text-purple-main text-[16px] font-bold"
-                        style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+                      </p>
+                      <p
+                        className={`text-[14px] tracking-[1px] text-center ${dateStyle.text}`}
+                        style={{ fontFamily: 'Geist Mono, ui-monospace, monospace', fontWeight: 600 }}
                       >
                         {block.bottom}
-                      </span>
+                      </p>
                     </div>
-                    {/* Body */}
-                    <div className="flex-1 min-w-0 flex flex-col gap-[8px]">
-                      <div className="flex items-center gap-[10px] flex-wrap">
-                        <h3 className="text-black text-[16px] font-semibold">{m.name}</h3>
-                        <span className="text-gray-secondary text-[12px]">
-                          {whenLabel(m.scheduled_at)} · {m.duration_min} min
-                        </span>
-                        {isLive && (
-                          <span className="text-red-main text-[12px] font-semibold flex items-center gap-[4px]">
-                            <span className="w-[6px] h-[6px] rounded-full bg-red-main" />
-                            LIVE
-                          </span>
+
+                    {/* Body — two stacked rows */}
+                    <div className="flex-1 min-w-0 flex flex-col gap-[10px]">
+                      {/* Top row */}
+                      <div className="flex items-start justify-between gap-[15px]">
+                        <div className="flex flex-col gap-[10px] min-w-0 flex-1">
+                          <div className="flex items-center gap-[15px] flex-wrap">
+                            <h3 className="text-black text-[20px] font-semibold leading-none">
+                              {m.name}
+                            </h3>
+                            <span
+                              className="text-[10px] tracking-[1px] text-[#6B7B86]"
+                              style={{
+                                fontFamily: 'Geist Mono, ui-monospace, monospace',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {metaLabel(m.scheduled_at, m.duration_min)}
+                            </span>
+                            {isLive && (
+                              <span className="flex items-center gap-[5px]">
+                                <span className="w-[6px] h-[6px] rounded-full bg-red-main" />
+                                <span
+                                  className="text-[#D9534F] text-[10px] tracking-[1px]"
+                                  style={{
+                                    fontFamily: 'Geist Mono, ui-monospace, monospace',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  LIVE
+                                </span>
+                              </span>
+                            )}
+                          </div>
+                          {m.summary && (
+                            <p className="text-[12px] text-[#6B7B86] leading-snug">
+                              {m.summary}
+                            </p>
+                          )}
+                        </div>
+                        {showJoin && (
+                          <button
+                            type="button"
+                            className="bg-[#2E434E] text-[#F8F9FA] text-[12px] px-[10px] py-[10px] rounded-[5px] shrink-0 hover:opacity-90"
+                          >
+                            Join
+                          </button>
                         )}
                       </div>
-                      <div className="flex items-center gap-[5px]">
-                        <span
-                          className={`px-[8px] py-[3px] rounded-[3px] text-[10px] font-semibold uppercase tracking-[1px] ${t.bg} ${t.text}`}
-                        >
-                          {t.label}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Right column */}
-                    <div className="flex flex-col items-end justify-between gap-[10px] shrink-0">
-                      <Button size="compact" variant="secondary">
-                        Join
-                      </Button>
-                      <div className="flex items-center gap-[8px]">
-                        {m.action_count > 0 && (
-                          <span className="bg-green-light text-green-main text-[10px] font-semibold uppercase tracking-[1px] px-[8px] py-[3px] rounded-[3px]">
-                            ✓ {m.action_count} actions
-                          </span>
-                        )}
-                        {m.attendees.length > 0 && (
-                          <UserGroup
-                            members={m.attendees.slice(0, 4).map(userToMember)}
-                            size={20}
-                          />
-                        )}
+
+                      {/* Bottom row */}
+                      <div className="flex items-center justify-between gap-[15px] w-full">
+                        <div className="flex items-center gap-[10px]">
+                          <MeetingTypeLabel type={m.meeting_type} />
+                        </div>
+                        <div className="flex items-center gap-[15px]">
+                          {m.action_count > 0 && (
+                            <span className="bg-red-light flex items-center gap-[5px] px-[5px] py-[2px] rounded-[2px]">
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 14 14"
+                                fill="none"
+                                aria-hidden
+                              >
+                                <path
+                                  d="M3 7L6 10L11 4"
+                                  stroke="#9B3838"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                              <span
+                                className="text-[#9B3838] text-[10px] tracking-[1px] uppercase"
+                                style={{
+                                  fontFamily: 'Wanted Sans, ui-sans-serif, sans-serif',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {m.action_count} ACTIONS
+                              </span>
+                            </span>
+                          )}
+                          {m.attendees.length > 0 && (
+                            <UserGroup
+                              members={m.attendees.slice(0, 5).map(userToMember)}
+                              size={15}
+                            />
+                          )}
+                        </div>
                       </div>
                     </div>
                   </article>

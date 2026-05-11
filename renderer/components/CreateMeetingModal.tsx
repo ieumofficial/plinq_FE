@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Input from './ui/Input'
 import Button from './ui/Button'
 import Icon from './ui/Icon'
+import ProjectLabel from './ui/ProjectLabel'
 import { useQueryClient } from '@tanstack/react-query'
 import { createMeeting } from '../lib/queries'
 import { useCurrentUser, useProjectMembers, useUserProjects } from '../lib/hooks'
@@ -24,8 +25,8 @@ const MEETING_TYPES: {
   activeBg: string
   activeText: string
 }[] = [
-  { key: 'planning', label: 'Planning', activeBg: 'bg-[#E6ECEF]', activeText: 'text-black' },
-  { key: 'check_in', label: 'Check-in', activeBg: 'bg-blue-light', activeText: 'text-blue-main' },
+  { key: 'planning', label: 'Planning', activeBg: 'bg-[#E6ECEF]', activeText: 'text-primary-main' },
+  { key: 'check_in', label: 'Check-in', activeBg: 'bg-[#DCEBE0]', activeText: 'text-green-main' },
   { key: 'review', label: 'Review', activeBg: 'bg-brown-light', activeText: 'text-brown-med' },
   {
     key: 'retrospective',
@@ -46,18 +47,6 @@ const RECURRENCES: { key: MeetingRecurrence; label: string }[] = [
   { key: 'every_week', label: 'Every week' },
   { key: 'every_year', label: 'Every year' },
 ]
-
-const PROJECT_COLOR_BY_DB_KEY: Record<string, { bg: string; fg: string }> = {
-  blue: { bg: 'bg-blue-light', fg: 'text-blue-main' },
-  green: { bg: 'bg-[#DCEBE0]', fg: 'text-green-main' },
-  amber: { bg: 'bg-brown-light', fg: 'text-brown-med' },
-  red: { bg: 'bg-red-light', fg: 'text-red-main' },
-  purple: { bg: 'bg-purple-light', fg: 'text-purple-main' },
-  turquoise: { bg: 'bg-turquoise-light', fg: 'text-turquoise-main' },
-}
-function projectColor(key: string | null | undefined) {
-  return PROJECT_COLOR_BY_DB_KEY[key ?? 'blue'] ?? PROJECT_COLOR_BY_DB_KEY.blue
-}
 
 function memberLabel(u: UserRow) {
   return u.nickname || `${u.first_name} ${u.last_name}`.trim() || u.email
@@ -152,11 +141,23 @@ export default function CreateMeetingModal({
 
   const { data: members = [] } = useProjectMembers(projectId)
 
-  // Esc / Cmd+Enter
+  // Esc / Cmd+Enter — Esc closes any open dropdown first; only closes the modal
+  // when no dropdown is showing.
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        if (projectPickerOpen) {
+          setProjectPickerOpen(false)
+          return
+        }
+        if (recurrencePickerOpen) {
+          setRecurrencePickerOpen(false)
+          return
+        }
+        onClose()
+        return
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault()
         void submit()
@@ -179,6 +180,8 @@ export default function CreateMeetingModal({
     attendeeIds,
     emailInvites,
     agenda,
+    projectPickerOpen,
+    recurrencePickerOpen,
   ])
 
   const project = useMemo(
@@ -308,21 +311,24 @@ export default function CreateMeetingModal({
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
                 Location *
               </label>
-              <div className="flex items-center gap-[6px] h-[39px]">
-                {LOCATIONS.map((l) => (
-                  <button
-                    key={l.key}
-                    type="button"
-                    onClick={() => setLocation(l.key)}
-                    className={`text-[12px] font-semibold uppercase tracking-[1px] whitespace-nowrap rounded-[2px] transition-colors ${
-                      location === l.key
-                        ? 'bg-[#E6ECEF] text-black px-[7px] py-[3px]'
-                        : 'text-gray-secondary hover:text-black px-[2px]'
-                    }`}
-                  >
-                    {l.label}
-                  </button>
-                ))}
+              <div className="bg-white-item flex items-start gap-[5px] p-[5px] rounded-[5px] h-[39px]">
+                {LOCATIONS.map((l) => {
+                  const selected = location === l.key
+                  return (
+                    <button
+                      key={l.key}
+                      type="button"
+                      onClick={() => setLocation(l.key)}
+                      className={`flex items-center justify-center px-[10px] py-[5px] rounded-[5px] text-[12px] font-semibold whitespace-nowrap transition-colors ${
+                        selected
+                          ? 'bg-[#E6ECEF] text-primary-main'
+                          : 'bg-white-item text-black hover:bg-white-white'
+                      }`}
+                    >
+                      {l.label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -343,17 +349,7 @@ export default function CreateMeetingModal({
               >
                 {project ? (
                   <>
-                    {(() => {
-                      const c = projectColor(project.color)
-                      return (
-                        <span
-                          className={`w-[20px] h-[20px] rounded-[3px] inline-flex items-center justify-center text-[11px] font-bold uppercase shrink-0 ${c.bg} ${c.fg}`}
-                          style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
-                        >
-                          {project.name.charAt(0)}
-                        </span>
-                      )
-                    })()}
+                    <ProjectLabel name={project.name} color={project.color} size="sm" />
                     <span className="text-[13px] text-black font-semibold truncate">
                       {project.name}
                     </span>
@@ -373,30 +369,22 @@ export default function CreateMeetingModal({
                   {projects.length === 0 ? (
                     <p className="px-3 py-2 text-gray-secondary text-[11px]">No projects yet</p>
                   ) : (
-                    projects.map((p) => {
-                      const c = projectColor(p.color)
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => {
-                            setProjectId(p.id)
-                            setProjectPickerOpen(false)
-                          }}
-                          className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-white-item text-left ${
-                            projectId === p.id ? 'bg-blue-light/30' : ''
-                          }`}
-                        >
-                          <span
-                            className={`w-[20px] h-[20px] rounded-[3px] inline-flex items-center justify-center text-[11px] font-bold uppercase shrink-0 ${c.bg} ${c.fg}`}
-                            style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
-                          >
-                            {p.name.charAt(0)}
-                          </span>
-                          <span className="text-[12px] text-black">{p.name}</span>
-                        </button>
-                      )
-                    })
+                    projects.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setProjectId(p.id)
+                          setProjectPickerOpen(false)
+                        }}
+                        className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-white-item text-left ${
+                          projectId === p.id ? 'bg-blue-light/30' : ''
+                        }`}
+                      >
+                        <ProjectLabel name={p.name} color={p.color} size="sm" />
+                        <span className="text-[12px] text-black">{p.name}</span>
+                      </button>
+                    ))
                   )}
                 </div>
               )}
@@ -405,21 +393,24 @@ export default function CreateMeetingModal({
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
                 Meeting Type *
               </label>
-              <div className="flex items-center gap-[6px] h-[39px]">
-                {MEETING_TYPES.map((t) => (
-                  <button
-                    key={t.key}
-                    type="button"
-                    onClick={() => setMeetingType(t.key)}
-                    className={`text-[12px] font-semibold uppercase tracking-[1px] whitespace-nowrap rounded-[2px] transition-colors ${
-                      meetingType === t.key
-                        ? `${t.activeBg} ${t.activeText} px-[7px] py-[3px]`
-                        : 'text-gray-secondary hover:text-black px-[2px]'
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
+              <div className="bg-white-item flex items-start gap-[5px] p-[5px] rounded-[5px] h-[39px]">
+                {MEETING_TYPES.map((t) => {
+                  const selected = meetingType === t.key
+                  return (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setMeetingType(t.key)}
+                      className={`flex items-center justify-center px-[10px] py-[5px] rounded-[5px] text-[12px] font-semibold whitespace-nowrap transition-colors ${
+                        selected
+                          ? `${t.activeBg} ${t.activeText}`
+                          : 'bg-white-item text-black hover:bg-white-white'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>

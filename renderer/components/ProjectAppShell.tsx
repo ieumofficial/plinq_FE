@@ -62,21 +62,6 @@ type Props = {
   children: ReactNode
 }
 
-function projectColorToHex(color: string | undefined): string {
-  if (!color) return '#2D5A9E'
-  // If already hex, use it; otherwise map known palette keys to hex.
-  if (color.startsWith('#')) return color
-  const palette: Record<string, string> = {
-    blue: '#2D5A9E',
-    red: '#9B3838',
-    green: '#2F6B45',
-    amber: '#8A5A1E',
-    gray: '#455E6A',
-    purple: '#5A3D8A',
-  }
-  return palette[color] ?? '#2D5A9E'
-}
-
 export default function ProjectAppShell({ projectId, active, children }: Props) {
   const router = useRouter()
   const { data: user, isFetched: userFetched } = useCurrentUser()
@@ -118,7 +103,6 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
 
   const projectName = project?.name ?? 'Project'
   const projectInitial = projectName.charAt(0).toUpperCase()
-  const projectColor = projectColorToHex(project?.color)
 
   const items: StackedNavItem[] = [
     { key: 'dashboard', icon: 'Dashboard', label: 'Project Dashboard' },
@@ -171,7 +155,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
             header={{
               kind: 'project',
               initial: projectInitial,
-              color: projectColor,
+              color: project?.color ?? 'blue',
               name: projectName,
               subtitle: project?.description ?? undefined,
               status: project ? dbStatusToUi(project.status) : undefined,

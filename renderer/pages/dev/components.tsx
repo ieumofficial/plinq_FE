@@ -16,6 +16,9 @@ import ProjectListCard from '../../components/ui/ProjectListCard'
 import MenuItem from '../../components/ui/MenuItem'
 import SideMenu, { type NavItem } from '../../components/ui/SideMenu'
 import StackedSideMenu, { type StackedNavItem } from '../../components/ui/StackedSideMenu'
+import ProjectLabel from '../../components/ui/ProjectLabel'
+import MeetingTypeLabel from '../../components/ui/MeetingTypeLabel'
+import MemberStatus from '../../components/ui/MemberStatus'
 import Header from '../../components/ui/Header'
 import AppLayout from '../../components/ui/AppLayout'
 import Filter from '../../components/ui/Filter'
@@ -536,6 +539,70 @@ export default function ComponentsPage() {
                   onItemClick={(k) => alert(k)}
                   onBack={() => alert('back')}
                 />
+              </div>
+            </div>
+          </Section>
+
+          {/* PROJECT LABEL */}
+          <Section title="Project Label">
+            <div className="flex flex-col gap-3">
+              <div>
+                <p className="text-gray-secondary text-[10px] mb-2 uppercase tracking-[1.5px]">
+                  Palette keys (small)
+                </p>
+                <div className="flex items-center gap-3">
+                  {(['blue', 'green', 'amber', 'red', 'purple', 'turquoise'] as const).map(
+                    (c) => (
+                      <ProjectLabel key={c} name={c} color={c} size="sm" />
+                    )
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-gray-secondary text-[10px] mb-2 uppercase tracking-[1.5px]">
+                  Custom hex (medium)
+                </p>
+                <div className="flex items-center gap-3">
+                  <ProjectLabel name="A" color="#FF6B35" size="md" />
+                  <ProjectLabel name="B" color="#16A085" size="md" />
+                  <ProjectLabel name="C" color="#9B59B6" size="md" />
+                </div>
+              </div>
+            </div>
+          </Section>
+
+          {/* MEETING TYPE LABEL */}
+          <Section title="Meeting Type Label">
+            <div className="flex items-center gap-3">
+              <MeetingTypeLabel type="planning" />
+              <MeetingTypeLabel type="check_in" />
+              <MeetingTypeLabel type="review" />
+              <MeetingTypeLabel type="retrospective" />
+            </div>
+          </Section>
+
+          {/* MEMBER STATUS */}
+          <Section title="Member Status">
+            <div className="flex flex-col gap-3">
+              <div>
+                <p className="text-gray-secondary text-[10px] mb-2 uppercase tracking-[1.5px]">
+                  Presence
+                </p>
+                <div className="flex items-center gap-4">
+                  <MemberStatus variant="presence" status="available" />
+                  <MemberStatus variant="presence" status="in_meeting" />
+                  <MemberStatus variant="presence" status="unavailable" />
+                </div>
+              </div>
+              <div>
+                <p className="text-gray-secondary text-[10px] mb-2 uppercase tracking-[1.5px]">
+                  Permission
+                </p>
+                <div className="flex items-center gap-2">
+                  <MemberStatus variant="permission" status="readonly" />
+                  <MemberStatus variant="permission" status="editor" />
+                  <MemberStatus variant="permission" status="admin" />
+                </div>
               </div>
             </div>
           </Section>

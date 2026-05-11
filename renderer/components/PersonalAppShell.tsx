@@ -7,9 +7,7 @@ import CreateNewMenu, { type CreateType } from './CreateNewMenu'
 import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
-import { supabase } from '../lib/supabase'
-import { getCurrentUser } from '../lib/queries'
-import type { UserRow } from '../lib/types'
+import { useCurrentUser, useMyOrg } from '../lib/hooks'
 
 // ─── Create New context ─────────────────────────────────────────────────────
 
@@ -97,44 +95,19 @@ export default function PersonalAppShell({
   children,
 }: Props) {
   const router = useRouter()
-  const [user, setUser] = useState<UserRow | null>(null)
-  const [orgId, setOrgId] = useState<string | null>(null)
-  const [orgName, setOrgName] = useState<string | null>(null)
+  const { data: user, isFetched: userFetched } = useCurrentUser()
+  const { data: org } = useMyOrg(user?.id)
+  const orgId = org?.id ?? null
+  const orgName = org?.name ?? null
+
+  // Redirect to login if no user (only after the first fetch resolves)
+  useEffect(() => {
+    if (userFetched && !user) router.push('/')
+  }, [userFetched, user, router])
 
   // Create New flow state
   const [menuOpen, setMenuOpen] = useState(false)
   const [createType, setCreateType] = useState<CreateType | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      const u = await getCurrentUser()
-      if (cancelled) return
-      if (!u) {
-        router.push('/')
-        return
-      }
-      setUser(u)
-
-      // First org the user is a member of (TODO: replace with selected-org context)
-      const { data } = await supabase
-        .from('organization_members')
-        .select('organizations(id, name)')
-        .eq('user_id', u.id)
-        .limit(1)
-        .maybeSingle()
-      if (!cancelled) {
-        const org = (data as { organizations: { id: string; name: string } | null } | null)
-          ?.organizations
-        setOrgId(org?.id ?? null)
-        setOrgName(org?.name ?? null)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [router])
 
   const initials = user
     ? `${user.first_name[0] ?? ''}${user.last_name[0] ?? ''}`.toUpperCase()

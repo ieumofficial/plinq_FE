@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import Input from './ui/Input'
 import Button from './ui/Button'
 import Icon from './ui/Icon'
-import { createProject, getOrgMembers, getCurrentUser } from '../lib/queries'
+import { useQueryClient } from '@tanstack/react-query'
+import { createProject } from '../lib/queries'
+import { useCurrentUser, useOrgMembers } from '../lib/hooks'
+import { queryKeys } from '../lib/queryKeys'
 import type { ProjectRoleDb, ProjectStatusDb, UserRow } from '../lib/types'
 import InviteByEmailModal from './InviteByEmailModal'
 
@@ -46,8 +49,10 @@ export default function CreateProjectModal({
   onClose,
   onCreated,
 }: Props) {
-  const [me, setMe] = useState<UserRow | null>(null)
-  const [orgMembers, setOrgMembers] = useState<UserRow[]>([])
+  const { data: meRaw } = useCurrentUser()
+  const me: UserRow | null = meRaw ?? null
+  const { data: orgMembers = [] } = useOrgMembers(orgId)
+  const queryClient = useQueryClient()
 
   const [name, setName] = useState('')
   const [color, setColor] = useState<ColorKey>('blue')
@@ -85,25 +90,10 @@ export default function CreateProjectModal({
     setSubmitting(false)
   }, [open])
 
-  // Load current user + org members
+  // Default lead = current user when modal opens
   useEffect(() => {
-    if (!open) return
-    let cancelled = false
-    async function load() {
-      const u = await getCurrentUser()
-      if (cancelled) return
-      setMe(u)
-      if (u && !leadId) setLeadId(u.id)
-      if (orgId) {
-        const ms = await getOrgMembers(orgId)
-        if (!cancelled) setOrgMembers(ms)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [open, orgId, leadId])
+    if (open && me && !leadId) setLeadId(me.id)
+  }, [open, me, leadId])
 
   // Esc / Cmd+Enter
   useEffect(() => {
@@ -179,6 +169,8 @@ export default function CreateProjectModal({
       setError(result.error)
       return
     }
+    queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
+    queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all })
     onCreated?.(result.id)
     onClose()
   }

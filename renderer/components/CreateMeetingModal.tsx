@@ -2,13 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import Input from './ui/Input'
 import Button from './ui/Button'
 import Icon from './ui/Icon'
-import {
-  createMeeting,
-  getCurrentUser,
-  getProjectMembers,
-  getUserProjects,
-  type ProjectWithStats,
-} from '../lib/queries'
+import { useQueryClient } from '@tanstack/react-query'
+import { createMeeting } from '../lib/queries'
+import { useCurrentUser, useProjectMembers, useUserProjects } from '../lib/hooks'
+import { queryKeys } from '../lib/queryKeys'
 import type { MeetingRecurrence, MeetingType, UserRow } from '../lib/types'
 import InviteByEmailModal from './InviteByEmailModal'
 
@@ -94,9 +91,10 @@ export default function CreateMeetingModal({
   onClose,
   onCreated,
 }: Props) {
-  const [me, setMe] = useState<UserRow | null>(null)
-  const [projects, setProjects] = useState<ProjectWithStats[]>([])
-  const [members, setMembers] = useState<UserRow[]>([])
+  const { data: meRaw } = useCurrentUser()
+  const me: UserRow | null = meRaw ?? null
+  const { data: projects = [] } = useUserProjects(me?.id)
+  const queryClient = useQueryClient()
 
   const [title, setTitle] = useState('')
   const [location, setLocation] = useState<'zoom' | 'in_person'>('zoom')
@@ -139,42 +137,17 @@ export default function CreateMeetingModal({
     setSubmitting(false)
   }, [open, defaultProjectId])
 
-  // Load projects + me. Pre-fill self as attendee.
+  // Pre-fill self as attendee + default project
   useEffect(() => {
-    if (!open) return
-    let cancelled = false
-    async function load() {
-      const u = await getCurrentUser()
-      if (cancelled) return
-      setMe(u)
-      if (!u) return
-      // Add self to attendees by default (user can remove if unwanted)
-      setAttendeeIds((prev) => (prev.includes(u.id) ? prev : [u.id, ...prev]))
-      const ps = await getUserProjects(u.id)
-      if (cancelled) return
-      setProjects(ps)
-      if (!projectId && ps.length > 0) setProjectId(ps[0].id)
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+    if (!open || !me) return
+    setAttendeeIds((prev) => (prev.includes(me.id) ? prev : [me.id, ...prev]))
+  }, [open, me])
 
-  // Load project members when project changes
   useEffect(() => {
-    if (!open || !projectId) return
-    let cancelled = false
-    async function load() {
-      const ms = await getProjectMembers(projectId!)
-      if (!cancelled) setMembers(ms)
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [open, projectId])
+    if (open && !projectId && projects.length > 0) setProjectId(projects[0].id)
+  }, [open, projectId, projects])
+
+  const { data: members = [] } = useProjectMembers(projectId)
 
   // Esc / Cmd+Enter
   useEffect(() => {
@@ -285,6 +258,8 @@ export default function CreateMeetingModal({
       setError(result.error)
       return
     }
+    queryClient.invalidateQueries({ queryKey: queryKeys.meetings.all })
+    queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all })
     onCreated?.(result.id)
     onClose()
   }

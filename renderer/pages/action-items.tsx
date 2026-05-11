@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Head from 'next/head'
-import { useRouter } from 'next/router'
 import PersonalAppShell from '../components/PersonalAppShell'
 import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
@@ -9,17 +8,9 @@ import Checkbox from '../components/ui/Checkbox'
 import StatusLabelBig from '../components/ui/StatusLabelBig'
 import PriorityTag from '../components/ui/PriorityTag'
 import Table, { TableHeader, TableRow, TableCell, type Column } from '../components/ui/Table'
-import {
-  getCurrentUser,
-  getUserActionItems,
-  type TaskWithProject,
-} from '../lib/queries'
-import {
-  dbStatusToUi,
-  dbPriorityToUi,
-  formatDueDate,
-  type UserRow,
-} from '../lib/types'
+import { useCurrentUser, useUserActionItems } from '../lib/hooks'
+import { type TaskWithProject } from '../lib/queries'
+import { dbStatusToUi, dbPriorityToUi, formatDueDate } from '../lib/types'
 
 type FilterKey = 'all' | 'mine' | 'overdue' | 'completed'
 
@@ -38,33 +29,10 @@ function isOverdue(t: TaskWithProject): boolean {
 }
 
 export default function ActionItemsPage() {
-  const router = useRouter()
-  const [, setUser] = useState<UserRow | null>(null)
-  const [tasks, setTasks] = useState<TaskWithProject[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: user } = useCurrentUser()
+  const { data: tasks = [], isLoading } = useUserActionItems(user?.id, { includeDone: true })
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterKey>('all')
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      const u = await getCurrentUser()
-      if (cancelled) return
-      if (!u) {
-        router.push('/')
-        return
-      }
-      setUser(u)
-      const ts = await getUserActionItems(u.id, { includeDone: true })
-      if (cancelled) return
-      setTasks(ts)
-      setLoading(false)
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [router])
 
   const counts = useMemo(() => {
     const all = tasks.length
@@ -162,7 +130,7 @@ export default function ActionItemsPage() {
           </div>
 
           {/* Tables grouped by project */}
-          {loading ? (
+          {isLoading && tasks.length === 0 ? (
             <p className="text-gray-secondary text-[12px]">Loading…</p>
           ) : grouped.length === 0 ? (
             <div className="bg-white-white border border-gray-border-light rounded-[10px] p-12 text-center">

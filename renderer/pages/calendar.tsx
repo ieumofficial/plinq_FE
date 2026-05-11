@@ -1,17 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Head from 'next/head'
-import { useRouter } from 'next/router'
 import PersonalAppShell from '../components/PersonalAppShell'
 import Calendar, { type CalendarEvent } from '../components/ui/Calendar'
 import Schedule from '../components/ui/Schedule'
 import FilterChecklist from '../components/ui/FilterChecklist'
 import {
-  getCurrentUser,
-  getUserCalendarEvents,
-  getUserUpcomingMeetings,
-  type MeetingWithAttendees,
-} from '../lib/queries'
-import { type UserRow } from '../lib/types'
+  useCurrentUser,
+  useUserCalendarEvents,
+  useUserUpcomingMeetings,
+} from '../lib/hooks'
 
 type FilterKey = 'meetings' | 'tasks'
 const FILTER_COLORS: Record<FilterKey, string> = {
@@ -33,90 +30,49 @@ function endOfDay(d: Date) {
 }
 
 export default function CalendarPage() {
-  const router = useRouter()
-  const [user, setUser] = useState<UserRow | null>(null)
+  const { data: user } = useCurrentUser()
+  const userId = user?.id
   const [calMonth, setCalMonth] = useState(startOfMonth(new Date()))
-  const [allEvents, setAllEvents] = useState<{ events: CalendarEvent[]; counts: Record<FilterKey, number> }>({
-    events: [],
-    counts: { meetings: 0, tasks: 0 },
+  const today = useMemo(() => new Date(), [])
+
+  const { data: rawEvents } = useUserCalendarEvents(
+    userId,
+    startOfMonth(calMonth),
+    endOfMonth(calMonth)
+  )
+  const { data: todayMeetings = [] } = useUserUpcomingMeetings(userId, {
+    from: startOfDay(today),
+    to: endOfDay(today),
   })
-  const [todayMeetings, setTodayMeetings] = useState<MeetingWithAttendees[]>([])
+
   const [filters, setFilters] = useState<Record<FilterKey, boolean>>({
     meetings: true,
     tasks: true,
   })
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      const u = await getCurrentUser()
-      if (cancelled) return
-      if (!u) {
-        router.push('/')
-        return
-      }
-      setUser(u)
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [router])
-
-  // Refetch month events when month changes
-  useEffect(() => {
-    if (!user) return
-    let cancelled = false
-    async function load() {
-      const u = user!
-      const { meetings: ms, tasksWithDue: ts } = await getUserCalendarEvents(
-        u.id,
-        startOfMonth(calMonth),
-        endOfMonth(calMonth)
-      )
-      if (cancelled) return
-      const events: CalendarEvent[] = [
-        ...ms.map((m) => ({
-          id: `m-${m.id}`,
-          date: m.scheduled_at.slice(0, 10),
-          title: m.name,
-          type: 'meeting' as const,
+  const allEvents = useMemo(() => {
+    if (!rawEvents) return { events: [] as CalendarEvent[], counts: { meetings: 0, tasks: 0 } }
+    const events: CalendarEvent[] = [
+      ...rawEvents.meetings.map((m) => ({
+        id: `m-${m.id}`,
+        date: m.scheduled_at.slice(0, 10),
+        title: m.name,
+        type: 'meeting' as const,
+      })),
+      ...rawEvents.tasksWithDue
+        .filter((t) => t.due_date)
+        .map((t) => ({
+          id: `t-${t.id}`,
+          date: t.due_date!,
+          title: t.title,
+          type: 'task' as const,
         })),
-        ...ts
-          .filter((t) => t.due_date)
-          .map((t) => ({
-            id: `t-${t.id}`,
-            date: t.due_date!,
-            title: t.title,
-            type: 'task' as const,
-          })),
-      ]
-      setAllEvents({ events, counts: { meetings: ms.length, tasks: ts.length } })
+    ]
+    return {
+      events,
+      counts: { meetings: rawEvents.meetings.length, tasks: rawEvents.tasksWithDue.length },
     }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [user, calMonth])
-
-  // Today's schedule (separate from grid events; uses attendees)
-  useEffect(() => {
-    if (!user) return
-    const u = user
-    let cancelled = false
-    async function load() {
-      const today = new Date()
-      const ms = await getUserUpcomingMeetings(u.id, {
-        from: startOfDay(today),
-        to: endOfDay(today),
-      })
-      if (!cancelled) setTodayMeetings(ms)
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [user])
+  }, [rawEvents])
 
   const visibleEvents = allEvents.events.filter((e) => {
     if (e.type === 'meeting') return filters.meetings
@@ -205,9 +161,7 @@ export default function CalendarPage() {
                   onChange={(v) => setFilters((s) => ({ ...s, tasks: v }))}
                 />
               </div>
-              <p className="text-gray-secondary text-[10px] mt-3">
-                Showing {monthLabel}
-              </p>
+              <p className="text-gray-secondary text-[10px] mt-3">Showing {monthLabel}</p>
             </section>
           </aside>
         </div>

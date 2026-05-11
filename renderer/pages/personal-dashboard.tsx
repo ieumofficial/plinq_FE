@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import PersonalAppShell from '../components/PersonalAppShell'
@@ -8,22 +8,18 @@ import Calendar, { type CalendarEvent } from '../components/ui/Calendar'
 import Schedule from '../components/ui/Schedule'
 import Button from '../components/ui/Button'
 import {
-  getCurrentUser,
-  getUserProjects,
-  getUserActionItems,
-  getUserUpcomingMeetings,
-  getUserCalendarEvents,
-  type ProjectWithStats,
-  type TaskWithProject,
-  type MeetingWithAttendees,
-} from '../lib/queries'
+  useCurrentUser,
+  useUserActionItems,
+  useUserCalendarEvents,
+  useUserProjects,
+  useUserUpcomingMeetings,
+} from '../lib/hooks'
 import {
   dbPriorityToUi,
   dbStatusToUi,
   formatDueDate,
   formatTimeRange,
   userToMember,
-  type UserRow,
 } from '../lib/types'
 
 const ACTIVE_PROJECTS_LIMIT = 3
@@ -67,85 +63,55 @@ function endOfDay(d: Date) {
 
 export default function PersonalDashboardPage() {
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<UserRow | null>(null)
-  const [projects, setProjects] = useState<ProjectWithStats[]>([])
-  const [tasks, setTasks] = useState<TaskWithProject[]>([])
-  const [meetings, setMeetings] = useState<MeetingWithAttendees[]>([])
-  const [calEvents, setCalEvents] = useState<CalendarEvent[]>([])
+  const { data: user } = useCurrentUser()
+  const userId = user?.id
+
   const [calMonth, setCalMonth] = useState(startOfMonth(new Date()))
+  const today = useMemo(() => new Date(), [])
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      const u = await getCurrentUser()
-      if (cancelled) return
-      if (!u) {
-        router.push('/')
-        return
-      }
-      setUser(u)
+  const { data: projects = [], isLoading: projectsLoading } = useUserProjects(userId, {
+    statuses: ['planned', 'in_progress', 'review'],
+    limit: ACTIVE_PROJECTS_LIMIT,
+  })
 
-      const today = new Date()
-      const [ps, ts, ms] = await Promise.all([
-        getUserProjects(u.id, {
-          statuses: ['planned', 'in_progress', 'review'],
-          limit: ACTIVE_PROJECTS_LIMIT,
-        }),
-        getUserActionItems(u.id, { limit: ACTION_ITEMS_LIMIT }),
-        getUserUpcomingMeetings(u.id, {
-          from: startOfDay(today),
-          to: endOfDay(today),
-          limit: TODAY_SCHEDULE_LIMIT,
-        }),
-      ])
-      if (cancelled) return
-      setProjects(ps)
-      setTasks(ts)
-      setMeetings(ms)
-      setLoading(false)
+  const { data: tasks = [], isLoading: tasksLoading } = useUserActionItems(userId, {
+    limit: ACTION_ITEMS_LIMIT,
+  })
+
+  const { data: meetings = [], isLoading: meetingsLoading } = useUserUpcomingMeetings(
+    userId,
+    {
+      from: startOfDay(today),
+      to: endOfDay(today),
+      limit: TODAY_SCHEDULE_LIMIT,
     }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [router])
+  )
 
-  // Reload calendar events whenever month changes
-  useEffect(() => {
-    if (!user) return
-    let cancelled = false
-    async function load() {
-      const u = user!
-      const { meetings: ms, tasksWithDue: ts } = await getUserCalendarEvents(
-        u.id,
-        startOfMonth(calMonth),
-        endOfMonth(calMonth)
-      )
-      if (cancelled) return
-      const events: CalendarEvent[] = [
-        ...ms.map((m) => ({
-          id: `m-${m.id}`,
-          date: m.scheduled_at.slice(0, 10),
-          title: m.name,
-          type: 'meeting' as const,
+  const { data: rawEvents } = useUserCalendarEvents(
+    userId,
+    startOfMonth(calMonth),
+    endOfMonth(calMonth)
+  )
+
+  const calEvents: CalendarEvent[] = useMemo(() => {
+    if (!rawEvents) return []
+    return [
+      ...rawEvents.meetings.map((m) => ({
+        id: `m-${m.id}`,
+        date: m.scheduled_at.slice(0, 10),
+        title: m.name,
+        type: 'meeting' as const,
+      })),
+      ...rawEvents.tasksWithDue
+        .filter((t) => t.due_date)
+        .map((t) => ({
+          id: `t-${t.id}`,
+          date: t.due_date!,
+          title: t.title,
+          type: 'deadline' as const,
         })),
-        ...ts
-          .filter((t) => t.due_date)
-          .map((t) => ({
-            id: `t-${t.id}`,
-            date: t.due_date!,
-            title: t.title,
-            type: 'deadline' as const,
-          })),
-      ]
-      setCalEvents(events)
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [user, calMonth])
+    ]
+  }, [rawEvents])
 
   return (
     <>
@@ -171,7 +137,7 @@ export default function PersonalDashboardPage() {
                   </Button>
                 }
               />
-              {loading ? (
+              {projectsLoading && projects.length === 0 ? (
                 <p className="text-gray-secondary text-[12px]">Loading…</p>
               ) : projects.length === 0 ? (
                 <p className="text-gray-secondary text-[12px]">No active projects yet.</p>
@@ -207,7 +173,7 @@ export default function PersonalDashboardPage() {
                   </Button>
                 }
               />
-              {loading ? (
+              {tasksLoading && tasks.length === 0 ? (
                 <p className="text-gray-secondary text-[12px]">Loading…</p>
               ) : tasks.length === 0 ? (
                 <p className="text-gray-secondary text-[12px]">All caught up.</p>
@@ -250,7 +216,7 @@ export default function PersonalDashboardPage() {
 
             <section className="bg-white-white rounded-[10px] border border-gray-border-light p-[20px] flex-1">
               <SectionHeader eyebrow="Upcoming · Today" title="What's Next" />
-              {loading ? (
+              {meetingsLoading && meetings.length === 0 ? (
                 <p className="text-gray-secondary text-[12px]">Loading…</p>
               ) : meetings.length === 0 ? (
                 <p className="text-gray-secondary text-[12px]">No meetings scheduled today.</p>

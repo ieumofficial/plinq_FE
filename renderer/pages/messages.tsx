@@ -29,6 +29,8 @@ import {
 } from '../lib/queries'
 import { queryKeys } from '../lib/queryKeys'
 import { userToMember } from '../lib/types'
+import { supabase } from '../lib/supabase'
+import type { UserRow } from '../lib/types'
 
 function formatRelative(iso: string | null): string | undefined {
   if (!iso) return undefined
@@ -136,6 +138,91 @@ function MessagesBody() {
       }
     })
   }, [activeSessionId, messages.length, user?.id, orgId, queryClient])
+
+  // Realtime: subscribe to INSERTs on the active session's chat_messages so
+  // messages from other users appear without a refresh.
+  useEffect(() => {
+    if (!activeSessionId || !user?.id) return
+    const channel = supabase
+      .channel(`chat:${activeSessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `session_id=eq.${activeSessionId}`,
+        },
+        async (payload) => {
+          const row = payload.new as {
+            id: string
+            session_id: string
+            author_id: string
+            body: string
+            reply_to_id: string | null
+            pinned_at: string | null
+            pinned_by: string | null
+            edited_at: string | null
+            created_at: string
+          }
+          // Skip our own message — already inserted optimistically.
+          if (row.author_id === user.id) return
+
+          // Fetch the author so we can render the row.
+          const { data: authorRow } = await supabase
+            .from('users')
+            .select('id, email, first_name, last_name, nickname, job_title')
+            .eq('id', row.author_id)
+            .single()
+          const author = (authorRow as UserRow | null) ?? {
+            id: row.author_id,
+            email: '',
+            first_name: '?',
+            last_name: '',
+            nickname: null,
+            job_title: null,
+          }
+
+          const messagesKey = queryKeys.chat.messages(activeSessionId)
+          queryClient.setQueryData<ChatMessageWithAuthor[]>(
+            messagesKey,
+            (prev = []) =>
+              prev.some((m) => m.id === row.id) ? prev : [...prev, { ...row, author }]
+          )
+          // Also refresh the sidebar so unread badge / preview updates.
+          if (orgId) {
+            queryClient.invalidateQueries({
+              queryKey: queryKeys.chat.sessions(user.id, orgId),
+            })
+          }
+        }
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [activeSessionId, user?.id, orgId, queryClient])
+
+  // Realtime: subscribe to ALL chat_messages INSERTs so the sidebar's preview/
+  // unread updates even for sessions you're not currently viewing.
+  useEffect(() => {
+    if (!user?.id || !orgId) return
+    const channel = supabase
+      .channel(`chat-sidebar:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        () => {
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.chat.sessions(user.id, orgId),
+          })
+        }
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [user?.id, orgId, queryClient])
 
   const { groups: sessionGroups, sessionsCount } = useMemo(
     () => buildSessionGroups(sessions),

@@ -54,4 +54,11 @@ export const queryKeys = {
     meetings: (projectId: string) => ['project', projectId, 'meetings'] as const,
     docs: (projectId: string) => ['project', projectId, 'docs'] as const,
   },
+
+  chat: {
+    all: ['chat'] as const,
+    sessions: (userId: string, orgId: string) =>
+      ['chat', 'sessions', userId, orgId] as const,
+    messages: (sessionId: string) => ['chat', 'messages', sessionId] as const,
+  },
 }

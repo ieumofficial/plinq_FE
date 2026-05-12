@@ -2,34 +2,36 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { useRouter } from 'next/router'
 import AppLayout from './ui/AppLayout'
 import SideMenu, { type NavItem } from './ui/SideMenu'
+import StackedSideMenu, { type StackedNavItem } from './ui/StackedSideMenu'
 import Header from './ui/Header'
 import CreateNewMenu, { type CreateType } from './CreateNewMenu'
 import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
-import { useCurrentUser, useMyOrg } from '../lib/hooks'
+import { useCurrentUser, useMyOrg, useOrgMembers } from '../lib/hooks'
 
 // ─── Create New context ─────────────────────────────────────────────────────
 
 type CreateNewApi = {
-  /** Open the type-picker menu. */
   openMenu: () => void
-  /** Skip the menu and jump straight into a specific create modal. */
   open: (type: CreateType) => void
 }
 
 const CreateNewContext = createContext<CreateNewApi | null>(null)
-
-/** Use inside any page wrapped by PersonalAppShell to trigger the global Create New flow. */
 export function useCreateNew(): CreateNewApi {
   const ctx = useContext(CreateNewContext)
-  if (!ctx) throw new Error('useCreateNew must be used inside PersonalAppShell')
+  if (!ctx) throw new Error('useCreateNew must be used inside OrganizationAppShell')
   return ctx
 }
 
-type ActiveKey = 'dashboard' | 'projects' | 'messages' | 'calendar' | 'tasks' | 'organization'
+export type OrgActiveKey =
+  | 'dashboard'
+  | 'projects'
+  | 'members'
+  | 'knowledge'
+  | 'org-chart'
 
-const NAV_ITEMS: NavItem[] = [
+const PERSONAL_RAIL_ITEMS: NavItem[] = [
   { key: 'dashboard', icon: 'Dashboard', label: 'Dashboard' },
   { key: 'projects', icon: 'Folder', label: 'Projects' },
   { key: 'messages', icon: 'Chat', label: 'Messages' },
@@ -38,11 +40,11 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'organization', icon: 'Organization', label: 'Organization' },
 ]
 
-const FOOTER_ITEMS: NavItem[] = [
+const PERSONAL_FOOTER: NavItem[] = [
   { key: 'settings', icon: 'Settings', label: 'Settings' },
 ]
 
-function routeFor(key: ActiveKey, orgId: string | null): string {
+function personalRoute(key: string, orgId: string | null): string | null {
   switch (key) {
     case 'dashboard':
       return '/personal-dashboard'
@@ -56,58 +58,27 @@ function routeFor(key: ActiveKey, orgId: string | null): string {
       return '/action-items'
     case 'organization':
       return orgId ? `/o/${orgId}/dashboard` : '/organization'
+    default:
+      return null
   }
 }
 
 type Props = {
-  active: ActiveKey
-  /** Shown above the header title. Format: "Workspace · Friday, April 10". */
-  headerEyebrow?: string
-  /** Big header title. Format: "Good morning, Yujin". */
-  headerTitle?: string
+  orgId: string
+  active: OrgActiveKey
   children: ReactNode
 }
 
-function buildEyebrow(orgName: string | null): string {
-  const date = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  })
-  return `${orgName ?? 'Workspace'} · ${date}`
-}
-
-function greeting(): string {
-  const h = new Date().getHours()
-  if (h < 12) return 'Good morning'
-  if (h < 18) return 'Good afternoon'
-  return 'Good evening'
-}
-
-/**
- * Layout shell for all post-login Personal Space pages.
- * Owns:
- *  - current user / org context (single fetch)
- *  - "Create new" flow (menu → 3 modals → DB write → route)
- */
-export default function PersonalAppShell({
-  active,
-  headerEyebrow,
-  headerTitle,
-  children,
-}: Props) {
+export default function OrganizationAppShell({ orgId, active, children }: Props) {
   const router = useRouter()
   const { data: user, isFetched: userFetched } = useCurrentUser()
   const { data: org } = useMyOrg(user?.id)
-  const orgId = org?.id ?? null
-  const orgName = org?.name ?? null
+  const { data: members = [] } = useOrgMembers(orgId)
 
-  // Redirect to login if no user (only after the first fetch resolves)
   useEffect(() => {
     if (userFetched && !user) router.push('/')
   }, [userFetched, user, router])
 
-  // Create New flow state
   const [menuOpen, setMenuOpen] = useState(false)
   const [createType, setCreateType] = useState<CreateType | null>(null)
 
@@ -117,9 +88,6 @@ export default function PersonalAppShell({
   const userName = user
     ? user.nickname || `${user.first_name} ${user.last_name}`.trim()
     : ''
-
-  const eyebrow = headerEyebrow ?? buildEyebrow(orgName)
-  const title = headerTitle ?? (user ? `${greeting()}, ${user.first_name}` : '')
 
   const openMenu = () => {
     setCreateType(null)
@@ -133,13 +101,26 @@ export default function PersonalAppShell({
     setMenuOpen(false)
     setCreateType(null)
   }
-  // Stay on current page; TanStack Query invalidation in the create modals
-  // refreshes the data automatically.
   const onCreated = () => closeAll()
 
-  const api: CreateNewApi = {
-    openMenu,
-    open: (t) => setCreateType(t),
+  const api: CreateNewApi = { openMenu, open: (t) => setCreateType(t) }
+
+  const orgName = org?.name ?? 'Organization'
+  const orgInitial = orgName.charAt(0).toUpperCase()
+
+  const items: StackedNavItem[] = [
+    { key: 'dashboard', icon: 'Dashboard', label: 'Dashboard' },
+    { key: 'projects', icon: 'Folder', label: 'Projects' },
+    { key: 'members', icon: 'People', label: 'Members', count: members.length },
+    { key: 'knowledge', icon: 'File', label: 'Knowledge / Governance' },
+    { key: 'org-chart', icon: 'Organization', label: 'Org Chart' },
+  ]
+
+  const goPage = (key: OrgActiveKey) => {
+    const route = `/o/${orgId}/${key}`
+    if (route !== router.pathname.replace('[orgId]', orgId)) {
+      router.push(route)
+    }
   }
 
   return (
@@ -147,9 +128,9 @@ export default function PersonalAppShell({
       <AppLayout
         header={
           <Header
-            orgName={orgName ?? 'Plinq'}
-            eyebrow={eyebrow}
-            title={title}
+            orgName={org?.name ?? 'Plinq'}
+            eyebrow=""
+            title=""
             userInitials={initials}
             hasNotifications={false}
             onBack={() => router.back()}
@@ -159,17 +140,31 @@ export default function PersonalAppShell({
         }
         sidebar={
           <SideMenu
-            sectionLabel="Personal Space"
-            items={NAV_ITEMS}
-            footerItems={FOOTER_ITEMS}
-            activeKey={active}
+            items={PERSONAL_RAIL_ITEMS}
+            footerItems={PERSONAL_FOOTER}
             userInitials={initials}
             userName={userName}
-            onItemClick={(key) => {
-              const route = routeFor(key as ActiveKey, orgId)
-              if (route && route !== router.pathname) router.push(route)
-            }}
+            stacked
             onCreateNew={openMenu}
+            onItemClick={(k) => {
+              const route = personalRoute(k, org?.id ?? null)
+              if (route) router.push(route)
+            }}
+          />
+        }
+        panel={
+          <StackedSideMenu
+            header={{
+              kind: 'org',
+              initial: orgInitial,
+              color: 'blue',
+              name: orgName,
+              subtitle: `${members.length} members total`,
+            }}
+            items={items}
+            activeKey={active}
+            onItemClick={(k) => goPage(k as OrgActiveKey)}
+            onBack={() => router.push('/personal-dashboard')}
           />
         }
       >
@@ -179,8 +174,8 @@ export default function PersonalAppShell({
       <CreateNewMenu open={menuOpen} onClose={closeAll} onPick={pickType} />
       <CreateProjectModal
         open={createType === 'project'}
-        orgId={orgId}
-        orgName={orgName}
+        orgId={org?.id ?? null}
+        orgName={org?.name ?? null}
         onClose={closeAll}
         onCreated={onCreated}
       />

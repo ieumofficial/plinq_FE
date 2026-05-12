@@ -219,6 +219,11 @@ export default function ChatComposer({
   const canSend = !sending && value.trim().length > 0
 
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Ignore Enter while an IME is composing (e.g. Korean/Japanese/Chinese):
+    // the IME uses Enter to commit the composition. If we send during
+    // composition, the IME re-injects the committed text afterwards and a
+    // second message goes out.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
       e.preventDefault()
       if (canSend) onSend()

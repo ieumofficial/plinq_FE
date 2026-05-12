@@ -73,6 +73,21 @@ export function useUserProjects(
   })
 }
 
+/** Delete a project. Invalidates project caches on success. */
+export function useDeleteProject() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (projectId: string) => {
+      const { error } = await supabase.from('projects').delete().eq('id', projectId)
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projects.all })
+      qc.invalidateQueries({ queryKey: ['project'] })
+    },
+  })
+}
+
 // ─── Action items / tasks ───────────────────────────────────────────────────
 
 export function useUserActionItems(

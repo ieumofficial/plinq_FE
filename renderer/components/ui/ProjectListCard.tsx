@@ -102,7 +102,7 @@ export default function ProjectListCard({
           <div className="flex items-center gap-[10px] min-w-0">
             {lead ? (
               <>
-                <UserGroup members={[lead]} size={15} />
+                <UserGroup members={[lead]} size={20} />
                 <span className="text-gray-main text-[14px] font-semibold whitespace-nowrap">
                   Lead
                 </span>
@@ -116,7 +116,7 @@ export default function ProjectListCard({
             )}
           </div>
           {members && members.length > 0 && (
-            <UserGroup members={members} size={15} max={5} overflowVariant="blue" />
+            <UserGroup members={members} size={20} max={5} overflowVariant="blue" />
           )}
         </div>
       </div>

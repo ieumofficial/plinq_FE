@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import Input from './Input'
 import Button from './Button'
 import Icon from './Icon'
@@ -86,6 +86,15 @@ function MaxIcon() {
     </svg>
   )
 }
+function RestoreIcon() {
+  // Two offset squares — the conventional Windows "restore down" glyph.
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
+      <rect x="2.5" y="0.5" width="7" height="7" stroke="currentColor" strokeWidth="1" />
+      <rect x="0.5" y="2.5" width="7" height="7" stroke="currentColor" strokeWidth="1" fill="#F8F9FA" />
+    </svg>
+  )
+}
 function CloseIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
@@ -112,6 +121,17 @@ export default function Header({
   const isMac = os === 'darwin'
   const isWindows = os === 'win32'
   const hasGreeting = !!(eyebrow || title)
+
+  const [isMaximized, setIsMaximized] = useState(false)
+
+  useEffect(() => {
+    if (!isWindows || typeof window === 'undefined' || !window.ipc) return
+    const off = window.ipc.on<boolean>('window-maximized-changed', (next) =>
+      setIsMaximized(!!next)
+    )
+    window.ipc.send('window-get-maximized')
+    return off
+  }, [isWindows])
 
   const sendIpc = (channel: string) => () => {
     if (typeof window !== 'undefined' && window.ipc) window.ipc.send(channel)
@@ -218,8 +238,11 @@ export default function Header({
           <CaptionButton onClick={sendIpc('window-minimize')} ariaLabel="Minimize">
             <MinIcon />
           </CaptionButton>
-          <CaptionButton onClick={sendIpc('window-maximize')} ariaLabel="Maximize">
-            <MaxIcon />
+          <CaptionButton
+            onClick={sendIpc('window-maximize')}
+            ariaLabel={isMaximized ? 'Restore' : 'Maximize'}
+          >
+            {isMaximized ? <RestoreIcon /> : <MaxIcon />}
           </CaptionButton>
           <CaptionButton
             variant="close"

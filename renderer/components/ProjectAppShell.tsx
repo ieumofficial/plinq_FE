@@ -47,13 +47,23 @@ const PERSONAL_FOOTER: NavItem[] = [
   { key: 'settings', icon: 'Settings', label: 'Settings' },
 ]
 
-const PERSONAL_ROUTE: Record<string, string> = {
-  dashboard: '/personal-dashboard',
-  projects: '/projects',
-  messages: '/messages',
-  calendar: '/calendar',
-  tasks: '/action-items',
-  organization: '/organization',
+function personalRoute(key: string, orgId: string | null): string | null {
+  switch (key) {
+    case 'dashboard':
+      return '/personal-dashboard'
+    case 'projects':
+      return '/projects'
+    case 'messages':
+      return '/messages'
+    case 'calendar':
+      return '/calendar'
+    case 'tasks':
+      return '/action-items'
+    case 'organization':
+      return orgId ? `/o/${orgId}/dashboard` : '/organization'
+    default:
+      return null
+  }
 }
 
 type Props = {
@@ -145,7 +155,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
             stacked
             onCreateNew={openMenu}
             onItemClick={(k) => {
-              const route = PERSONAL_ROUTE[k]
+              const route = personalRoute(k, org?.id ?? null)
               if (route) router.push(route)
             }}
           />

@@ -14,6 +14,8 @@ type Props = {
   events: CalendarEvent[]
   /** Optional today override (defaults to new Date()). */
   today?: Date
+  /** Currently selected date — renders a blue ring around the matching cell. */
+  selectedDate?: Date | null
   onDayClick?: (date: Date) => void
   onPrevMonth?: () => void
   onNextMonth?: () => void
@@ -76,6 +78,7 @@ export default function Calendar({
   month,
   events,
   today: todayProp,
+  selectedDate,
   onDayClick,
   onPrevMonth,
   onNextMonth,
@@ -233,6 +236,7 @@ export default function Calendar({
           const dEvents = eventsByDate.get(ymd(d)) ?? []
           const outOfBound = d.getMonth() !== monthIndex
           const isToday = isSameDate(d, today)
+          const isSelected = !!selectedDate && isSameDate(d, selectedDate)
 
           // Dashboard: render an invisible placeholder for out-of-bound cells
           // (matches Figma "Status=Transparent" with opacity-0).
@@ -254,6 +258,7 @@ export default function Calendar({
                 date={d.getDate()}
                 events={dEvents}
                 isToday={isToday}
+                isSelected={isSelected}
                 outOfBound={outOfBound}
                 fillParent
                 onClick={() => onDayClick?.(d)}
@@ -268,6 +273,7 @@ export default function Calendar({
               date={d.getDate()}
               events={dEvents}
               isToday={isToday}
+              isSelected={isSelected}
               outOfBound={outOfBound}
               onClick={() => onDayClick?.(d)}
             />

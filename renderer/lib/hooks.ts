@@ -5,7 +5,7 @@
  *   - background refetches keep data fresh after staleTime
  *   - mutations can target precise keys for invalidation
  */
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getCurrentUser,
   getOrgMembers,
@@ -24,7 +24,7 @@ import {
 } from './queries'
 import { supabase } from './supabase'
 import { queryKeys } from './queryKeys'
-import type { ProjectRow } from './types'
+import type { ProjectRow, TaskStatusDb } from './types'
 
 // ─── User / org ─────────────────────────────────────────────────────────────
 
@@ -81,6 +81,26 @@ export function useUserActionItems(
     queryKey: queryKeys.tasks.actionItems(userId ?? '', opts),
     queryFn: () => getUserActionItems(userId!, opts),
     enabled: !!userId,
+  })
+}
+
+/** Update a task's status. Invalidates task/calendar/project caches on success. */
+export function useUpdateTaskStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ taskId, status }: { taskId: string; status: TaskStatusDb }) => {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status })
+        .eq('id', taskId)
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.tasks.all })
+      qc.invalidateQueries({ queryKey: queryKeys.calendar.all })
+      qc.invalidateQueries({ queryKey: queryKeys.projects.all })
+      qc.invalidateQueries({ queryKey: ['project'] })
+    },
   })
 }
 

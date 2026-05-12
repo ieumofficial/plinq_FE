@@ -9,6 +9,7 @@ import Schedule from '../components/ui/Schedule'
 import Button from '../components/ui/Button'
 import {
   useCurrentUser,
+  useUpdateTaskStatus,
   useUserActionItems,
   useUserCalendarEvents,
   useUserProjects,
@@ -77,6 +78,7 @@ export default function PersonalDashboardPage() {
   const { data: tasks = [], isLoading: tasksLoading } = useUserActionItems(userId, {
     limit: ACTION_ITEMS_LIMIT,
   })
+  const { mutate: updateTaskStatus } = useUpdateTaskStatus()
 
   const { data: meetings = [], isLoading: meetingsLoading } = useUserUpcomingMeetings(
     userId,
@@ -189,6 +191,13 @@ export default function PersonalDashboardPage() {
                         t.project_name
                           ? { label: t.project_name, color: 'purple' }
                           : undefined
+                      }
+                      checked={t.status === 'done'}
+                      onCheckedChange={(next) =>
+                        updateTaskStatus({
+                          taskId: t.id,
+                          status: next ? 'done' : 'in_progress',
+                        })
                       }
                     />
                   ))}

@@ -8,7 +8,7 @@ import Checkbox from '../components/ui/Checkbox'
 import StatusLabelBig from '../components/ui/StatusLabelBig'
 import PriorityTag from '../components/ui/PriorityTag'
 import Table, { TableHeader, TableRow, TableCell, type Column } from '../components/ui/Table'
-import { useCurrentUser, useUserActionItems } from '../lib/hooks'
+import { useCurrentUser, useUpdateTaskStatus, useUserActionItems } from '../lib/hooks'
 import { type TaskWithProject } from '../lib/queries'
 import { dbStatusToUi, dbPriorityToUi, formatDueDate } from '../lib/types'
 
@@ -31,6 +31,7 @@ function isOverdue(t: TaskWithProject): boolean {
 export default function ActionItemsPage() {
   const { data: user } = useCurrentUser()
   const { data: tasks = [], isLoading } = useUserActionItems(user?.id, { includeDone: true })
+  const { mutate: updateTaskStatus } = useUpdateTaskStatus()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterKey>('all')
 
@@ -152,7 +153,15 @@ export default function ActionItemsPage() {
                     {rows.map((t, i) => (
                       <TableRow key={t.id} isLast={i === rows.length - 1}>
                         <TableCell width="flex-[2]">
-                          <Checkbox checked={t.status === 'done'} />
+                          <Checkbox
+                            checked={t.status === 'done'}
+                            onChange={(next) =>
+                              updateTaskStatus({
+                                taskId: t.id,
+                                status: next ? 'done' : 'in_progress',
+                              })
+                            }
+                          />
                           <span
                             className={`text-[14px] ${
                               t.status === 'done'

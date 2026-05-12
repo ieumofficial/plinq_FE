@@ -17,4 +17,17 @@ const handler = {
 
 contextBridge.exposeInMainWorld('ipc', handler)
 
+// Expose platform info synchronously so the renderer can render
+// the right title-bar layout on first paint (no IPC round-trip).
+const platform = {
+  /** 'darwin' | 'win32' | 'linux' | etc. */
+  os: process.platform as NodeJS.Platform,
+  isMac: process.platform === 'darwin',
+  isWindows: process.platform === 'win32',
+  isLinux: process.platform === 'linux',
+}
+
+contextBridge.exposeInMainWorld('platform', platform)
+
 export type IpcHandler = typeof handler
+export type PlatformInfo = typeof platform

@@ -56,7 +56,7 @@ export default function FilterChecklist({
       </span>
       {count !== undefined && (
         <span
-          className="text-[12px] text-gray-secondary tracking-[-0.3px]"
+          className="text-[12px] font-normal text-gray-secondary tracking-[-0.3px]"
           style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
         >
           {count}

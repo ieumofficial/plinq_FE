@@ -12,8 +12,13 @@ import ActionItem from '../../components/ui/ActionItem'
 import Schedule from '../../components/ui/Schedule'
 import Task, { type TaskStatus } from '../../components/ui/Task'
 import ProjectCard from '../../components/ui/ProjectCard'
+import ProjectListCard from '../../components/ui/ProjectListCard'
 import MenuItem from '../../components/ui/MenuItem'
 import SideMenu, { type NavItem } from '../../components/ui/SideMenu'
+import StackedSideMenu, { type StackedNavItem } from '../../components/ui/StackedSideMenu'
+import ProjectLabel from '../../components/ui/ProjectLabel'
+import MeetingTypeLabel from '../../components/ui/MeetingTypeLabel'
+import MemberStatus from '../../components/ui/MemberStatus'
 import Header from '../../components/ui/Header'
 import AppLayout from '../../components/ui/AppLayout'
 import Filter from '../../components/ui/Filter'
@@ -49,6 +54,24 @@ const NAV_ITEMS: NavItem[] = [
 ]
 const FOOTER_ITEMS: NavItem[] = [{ key: 'settings', icon: 'Settings', label: 'Settings' }]
 
+const PROJECT_NAV_ITEMS: StackedNavItem[] = [
+  { key: 'dashboard', icon: 'Dashboard', label: 'Project Dashboard' },
+  { key: 'kanban', icon: 'Kanban', label: 'Kanban Board' },
+  { key: 'backlog', icon: 'Task', label: 'Backlog', count: 12 },
+  { key: 'timeline', icon: 'Calendar', label: 'Timeline' },
+  { key: 'meetings', icon: 'Meeting', label: 'Meetings' },
+  { key: 'members', icon: 'People', label: 'Members', count: 12 },
+  { key: 'knowledge', icon: 'File', label: 'Knowledge Base', count: 12 },
+]
+
+const ORG_NAV_ITEMS: StackedNavItem[] = [
+  { key: 'dashboard', icon: 'Dashboard', label: 'Dashboard' },
+  { key: 'projects', icon: 'Folder', label: 'Projects', count: 12 },
+  { key: 'members', icon: 'People', label: 'Members', count: 108 },
+  { key: 'knowledge', icon: 'File', label: 'Knowledge/ Governance' },
+  { key: 'orgchart', icon: 'Organization', label: 'Org Chart' },
+]
+
 const STATUSES_BIG: Status[] = ['planned', 'in-progress', 'review', 'blocked', 'done', 'all']
 
 const CALENDAR_MONTH = new Date(2026, 4, 1) // May 2026
@@ -77,13 +100,24 @@ function Section({
   background?: 'light' | 'dark'
   children: React.ReactNode
 }) {
-  const bg = background === 'dark' ? 'bg-primary-dark text-white-main' : 'bg-white text-black'
+  const isDark = background === 'dark'
   return (
-    <section className="border border-gray-border-light rounded-lg overflow-hidden">
-      <header className="px-6 py-3 bg-white-main border-b border-gray-border-light">
-        <h2 className="text-[14px] font-semibold text-black tracking-[-0.2px]">{title}</h2>
+    <section
+      className="border border-gray-border-light rounded-lg overflow-hidden"
+      style={{ backgroundColor: isDark ? '#2E434E' : '#FFFFFF' }}
+    >
+      <header
+        className="px-6 py-3 border-b border-gray-border-light"
+        style={{
+          backgroundColor: isDark ? '#1F2F38' : '#F8F9FA',
+          color: isDark ? '#F8F9FA' : '#16242E',
+        }}
+      >
+        <h2 className="text-[14px] font-semibold tracking-[-0.2px]">{title}</h2>
       </header>
-      <div className={`p-6 ${bg}`}>{children}</div>
+      <div className="p-6" style={{ color: isDark ? '#F8F9FA' : '#16242E' }}>
+        {children}
+      </div>
     </section>
   )
 }
@@ -307,15 +341,15 @@ export default function ComponentsPage() {
 
           {/* PRIORITY TAG */}
           <Section title="Priority Tag">
-            <Row label="All priorities">
+            <Row label="With text">
               {PRIORITIES.map((p) => (
                 <PriorityTag key={p} priority={p} />
               ))}
             </Row>
-            <Row label="Sizes">
-              <PriorityTag priority="highest" size="sm" />
-              <PriorityTag priority="highest" size="md" />
-              <PriorityTag priority="highest" size="lg" />
+            <Row label="Icon only">
+              {PRIORITIES.map((p) => (
+                <PriorityTag key={p} priority={p} isText={false} />
+              ))}
             </Row>
           </Section>
 
@@ -447,7 +481,6 @@ export default function ComponentsPage() {
             <div className="flex gap-6 items-start">
               <div className="border border-gray-border-light rounded-md overflow-hidden h-[600px]">
                 <SideMenu
-                  orgName="Plinq"
                   sectionLabel="Personal Space"
                   items={NAV_ITEMS}
                   footerItems={FOOTER_ITEMS}
@@ -460,7 +493,6 @@ export default function ComponentsPage() {
               </div>
               <div className="border border-gray-border-light rounded-md overflow-hidden h-[600px]">
                 <SideMenu
-                  orgName="Plinq"
                   items={NAV_ITEMS}
                   footerItems={FOOTER_ITEMS}
                   activeKey={activeNav}
@@ -470,6 +502,107 @@ export default function ComponentsPage() {
                   userName="Yujin Park"
                   stacked
                 />
+              </div>
+            </div>
+          </Section>
+
+          {/* STACKED SIDE MENU */}
+          <Section title="Stacked Side Menu (Project + Org)">
+            <div className="flex gap-6 items-start">
+              <div className="border border-gray-border-light rounded-md overflow-hidden h-[600px] bg-[#F4F6F8]">
+                <StackedSideMenu
+                  header={{
+                    kind: 'project',
+                    initial: 'A',
+                    color: '#2D5A9E',
+                    name: 'Apollo',
+                    subtitle: 'Auth migration · Q2 2026',
+                    status: 'in-progress',
+                  }}
+                  items={PROJECT_NAV_ITEMS}
+                  activeKey="dashboard"
+                  onItemClick={(k) => alert(k)}
+                  onBack={() => alert('back')}
+                />
+              </div>
+              <div className="border border-gray-border-light rounded-md overflow-hidden h-[600px] bg-[#F4F6F8]">
+                <StackedSideMenu
+                  header={{
+                    kind: 'org',
+                    initial: 'A',
+                    color: '#9B3838',
+                    name: 'Org Name',
+                    subtitle: '108 members total',
+                  }}
+                  items={ORG_NAV_ITEMS}
+                  activeKey="dashboard"
+                  onItemClick={(k) => alert(k)}
+                  onBack={() => alert('back')}
+                />
+              </div>
+            </div>
+          </Section>
+
+          {/* PROJECT LABEL */}
+          <Section title="Project Label">
+            <div className="flex flex-col gap-3">
+              <div>
+                <p className="text-gray-secondary text-[10px] mb-2 uppercase tracking-[1.5px]">
+                  Palette keys (small)
+                </p>
+                <div className="flex items-center gap-3">
+                  {(['blue', 'green', 'amber', 'red', 'purple', 'turquoise'] as const).map(
+                    (c) => (
+                      <ProjectLabel key={c} name={c} color={c} size="sm" />
+                    )
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-gray-secondary text-[10px] mb-2 uppercase tracking-[1.5px]">
+                  Custom hex (medium)
+                </p>
+                <div className="flex items-center gap-3">
+                  <ProjectLabel name="A" color="#FF6B35" size="md" />
+                  <ProjectLabel name="B" color="#16A085" size="md" />
+                  <ProjectLabel name="C" color="#9B59B6" size="md" />
+                </div>
+              </div>
+            </div>
+          </Section>
+
+          {/* MEETING TYPE LABEL */}
+          <Section title="Meeting Type Label">
+            <div className="flex items-center gap-3">
+              <MeetingTypeLabel type="planning" />
+              <MeetingTypeLabel type="check_in" />
+              <MeetingTypeLabel type="review" />
+              <MeetingTypeLabel type="retrospective" />
+            </div>
+          </Section>
+
+          {/* MEMBER STATUS */}
+          <Section title="Member Status">
+            <div className="flex flex-col gap-3">
+              <div>
+                <p className="text-gray-secondary text-[10px] mb-2 uppercase tracking-[1.5px]">
+                  Presence
+                </p>
+                <div className="flex items-center gap-4">
+                  <MemberStatus variant="presence" status="available" />
+                  <MemberStatus variant="presence" status="in_meeting" />
+                  <MemberStatus variant="presence" status="unavailable" />
+                </div>
+              </div>
+              <div>
+                <p className="text-gray-secondary text-[10px] mb-2 uppercase tracking-[1.5px]">
+                  Permission
+                </p>
+                <div className="flex items-center gap-2">
+                  <MemberStatus variant="permission" status="readonly" />
+                  <MemberStatus variant="permission" status="editor" />
+                  <MemberStatus variant="permission" status="admin" />
+                </div>
               </div>
             </div>
           </Section>
@@ -498,7 +631,6 @@ export default function ComponentsPage() {
               <AppLayout
                 sidebar={
                   <SideMenu
-                    orgName="Plinq"
                     sectionLabel="Personal Space"
                     items={NAV_ITEMS}
                     footerItems={FOOTER_ITEMS}
@@ -582,7 +714,7 @@ export default function ComponentsPage() {
               <ProjectCard
                 name="Apollo"
                 description="Auth migration · Identity SDK + cutover runbook for 1.2M accounts."
-                tag={{ label: 'EXEC', color: 'blue' }}
+                status="in-progress"
                 progress={73}
                 members={SAMPLE_MEMBERS}
                 onOpen={() => alert('Open')}
@@ -590,23 +722,71 @@ export default function ComponentsPage() {
               <ProjectCard
                 name="Pricing V2"
                 description="New tier matrix + billing flow updates."
-                tag={{ label: 'EXEC', color: 'amber' }}
+                status="review"
                 progress={48}
                 members={SAMPLE_MEMBERS.slice(0, 3)}
               />
               <ProjectCard
                 name="Design System"
                 description="Token migration to v4 and component library cleanup."
-                tag={{ label: 'EXEC', color: 'green' }}
+                status="done"
                 progress={91}
                 members={SAMPLE_MEMBERS.slice(0, 4)}
               />
               <ProjectCard
                 name="Theta"
                 description="Internal research project."
-                tag={{ label: 'R&D', color: 'purple' }}
+                status="planned"
                 progress={12}
                 members={SAMPLE_MEMBERS.slice(0, 2)}
+              />
+            </div>
+          </Section>
+
+          {/* PROJECT LIST CARD */}
+          <Section title="Project List Card (Projects 페이지용)">
+            <div className="grid grid-cols-2 gap-[10px]">
+              <ProjectListCard
+                name="Apollo"
+                description="Auth migration · Identity SDK + cutover runbook for 1.2M accounts."
+                status="in-progress"
+                progress={72}
+                tasksDone={94}
+                tasksTotal={130}
+                due="May 11"
+                lead={SAMPLE_MEMBERS[3]}
+                members={SAMPLE_MEMBERS}
+              />
+              <ProjectListCard
+                name="Pricing V2"
+                description="New tier matrix + billing flow updates."
+                status="review"
+                progress={48}
+                tasksDone={20}
+                tasksTotal={42}
+                due="May 30"
+                lead={SAMPLE_MEMBERS[0]}
+                members={SAMPLE_MEMBERS.slice(0, 4)}
+              />
+              <ProjectListCard
+                name="Theta"
+                status="planned"
+                progress={0}
+                tasksDone={0}
+                tasksTotal={0}
+                lead={SAMPLE_MEMBERS[1]}
+                members={SAMPLE_MEMBERS.slice(0, 2)}
+              />
+              <ProjectListCard
+                name="Design System"
+                description="Token migration to v4 and component library cleanup."
+                status="done"
+                progress={100}
+                tasksDone={56}
+                tasksTotal={56}
+                due="Apr 18"
+                lead={SAMPLE_MEMBERS[2]}
+                members={SAMPLE_MEMBERS.slice(0, 5)}
               />
             </div>
           </Section>
@@ -685,7 +865,7 @@ export default function ComponentsPage() {
           </Section>
 
           <Section title="Calendar · Monthly view">
-            <div className="bg-white-white p-4 rounded-md overflow-auto">
+            <div className="bg-white-white p-4 rounded-md h-[700px]">
               <Calendar
                 view="monthly"
                 month={calMonth}
@@ -764,7 +944,7 @@ export default function ComponentsPage() {
                         <StatusLabelBig status={r.status} size="md" />
                       </TableCell>
                       <TableCell width="w-[90px]">
-                        <PriorityTag priority={r.priority} size="sm" />
+                        <PriorityTag priority={r.priority} />
                       </TableCell>
                       <TableCell width="w-[80px]">
                         <span

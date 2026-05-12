@@ -2,7 +2,8 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import DarkBackground from '../components/DarkBackground'
-import PlinqLogo from '../components/PlinqLogo'
+import Logo from '../components/ui/Logo'
+import Icon from '../components/ui/Icon'
 import { supabase } from '../lib/supabase'
 
 const noDrag: CSSProperties = { WebkitAppRegion: 'no-drag' } as CSSProperties
@@ -14,26 +15,6 @@ type OrgInfo = {
 }
 
 const ORG_COLORS = ['#455E6A', '#9B3838', '#5B3D8A', '#2D5A9E', '#2F6B45']
-
-function ArrowIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M6 4L10 8L6 12"
-        stroke="#94A0AA"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
 
 export default function ChooseOrgPage() {
   const router = useRouter()
@@ -126,7 +107,7 @@ export default function ChooseOrgPage() {
         </Head>
         <DarkBackground>
           <div className="flex-1 flex items-center justify-center">
-            <p className="text-[#94A0AA] text-[14px]">Loading...</p>
+            <p className="text-gray-secondary text-[14px]">Loading...</p>
           </div>
         </DarkBackground>
       </>
@@ -140,42 +121,40 @@ export default function ChooseOrgPage() {
       </Head>
       <DarkBackground>
         <div className="flex-1 flex flex-col items-center justify-center gap-6 px-10 py-16">
-          {/* Logo */}
-          <PlinqLogo size="medium" />
+          <Logo variant="on-dark" size={32} />
 
           {/* Welcome message */}
           <div className="text-center">
             <h1 className="text-[28px] leading-tight">
-              <span className="text-[#EBEFF2] font-semibold">
+              <span className="text-gray-extra-light font-semibold">
                 Welcome back,{' '}
               </span>
               <span
-                className="text-[#5B7FB6] italic font-medium"
+                className="text-blue-med italic font-medium"
                 style={{ fontFamily: 'Inter, sans-serif' }}
               >
                 {firstName}!
               </span>
             </h1>
-            <p className="text-[#94A0AA] text-[12px] mt-2">
+            <p className="text-gray-secondary text-[12px] mt-2">
               Choose an organization below to get started.
             </p>
           </div>
 
           {/* Org list card */}
           <div
-            className="w-[400px] bg-white border border-[#D9D9D9] rounded-[10px] overflow-hidden"
+            className="w-[400px] bg-white-white border border-gray-border rounded-[10px] overflow-hidden"
             style={noDrag}
           >
             {/* Card header */}
             <div className="px-5 py-4">
-              <p className="text-[#455E6A] text-[12px]">
+              <p className="text-primary-main text-[12px]">
                 Organizations for{' '}
                 <span className="font-bold">{email}</span>
               </p>
             </div>
 
-            {/* Divider */}
-            <div className="h-px bg-[#E6EAEE]" />
+            <div className="h-px bg-gray-border-light" />
 
             {/* Org rows */}
             <div>
@@ -184,7 +163,7 @@ export default function ChooseOrgPage() {
                   key={org.id}
                   type="button"
                   onClick={() => handleSelectOrg(org.id)}
-                  className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-[#F8F9FA] transition-colors cursor-pointer text-left"
+                  className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-white-main transition-colors cursor-pointer text-left"
                 >
                   {/* Colored square with first letter */}
                   <div
@@ -199,17 +178,18 @@ export default function ChooseOrgPage() {
 
                   {/* Org info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[#16242E] text-[14px] font-semibold truncate">
+                    <p className="text-black text-[14px] font-semibold truncate">
                       {org.name}
                     </p>
-                    <p className="text-[#94A0AA] text-[11px]">
+                    <p className="text-gray-secondary text-[11px]">
                       {org.member_count}{' '}
                       {org.member_count === 1 ? 'member' : 'members'}
                     </p>
                   </div>
 
-                  {/* Arrow */}
-                  <ArrowIcon />
+                  <span className="text-gray-secondary">
+                    <Icon name="ArrowRight" size={15} />
+                  </span>
                 </button>
               ))}
             </div>
@@ -217,11 +197,11 @@ export default function ChooseOrgPage() {
             {/* Show more */}
             {hiddenCount > 0 && !showAll && (
               <>
-                <div className="h-px bg-[#E6EAEE]" />
+                <div className="h-px bg-gray-border-light" />
                 <button
                   type="button"
                   onClick={() => setShowAll(true)}
-                  className="w-full px-5 py-3 text-[#5B7FB6] text-[12px] font-medium hover:bg-[#F8F9FA] transition-colors cursor-pointer"
+                  className="w-full px-5 py-3 text-blue-med text-[12px] font-medium hover:bg-white-main transition-colors cursor-pointer"
                 >
                   Show {hiddenCount} more organization
                   {hiddenCount > 1 ? 's' : ''}

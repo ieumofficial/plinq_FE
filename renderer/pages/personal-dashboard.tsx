@@ -1,125 +1,236 @@
+import { useMemo, useState, type ReactNode } from 'react'
 import Head from 'next/head'
-import AuthLayout from '../components/AuthLayout'
-import PlaceholderCross from '../components/PlaceholderCross'
+import { useRouter } from 'next/router'
+import PersonalAppShell from '../components/PersonalAppShell'
+import ProjectCard from '../components/ui/ProjectCard'
+import ActionItem from '../components/ui/ActionItem'
+import Calendar, { type CalendarEvent } from '../components/ui/Calendar'
+import Schedule from '../components/ui/Schedule'
+import Button from '../components/ui/Button'
+import {
+  useCurrentUser,
+  useUserActionItems,
+  useUserCalendarEvents,
+  useUserProjects,
+  useUserUpcomingMeetings,
+} from '../lib/hooks'
+import {
+  dbPriorityToUi,
+  dbStatusToUi,
+  formatDueDate,
+  formatTimeRange,
+  userToMember,
+} from '../lib/types'
 
-type Project = { id: number; name: string }
-type ActionItem = { id: number; title: string; due: string; project: string }
+const ACTIVE_PROJECTS_LIMIT = 3
+const ACTION_ITEMS_LIMIT = 7
+const TODAY_SCHEDULE_LIMIT = 3
 
-const projects: Project[] = [
-  { id: 1, name: 'Project 1' },
-  { id: 2, name: 'Project 2' },
-  { id: 3, name: 'Project 3' },
-]
+function SectionHeader({
+  eyebrow,
+  title,
+  action,
+}: {
+  eyebrow: string
+  title: string
+  action?: ReactNode
+}) {
+  return (
+    <div className="flex items-start justify-between mb-4">
+      <div className="flex flex-col gap-[5px]">
+        <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
+          {eyebrow}
+        </p>
+        <h2 className="text-black text-[20px] font-semibold leading-tight">{title}</h2>
+      </div>
+      {action}
+    </div>
+  )
+}
 
-const actionItems: ActionItem[] = [
-  { id: 1, title: 'Action Item 1', due: 'DUE DATE', project: 'PROJECT NAME' },
-  { id: 2, title: 'Action Item 2', due: 'DUE DATE', project: 'PROJECT NAME' },
-  { id: 3, title: 'Action Item 3', due: 'DUE DATE', project: 'PROJECT NAME' },
-  { id: 4, title: 'Action Item 4', due: 'DUE DATE', project: 'PROJECT NAME' },
-]
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1)
+}
+function endOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999)
+}
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
+function endOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999)
+}
 
-/**
- * Personal Dashboard — Figma node 122:608.
- *
- * The page sits inside <main> from AuthLayout, whose origin is at
- * (left=300, top=103) of the window (right of Sidebar, below Header).
- * All offsets here are therefore Figma's pixel values minus those origins:
- *   left = figmaLeft - 300, top = figmaTop - 103.
- */
 export default function PersonalDashboardPage() {
+  const router = useRouter()
+  const { data: user } = useCurrentUser()
+  const userId = user?.id
+
+  const [calMonth] = useState(startOfMonth(new Date()))
+  const today = useMemo(() => new Date(), [])
+
+  const { data: projects = [], isLoading: projectsLoading } = useUserProjects(userId, {
+    statuses: ['planned', 'in_progress', 'review'],
+    limit: ACTIVE_PROJECTS_LIMIT,
+  })
+
+  const { data: tasks = [], isLoading: tasksLoading } = useUserActionItems(userId, {
+    limit: ACTION_ITEMS_LIMIT,
+  })
+
+  const { data: meetings = [], isLoading: meetingsLoading } = useUserUpcomingMeetings(
+    userId,
+    {
+      from: startOfDay(today),
+      to: endOfDay(today),
+      limit: TODAY_SCHEDULE_LIMIT,
+    }
+  )
+
+  const { data: rawEvents } = useUserCalendarEvents(
+    userId,
+    startOfMonth(calMonth),
+    endOfMonth(calMonth)
+  )
+
+  const calEvents: CalendarEvent[] = useMemo(() => {
+    if (!rawEvents) return []
+    return [
+      ...rawEvents.meetings.map((m) => ({
+        id: `m-${m.id}`,
+        date: m.scheduled_at.slice(0, 10),
+        title: m.name,
+        type: 'meeting' as const,
+      })),
+      ...rawEvents.tasksWithDue
+        .filter((t) => t.due_date)
+        .map((t) => ({
+          id: `t-${t.id}`,
+          date: t.due_date!,
+          title: t.title,
+          type: 'deadline' as const,
+        })),
+    ]
+  }, [rawEvents])
+
   return (
     <>
       <Head>
-        <title>Personal Dashboard · Plow</title>
+        <title>plinq · Dashboard</title>
       </Head>
-      <AuthLayout>
-        {/* Left column: Projects Overview + Pending Action Items
-            Figma: top=133, left=354 → main-relative: top=30, left=54 */}
-        <div className="absolute top-[30px] left-[54px] w-[693px] flex flex-col gap-[40px] items-start">
-          {/* Projects Overview */}
-          <section className="w-full flex flex-col items-start">
-            <div className="flex items-center justify-between w-full">
-              <h2 className="font-sans font-medium text-[20px] leading-[24px] tracking-[0.2px] text-black">
-                Projects Overview
-              </h2>
-              <a
-                href="#"
-                className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-black whitespace-nowrap cursor-pointer"
-              >
-                VIEW ALL
-              </a>
-            </div>
-            <div className="mt-[5px] w-full flex items-center justify-center gap-[20px] bg-[#efeff0] border-2 border-[#afb1b6] rounded-lg px-[50px] py-[30px]">
-              {projects.map((p) => (
-                <div key={p.id} className="flex-1 flex flex-col gap-[10px] items-start justify-center">
-                  <p className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-black whitespace-nowrap">
-                    {p.name}
-                  </p>
-                  <div className="w-full h-[222px] bg-white border-2 border-[#afb1b6] rounded-lg" />
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Pending Action Items */}
-          <section className="w-full flex flex-col items-start">
-            <div className="flex items-center justify-between w-full">
-              <h2 className="font-sans font-medium text-[20px] leading-[24px] tracking-[0.2px] text-black">
-                Pending Action Items
-              </h2>
-              <a
-                href="#"
-                className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-black whitespace-nowrap cursor-pointer"
-              >
-                VIEW ALL
-              </a>
-            </div>
-            <div className="mt-[5px] w-full h-[462px] flex flex-col gap-[17px] items-start bg-[#efeff0] border-2 border-[#afb1b6] rounded-lg px-[30px] py-[28px] overflow-hidden">
-              {actionItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="relative w-full h-[89px] bg-white border-2 border-[#afb1b6] rounded-lg overflow-hidden"
-                >
-                  <div className="absolute left-[13px] top-[13px] flex items-center gap-[15px] p-[4px]">
-                    <input
-                      type="checkbox"
-                      className="w-[20px] h-[20px] accent-black border-2 border-[#afb1b6] rounded-[4px] shrink-0"
+      <PersonalAppShell active="dashboard">
+        <div className="p-6 flex gap-[10px] min-h-full">
+          {/* LEFT COLUMN — Projects + Action Items */}
+          <div className="flex-1 flex flex-col gap-[10px] min-w-0">
+            <section className="bg-white-white rounded-[10px] border border-gray-border-light p-[20px] min-h-[306px]">
+              <SectionHeader
+                eyebrow={`Projects · ${projects.length} active`}
+                title="Active Projects"
+                action={
+                  <Button
+                    size="mini"
+                    variant="secondary"
+                    iconRight="ArrowRight"
+                    onClick={() => router.push('/projects')}
+                  >
+                    View all
+                  </Button>
+                }
+              />
+              {projectsLoading && projects.length === 0 ? (
+                <p className="text-gray-secondary text-[12px]">Loading…</p>
+              ) : projects.length === 0 ? (
+                <p className="text-gray-secondary text-[12px]">No active projects yet.</p>
+              ) : (
+                <div className="flex gap-[10px] overflow-x-auto">
+                  {projects.map((p) => (
+                    <ProjectCard
+                      key={p.id}
+                      name={p.name}
+                      description={p.description ?? ''}
+                      status={dbStatusToUi(p.status)}
+                      progress={p.progressPct ?? 0}
+                      members={p.members.map(userToMember)}
+                      onOpen={() => router.push(`/p/${p.id}/dashboard`)}
                     />
-                    <div className="flex flex-col">
-                      <p className="font-sans font-medium text-[20px] leading-[24px] tracking-[0.2px] text-[#19191b] whitespace-nowrap">
-                        {item.title}
-                      </p>
-                      <p className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-[#7d7d7d] whitespace-nowrap">
-                        {item.due} | {item.project}
-                      </p>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </section>
-        </div>
+              )}
+            </section>
 
-        {/* Right column: Calendar + AI Follow-up
-            Figma: top=133, left=1096 → main-relative: top=30, left=796 */}
-        <div className="absolute top-[30px] left-[796px] w-[592px] flex flex-col gap-[40px] items-start">
-          {/* Calendar */}
-          <section className="w-full h-[577px] flex flex-col gap-[20px] items-start">
-            <h2 className="font-sans font-medium text-[20px] leading-[24px] tracking-[0.2px] text-black">
-              Calendar
-            </h2>
-            <PlaceholderCross className="w-full flex-1" />
-          </section>
+            <section className="bg-white-white rounded-[10px] border border-gray-border-light p-[20px] flex-1">
+              <SectionHeader
+                eyebrow={`Tasks · ${tasks.length} pending`}
+                title="What you have to do"
+                action={
+                  <Button
+                    size="mini"
+                    variant="secondary"
+                    iconRight="ArrowRight"
+                    onClick={() => router.push('/action-items')}
+                  >
+                    View all
+                  </Button>
+                }
+              />
+              {tasksLoading && tasks.length === 0 ? (
+                <p className="text-gray-secondary text-[12px]">Loading…</p>
+              ) : tasks.length === 0 ? (
+                <p className="text-gray-secondary text-[12px]">All caught up.</p>
+              ) : (
+                <div className="flex flex-col gap-[5px]">
+                  {tasks.map((t) => (
+                    <ActionItem
+                      key={t.id}
+                      title={t.title}
+                      date={formatDueDate(t.due_date)}
+                      priority={dbPriorityToUi(t.priority)}
+                      projectTag={
+                        t.project_name
+                          ? { label: t.project_name, color: 'purple' }
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
 
-          {/* AI Follow-up */}
-          <section className="w-full h-[304px] flex flex-col gap-[20px] items-start">
-            <h2 className="font-sans font-medium text-[20px] leading-[24px] tracking-[0.2px] text-black">
-              AI Follow-up
-            </h2>
-            <div className="w-full flex-1 bg-[#efeff0] border-2 border-[#afb1b6] rounded-lg" />
-          </section>
+          {/* RIGHT COLUMN — Calendar + Today */}
+          <div className="w-[594px] flex flex-col gap-[10px]">
+            <section className="bg-white-white rounded-[10px] border border-gray-border-light p-[20px]">
+              <Calendar
+                view="dashboard"
+                month={calMonth}
+                events={calEvents}
+                onOpen={() => router.push('/calendar')}
+              />
+            </section>
+
+            <section className="bg-white-white rounded-[10px] border border-gray-border-light p-[20px] flex-1">
+              <SectionHeader eyebrow="Upcoming · Today" title="What's Next" />
+              {meetingsLoading && meetings.length === 0 ? (
+                <p className="text-gray-secondary text-[12px]">Loading…</p>
+              ) : meetings.length === 0 ? (
+                <p className="text-gray-secondary text-[12px]">No meetings scheduled today.</p>
+              ) : (
+                <div className="flex flex-col gap-[10px]">
+                  {meetings.map((m) => (
+                    <Schedule
+                      key={m.id}
+                      title={m.name}
+                      time={formatTimeRange(m.scheduled_at, m.duration_min)}
+                      location={m.location_or_url ?? undefined}
+                      attendees={m.attendees.map(userToMember)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
         </div>
-      </AuthLayout>
+      </PersonalAppShell>
     </>
   )
 }

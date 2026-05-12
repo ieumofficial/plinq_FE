@@ -29,6 +29,20 @@ import Calendar, { type CalendarEvent } from '../../components/ui/Calendar'
 import StatusLabelBig, { type Status } from '../../components/ui/StatusLabelBig'
 import FileLabel from '../../components/ui/FileLabel'
 import Table, { TableHeader, TableRow, TableCell, type Column } from '../../components/ui/Table'
+import Radio from '../../components/ui/Radio'
+import Option from '../../components/ui/Option'
+import ReactionButton from '../../components/ui/ReactionButton'
+import ChatHeader from '../../components/ui/ChatHeader'
+import ChatMessage from '../../components/ui/ChatMessage'
+import ChatDetails from '../../components/ui/ChatDetails'
+import ChatSidebar, {
+  type ChatSessionGroup,
+  type ChatDmItem,
+} from '../../components/ui/ChatSidebar'
+import ChatComposer, {
+  ChatComposerChip,
+  ComposerIcons,
+} from '../../components/ui/ChatComposer'
 
 const TAG_COLORS: TagColor[] = ['blue', 'amber', 'green', 'red', 'gray', 'purple', 'dark']
 
@@ -76,6 +90,41 @@ const STATUSES_BIG: Status[] = ['planned', 'in-progress', 'review', 'blocked', '
 
 const CALENDAR_MONTH = new Date(2026, 4, 1) // May 2026
 const CALENDAR_TODAY = new Date(2026, 4, 10)
+
+const SAMPLE_MESSAGE_BODY =
+  'Q2 OKRs are locked — see the pinned doc. Three highlights: (1) Apollo cutover by May 11, (2) Aurora pilot expands to 6 customers, (3) hiring freeze lifts on the design team.'
+
+const SAMPLE_CHAT_SESSIONS: ChatSessionGroup[] = [
+  {
+    label: 'Org-wide · Stratos Labs',
+    items: [
+      { id: 'general', name: 'general' },
+      { id: 'random', name: 'random' },
+    ],
+  },
+  {
+    label: 'Assigned to projects',
+    items: [
+      { id: 'design-crit', name: 'design-crit', unreadCount: 2 },
+      { id: 'leads', name: 'leads' },
+    ],
+  },
+  {
+    label: 'Member groups',
+    items: [
+      { id: 'apollo-end', name: 'apollo-end', projectTag: 'Apollo', unreadCount: 2, hasMention: true },
+      { id: 'launch-may11', name: 'launch-may11', projectTag: 'Apollo' },
+    ],
+  },
+]
+
+const SAMPLE_CHAT_DMS: ChatDmItem[] = [
+  { id: 'mira-1', name: 'Mira Chen', presence: 'online', preview: 'Yes — staging flake reproduced.', timeLabel: '2m', unreadCount: 2 },
+  { id: 'mira-2', name: 'Mira Chen', presence: 'online', preview: 'You: Sounds good!', timeLabel: '2m' },
+  { id: 'mira-3', name: 'Mira Chen', presence: 'away', preview: 'Yes — staging flake reproduced.', timeLabel: '2m' },
+  { id: 'mira-4', name: 'Mira Chen', presence: 'away', preview: 'Yes — staging flake reproduced.', timeLabel: '2m' },
+  { id: 'mira-5', name: 'Mira Chen', presence: 'offline', preview: 'Yes — staging flake reproduced.', timeLabel: '2m', unreadCount: 2 },
+]
 
 const SAMPLE_CAL_EVENTS: CalendarEvent[] = [
   { id: '1', date: '2026-05-04', title: 'Apollo standup', type: 'meeting' },
@@ -1002,6 +1051,253 @@ export default function ComponentsPage() {
                 </Table>
               )
             })()}
+          </Section>
+
+          {/* CHAT — Radio */}
+          <Section title="Radio">
+            <Row label="Selected / Unselected">
+              <Radio selected={false} />
+              <Radio selected />
+            </Row>
+          </Section>
+
+          {/* CHAT — Option */}
+          <Section title="Option (single-select picker row)">
+            <div className="bg-white-item rounded-[5px] w-[289px] flex flex-col">
+              <Option
+                icon="People"
+                title="Pick members directly"
+                subtitle="Invite individuals"
+                selected={false}
+              />
+              <Option
+                icon="Folder"
+                title="Assign to a project"
+                subtitle="Members sync from selected project below"
+                selected
+              />
+            </div>
+          </Section>
+
+          {/* CHAT — Reaction Button */}
+          <Section title="Reaction Button">
+            <Row label="Reactions">
+              <ReactionButton variant="reaction" emoji="🎯" count={4} />
+              <ReactionButton variant="reaction" emoji="🎯" count={4} selected />
+              <ReactionButton variant="add" />
+            </Row>
+          </Section>
+
+          {/* CHAT — Header */}
+          <Section title="Chat Header — Channel">
+            <div className="bg-background border border-gray-border-light rounded-md p-[20px]">
+              <ChatHeader
+                variant="channel"
+                orgName="Stratos Labs"
+                name="general"
+                description="Org-wide announcements"
+                memberCount={108}
+                pinnedCount={3}
+                members={SAMPLE_MEMBERS.slice(0, 4)}
+                tipNode={
+                  <>
+                    <strong className="text-black font-semibold">#general</strong>{' '}
+                    is the org-wide default channel. Everyone at Stratos Labs is a
+                    member.
+                  </>
+                }
+              />
+            </div>
+          </Section>
+
+          <Section title="Chat Header — DM">
+            <div className="bg-background border border-gray-border-light rounded-md p-[20px]">
+              <ChatHeader
+                variant="dm"
+                name="Mira Chen"
+                member={{ name: 'Mira Chen' }}
+                isActive
+                jobTitle="Senior Engineer"
+                project={{ name: 'Apollo', color: 'blue' }}
+                tipNode={
+                  <>
+                    This is the beginning of your direct conversation with{' '}
+                    <strong className="text-black font-semibold">Mira Chen</strong>.
+                    You share <strong className="text-black font-semibold">3 sessions</strong>.
+                    Messages here are private to the two of you.
+                  </>
+                }
+              />
+            </div>
+          </Section>
+
+          {/* CHAT — Message */}
+          <Section title="Chat Message">
+            <div className="bg-white-white border border-gray-border-light rounded-md w-[600px] flex flex-col gap-[2px] py-[10px]">
+              <ChatMessage
+                author={{ name: 'Seoyeon Park' }}
+                authorTag="Lead"
+                time="10:31AM"
+                body={SAMPLE_MESSAGE_BODY}
+              />
+              <ChatMessage
+                author={{ name: 'Seoyeon Park' }}
+                authorTag="Lead"
+                time="10:31AM"
+                body={SAMPLE_MESSAGE_BODY}
+                reactions={[
+                  { emoji: '🎯', count: 4 },
+                  { emoji: '🎯', count: 4, selectedByMe: true },
+                ]}
+              />
+              <ChatMessage
+                author={{ name: 'Seoyeon Park' }}
+                authorTag="Lead"
+                time="10:31AM"
+                body={SAMPLE_MESSAGE_BODY}
+                reactions={[
+                  { emoji: '🎯', count: 4 },
+                  { emoji: '🎯', count: 4 },
+                ]}
+                thread={{
+                  count: 12,
+                  avatars: SAMPLE_MEMBERS.slice(0, 3),
+                  lastReplyLabel: 'Last today at 2:14PM',
+                }}
+              />
+              <ChatMessage
+                author={{ name: 'Seoyeon Park' }}
+                authorTag="Lead"
+                time="10:31AM"
+                body={SAMPLE_MESSAGE_BODY}
+                thread={{
+                  count: 12,
+                  avatars: SAMPLE_MEMBERS.slice(0, 3),
+                  lastReplyLabel: 'Last today at 2:14PM',
+                }}
+              />
+            </div>
+          </Section>
+
+          {/* CHAT — Details panel */}
+          <Section title="Chat Details — Channel">
+            <div className="bg-background border border-gray-border-light rounded-md p-[20px]">
+              <div className="h-[700px]">
+                <ChatDetails
+                  variant="channel"
+                  name="general"
+                  description="Org-wide announcement"
+                  createdLine={'Auto-created with the organization · Jan 12, 2026'}
+                  members={[
+                    { member: SAMPLE_MEMBERS[0], tag: 'Lead' },
+                    { member: SAMPLE_MEMBERS[1] },
+                    { member: SAMPLE_MEMBERS[2] },
+                    { member: SAMPLE_MEMBERS[3] },
+                  ]}
+                  memberCount={108}
+                  extraMemberCount={104}
+                  pinned={[
+                    { id: '1', title: 'Q2 OKR snapshot', meta: 'AI · 2d ago' },
+                    { id: '2', title: 'Weekly all-hands recap', meta: 'Daniel · 5d ago' },
+                    { id: '3', title: 'Welcome to Stratos', meta: 'Onboarding · Jan 12' },
+                  ]}
+                  aiCard={{
+                    title: 'Catch me up',
+                    subtitle:
+                      '24 messages since you last checked. Hannah shared the Q2 OKR draft. Daniel proposed an all-hands time change. AI drafted the response.',
+                    children: (
+                      <Button size="compact" variant="secondary">
+                        Read summary
+                      </Button>
+                    ),
+                  }}
+                />
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Chat Details — DM">
+            <div className="bg-background border border-gray-border-light rounded-md p-[20px]">
+              <div className="h-[700px]">
+                <ChatDetails
+                  variant="dm"
+                  member={{ name: 'Mira Chen' }}
+                  jobTitle="Senior Engineer"
+                  orgName="Strato Labs"
+                  sharedSessions={[
+                    { id: 's1', name: 'apollo-eng', subtitle: 'Project · Apollo', category: 'project-context' },
+                    { id: 's2', name: 'design-crit', subtitle: 'Member group', category: 'references' },
+                    { id: 's3', name: 'general', subtitle: 'Org-wide', category: 'decisions' },
+                  ]}
+                  sharedFiles={[
+                    { id: 'f1', name: 'staging-flake.repro.md', meta: 'Today · 12 KB' },
+                    { id: 'f2', name: 'token-rotation-notes.txt', meta: 'Yesterday · 8 KB', category: 'references' },
+                    { id: 'f3', name: 'cutover-checklist.pdf', meta: 'Apr 24 · 1.4 MB', category: 'project-context' },
+                  ]}
+                  aiCard={{
+                    title: 'Action items inferred',
+                    subtitle: '2 items detected from the messages.',
+                    children: (
+                      <div className="flex flex-col gap-[7px]">
+                        <button
+                          type="button"
+                          className="bg-primary-main text-white text-[12px] rounded-[5px] px-[10px] py-[7px] flex items-center justify-between hover:bg-primary-main/80"
+                        >
+                          APO-205: Align staging/ prod TTL
+                          <span aria-hidden>→</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="bg-primary-main text-white text-[12px] rounded-[5px] px-[10px] py-[7px] flex items-center justify-between hover:bg-primary-main/80"
+                        >
+                          APO-204: Pair review
+                          <span aria-hidden>→</span>
+                        </button>
+                      </div>
+                    ),
+                  }}
+                />
+              </div>
+            </div>
+          </Section>
+
+          {/* CHAT — Sidebar */}
+          <Section title="Chat Sidebar (Messages page)">
+            <div className="bg-background border border-gray-border-light rounded-md inline-block">
+              <div className="h-[820px]">
+                <ChatSidebar
+                  activeFilter="all"
+                  sessionsCount={7}
+                  sessionGroups={SAMPLE_CHAT_SESSIONS}
+                  dms={SAMPLE_CHAT_DMS}
+                  dmCount={5}
+                  activeId="general"
+                />
+              </div>
+            </div>
+          </Section>
+
+          {/* CHAT — Composer */}
+          <Section title="Chat Composer">
+            <div className="bg-background border border-gray-border-light rounded-md p-[20px] w-[850px]">
+              <ChatComposer
+                value=""
+                onChange={() => undefined}
+                onSend={() => undefined}
+                onSchedule={() => undefined}
+                placeholder="Message #general"
+                scopeChips={
+                  <>
+                    <ChatComposerChip icon={<ComposerIcons.Sparkle />}>
+                      AI on · drafts replies
+                    </ChatComposerChip>
+                    <ChatComposerChip icon={<ComposerIcons.OrgChart />}>
+                      Org-wide · 108 members
+                    </ChatComposerChip>
+                  </>
+                }
+              />
+            </div>
           </Section>
         </div>
       </main>

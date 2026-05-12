@@ -65,6 +65,11 @@ type Props = {
   headerEyebrow?: string
   /** Big header title. Format: "Good morning, Yujin". */
   headerTitle?: string
+  /**
+   * When true, the left rail collapses to the 59px icon-only sidebar (used on
+   * the Messages page where ChatSidebar replaces the wider personal nav).
+   */
+  stackedSidebar?: boolean
   children: ReactNode
 }
 
@@ -94,6 +99,7 @@ export default function PersonalAppShell({
   active,
   headerEyebrow,
   headerTitle,
+  stackedSidebar = false,
   children,
 }: Props) {
   const router = useRouter()
@@ -159,12 +165,13 @@ export default function PersonalAppShell({
         }
         sidebar={
           <SideMenu
-            sectionLabel="Personal Space"
+            sectionLabel={stackedSidebar ? undefined : 'Personal Space'}
             items={NAV_ITEMS}
             footerItems={FOOTER_ITEMS}
             activeKey={active}
             userInitials={initials}
             userName={userName}
+            stacked={stackedSidebar}
             onItemClick={(key) => {
               const route = routeFor(key as ActiveKey, orgId)
               if (route && route !== router.pathname) router.push(route)

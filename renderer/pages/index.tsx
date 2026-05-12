@@ -12,6 +12,11 @@ export default function LoginPage() {
   const router = useRouter()
 
   useEffect(() => {
+    // window.ipc only exists when running inside the Electron renderer
+    // (exposed via preload.ts). In a regular browser preview or before
+    // preload finishes, it's undefined — skip the subscription rather
+    // than crashing the page.
+    if (typeof window === 'undefined' || !window.ipc) return
     const cleanup = window.ipc.on(
       'auth-callback',
       (tokens: { access_token: string; refresh_token: string }) => {
@@ -33,6 +38,7 @@ export default function LoginPage() {
   const handleGetStarted = () => {
     // 프로덕션: 시스템 브라우저 (plinq:// 프로토콜 등록됨)
     // 개발: 앱 내 창 (프로토콜 미등록 우회)
+    if (typeof window === 'undefined' || !window.ipc) return
     const isProd = process.env.NODE_ENV === 'production'
     window.ipc.send(
       isProd ? 'open-external' : 'open-login-window',

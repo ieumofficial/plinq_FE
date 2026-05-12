@@ -1,14 +1,20 @@
 import { useMemo, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
+import { useQueryClient } from '@tanstack/react-query'
 import ProjectAppShell, { useCreateNew } from '../../../components/ProjectAppShell'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import Icon from '../../../components/ui/Icon'
 import UserGroup from '../../../components/ui/UserGroup'
+import ZoomConnectButton from '../../../components/ZoomConnectButton'
 import { useProject, useProjectMeetings } from '../../../lib/hooks'
+import { queryKeys } from '../../../lib/queryKeys'
+import { supabase } from '../../../lib/supabase'
 import { userToMember, type MeetingType } from '../../../lib/types'
 import MeetingTypeLabel from '../../../components/ui/MeetingTypeLabel'
+import MeetingInsights from '../../../components/MeetingInsights'
+import { analyzeMeeting, parseSummary } from '../../../lib/aiAnalyze'
 
 function dateBlock(iso: string): { top: string; bottom: string } {
   const d = new Date(iso)
@@ -68,6 +74,80 @@ function MeetingsBody({ projectId }: { projectId: string }) {
   const { data: project } = useProject(projectId)
   const { data: meetings = [] } = useProjectMeetings(projectId)
   const [search, setSearch] = useState('')
+  const queryClient = useQueryClient()
+  // Per-meeting AI analysis state. Lives at body-level so we can fan out
+  // status to the inline analyze card per row without lifting each card
+  // into its own component (one row = one map iteration, no hooks allowed).
+  const [analyzeState, setAnalyzeState] = useState<
+    Record<string, { analyzing: boolean; error: string | null }>
+  >({})
+
+  async function handleAnalyze(meetingId: string) {
+    setAnalyzeState((prev) => ({
+      ...prev,
+      [meetingId]: { analyzing: true, error: null },
+    }))
+    try {
+      await analyzeMeeting(meetingId)
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.project.meetings(projectId),
+      })
+      setAnalyzeState((prev) => ({
+        ...prev,
+        [meetingId]: { analyzing: false, error: null },
+      }))
+    } catch (e) {
+      setAnalyzeState((prev) => ({
+        ...prev,
+        [meetingId]: { analyzing: false, error: (e as Error).message },
+      }))
+    }
+  }
+
+  // Open a Zoom (or other) URL in the system browser via Electron IPC,
+  // falling back to window.open when running in a plain browser preview.
+  function openExternal(url: string) {
+    if (typeof window !== 'undefined' && window.ipc) {
+      window.ipc.send('open-external', url)
+    } else {
+      window.open(url, '_blank')
+    }
+  }
+
+  // Mark a meeting as "live now". Used when the user clicks Join — the
+  // row flips to `recording` so the card UI swaps Join for the Open Zoom +
+  // End meeting controls, and downstream features (zoom-analyze polling)
+  // know which row to watch.
+  async function startMeeting(meetingId: string) {
+    const { error } = await supabase
+      .from('meetings')
+      .update({ status: 'recording' })
+      .eq('id', meetingId)
+    if (error) {
+      console.error('[meetings] startMeeting status update failed', error)
+      return
+    }
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.project.meetings(projectId),
+    })
+  }
+
+  // Flag the meeting as finished. The AI pipeline picks up `processed`
+  // rows and runs transcript → summary against the Zoom cloud recording
+  // (or any uploaded audio) — added in the next iteration.
+  async function endMeeting(meetingId: string) {
+    const { error } = await supabase
+      .from('meetings')
+      .update({ status: 'processed' })
+      .eq('id', meetingId)
+    if (error) {
+      console.error('[meetings] endMeeting status update failed', error)
+      return
+    }
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.project.meetings(projectId),
+    })
+  }
 
   const filtered = useMemo(() => {
     if (!search.trim()) return meetings
@@ -96,6 +176,7 @@ function MeetingsBody({ projectId }: { projectId: string }) {
               </h1>
             </div>
             <div className="flex items-center gap-[10px]">
+              <ZoomConnectButton />
               <Input
                 variant="search"
                 placeholder="Find a meeting..."
@@ -153,9 +234,29 @@ function MeetingsBody({ projectId }: { projectId: string }) {
                 const isUpcoming = new Date(m.scheduled_at).getTime() >= Date.now()
                 const showJoin = isLive || isUpcoming
                 const dateStyle = DATE_BLOCK_STYLES[m.meeting_type]
+                const insights = parseSummary(m.summary)
+                const az = analyzeState[m.id] ?? {
+                  analyzing: false,
+                  error: null,
+                }
+                // Analysis is available when (a) the meeting has a real
+                // Zoom join URL, (b) it's not currently live, (c) its
+                // scheduled start time is in the past, and (d) we haven't
+                // analyzed it yet. This covers both the "user ran a Right
+                // Now meeting" and "user ended a scheduled meeting" paths.
+                const isPast =
+                  new Date(m.scheduled_at).getTime() <= Date.now()
+                const canAnalyze =
+                  !isLive &&
+                  isPast &&
+                  !insights &&
+                  !!m.location_or_url &&
+                  /^https?:\/\//i.test(m.location_or_url)
+                const showAnalysisCard =
+                  !!insights || canAnalyze || az.analyzing || !!az.error
                 return (
+                  <div key={m.id} className="flex flex-col gap-[10px]">
                   <article
-                    key={m.id}
                     className="bg-white-white border border-gray-border-light rounded-[10px] p-[15px] flex items-center gap-[15px]"
                   >
                     {/* Date block — 60×50 */}
@@ -209,20 +310,62 @@ function MeetingsBody({ projectId }: { projectId: string }) {
                               </span>
                             )}
                           </div>
-                          {m.summary && (
+                          {insights?.summary && (
                             <p className="text-[12px] text-[#6B7B86] leading-snug">
-                              {m.summary}
+                              {insights.summary}
                             </p>
                           )}
                         </div>
-                        {showJoin && (
-                          <button
-                            type="button"
-                            className="bg-[#2E434E] text-[#F8F9FA] text-[12px] px-[10px] py-[10px] rounded-[5px] shrink-0 hover:opacity-90"
-                          >
-                            Join
-                          </button>
-                        )}
+                        {(showJoin || isLive) && (() => {
+                          const url = m.location_or_url
+                          const isUrl = !!url && /^https?:\/\//i.test(url)
+                          // Live mode: card shows "Open Zoom" (reopen the
+                          // call if user closed it) + "End meeting" (flips
+                          // status to processed so the AI pipeline kicks in).
+                          if (isLive) {
+                            return (
+                              <div className="flex items-center gap-[8px] shrink-0">
+                                {isUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openExternal(url!)}
+                                    className="bg-white-white border border-gray-border text-black text-[12px] px-[10px] py-[10px] rounded-[5px] hover:bg-white-item"
+                                  >
+                                    Open Zoom
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => void endMeeting(m.id)}
+                                  className="bg-red-main text-white text-[12px] px-[10px] py-[10px] rounded-[5px] hover:opacity-90"
+                                >
+                                  End meeting
+                                </button>
+                              </div>
+                            )
+                          }
+                          return (
+                            <button
+                              type="button"
+                              disabled={!isUrl}
+                              onClick={() => {
+                                if (!isUrl) return
+                                openExternal(url!)
+                                void startMeeting(m.id)
+                              }}
+                              title={
+                                isUrl
+                                  ? `Open ${url}`
+                                  : url
+                                    ? `"${url}" 는 유효한 링크가 아닙니다 — Zoom으로 다시 만들면 join URL이 자동 생성됩니다`
+                                    : 'No meeting URL set'
+                              }
+                              className="bg-[#2E434E] text-[#F8F9FA] text-[12px] px-[10px] py-[10px] rounded-[5px] shrink-0 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              Join
+                            </button>
+                          )
+                        })()}
                       </div>
 
                       {/* Bottom row */}
@@ -269,6 +412,33 @@ function MeetingsBody({ projectId }: { projectId: string }) {
                       </div>
                     </div>
                   </article>
+                  {showAnalysisCard && (
+                    <div className="bg-white-white border border-gray-border-light rounded-[10px] p-[15px] ml-[75px]">
+                      {insights ? (
+                        <MeetingInsights data={insights} />
+                      ) : (
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-black text-[13px] font-semibold">
+                              AI 회의록 — 로컬 녹화 분석 곧 지원
+                            </p>
+                            <p className="text-gray-main text-[11px] mt-1">
+                              회의 종료 후 PC에 저장된 m4a 파일을 자동으로 가져와 분석합니다.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            disabled
+                            title="Local audio import coming next iteration"
+                            className="bg-gray-disabled text-gray-main text-[12px] px-[15px] py-[8px] rounded-[5px] shrink-0 cursor-not-allowed"
+                          >
+                            Coming soon
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  </div>
                 )
               })
             )}

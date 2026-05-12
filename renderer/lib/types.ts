@@ -45,6 +45,39 @@ export type MeetingRecurrence = 'once' | 'every_day' | 'every_week' | 'every_yea
 
 export type ProjectRoleDb = 'editor' | 'admin' | 'readonly'
 
+// ─── Chat ───────────────────────────────────────────────────────────────────
+
+export type ChatSessionKind = 'channel' | 'dm'
+export type ChatSessionScope = 'org_wide' | 'project' | 'member_group' | 'dm'
+export type ChatSessionPrivacy = 'public' | 'private'
+
+export type ChatSessionRow = {
+  id: string
+  org_id: string
+  kind: ChatSessionKind
+  scope: ChatSessionScope
+  privacy: ChatSessionPrivacy
+  name: string | null
+  description: string | null
+  project_id: string | null
+  dm_user_a: string | null
+  dm_user_b: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export type ChatMessageRow = {
+  id: string
+  session_id: string
+  author_id: string
+  body: string
+  reply_to_id: string | null
+  pinned_at: string | null
+  pinned_by: string | null
+  edited_at: string | null
+  created_at: string
+}
+
 export type TaskRow = {
   id: string
   project_id: string | null

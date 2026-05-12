@@ -7,6 +7,8 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import {
+  getChatMessages,
+  getChatSessions,
   getCurrentUser,
   getOrgMembers,
   getProject,
@@ -190,5 +192,28 @@ export function useProjectDocs(projectId: string | null | undefined) {
     queryKey: queryKeys.project.docs(projectId ?? ''),
     queryFn: () => getProjectDocs(projectId!),
     enabled: !!projectId,
+  })
+}
+
+// ─── Chat ───────────────────────────────────────────────────────────────────
+
+export function useChatSessions(
+  userId: string | null | undefined,
+  orgId: string | null | undefined
+) {
+  return useQuery({
+    queryKey: queryKeys.chat.sessions(userId ?? '', orgId ?? ''),
+    queryFn: () => getChatSessions(userId!, orgId!),
+    enabled: !!userId && !!orgId,
+    staleTime: 30 * 1000,
+  })
+}
+
+export function useChatMessages(sessionId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.chat.messages(sessionId ?? ''),
+    queryFn: () => getChatMessages(sessionId!),
+    enabled: !!sessionId,
+    staleTime: 10 * 1000,
   })
 }

@@ -13,6 +13,9 @@ import type {
   MeetingRow,
   UserRow,
   TaskStatusDb,
+  ChatSessionRow,
+  ChatSessionPrivacy,
+  ChatMessageRow,
 } from './types'
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -876,4 +879,338 @@ export async function getUserCalendarEvents(
   }
 
   return { meetings, tasksWithDue }
+}
+
+// ─── Chat ────────────────────────────────────────────────────────────────────
+
+export type ChatSessionWithMeta = ChatSessionRow & {
+  /** Channels: project name (when scope=project). */
+  project_name: string | null
+  /** DMs: the OTHER participant (not the current user). */
+  other_user: UserRow | null
+  /** Number of unread messages for the current user. */
+  unread_count: number
+  /** Last message body for preview. */
+  last_message_body: string | null
+  /** Last message timestamp for sort + preview. */
+  last_message_at: string | null
+}
+
+/**
+ * All chat sessions the current user is a member of, in the given org.
+ * Returns enriched rows with project name, other-user (for DMs), unread count,
+ * and last message preview.
+ */
+export async function getChatSessions(
+  userId: string,
+  orgId: string
+): Promise<ChatSessionWithMeta[]> {
+  // 1) Sessions the user is a member of.
+  const { data: memberRows, error: mErr } = await supabase
+    .from('chat_session_members')
+    .select('session_id, last_read_at')
+    .eq('user_id', userId)
+  if (mErr) {
+    console.error('[queries] chat_session_members', mErr)
+    return []
+  }
+  const ids = (memberRows ?? []).map((r) => r.session_id as string)
+  if (ids.length === 0) return []
+
+  const lastReadByMembership = new Map<string, string | null>()
+  for (const r of memberRows ?? []) {
+    lastReadByMembership.set(
+      r.session_id as string,
+      (r as { last_read_at: string | null }).last_read_at ?? null
+    )
+  }
+
+  const { data: sessionRows, error: sErr } = await supabase
+    .from('chat_sessions')
+    .select(
+      'id, org_id, kind, scope, privacy, name, description, project_id, dm_user_a, dm_user_b, created_by, created_at, projects(name)'
+    )
+    .eq('org_id', orgId)
+    .in('id', ids)
+  if (sErr) {
+    console.error('[queries] chat_sessions', sErr)
+    return []
+  }
+  const sessions = (sessionRows ?? []) as (ChatSessionRow & {
+    projects: { name: string } | { name: string }[] | null
+  })[]
+  if (sessions.length === 0) return []
+
+  // 2) For DMs, fetch the OTHER user record.
+  const otherUserIds = new Set<string>()
+  for (const s of sessions) {
+    if (s.kind === 'dm') {
+      const other = s.dm_user_a === userId ? s.dm_user_b : s.dm_user_a
+      if (other) otherUserIds.add(other)
+    }
+  }
+  let usersById = new Map<string, UserRow>()
+  if (otherUserIds.size > 0) {
+    const { data: users, error: uErr } = await supabase
+      .from('users')
+      .select('id, email, first_name, last_name, nickname, job_title')
+      .in('id', Array.from(otherUserIds))
+    if (uErr) console.error('[queries] dm other users', uErr)
+    usersById = new Map((users ?? []).map((u) => [u.id as string, u as UserRow]))
+  }
+
+  // 3) Latest message + unread count per session.
+  // Fetch author_id too so we can exclude the current user's own messages
+  // from the unread count (you don't get notified about your own posts).
+  const sessionIds = sessions.map((s) => s.id)
+  const { data: msgs, error: msgErr } = await supabase
+    .from('chat_messages')
+    .select('session_id, author_id, body, created_at')
+    .in('session_id', sessionIds)
+    .order('created_at', { ascending: false })
+  if (msgErr) console.error('[queries] chat_messages preview', msgErr)
+  const lastBySession = new Map<string, { body: string; at: string }>()
+  const unreadBySession = new Map<string, number>()
+  for (const row of (msgs ?? []) as {
+    session_id: string
+    author_id: string
+    body: string
+    created_at: string
+  }[]) {
+    if (!lastBySession.has(row.session_id)) {
+      lastBySession.set(row.session_id, { body: row.body, at: row.created_at })
+    }
+    if (row.author_id === userId) continue // own message → not unread
+    const lastRead = lastReadByMembership.get(row.session_id) ?? null
+    if (!lastRead || row.created_at > lastRead) {
+      unreadBySession.set(
+        row.session_id,
+        (unreadBySession.get(row.session_id) ?? 0) + 1
+      )
+    }
+  }
+
+  return sessions
+    .map<ChatSessionWithMeta>((s) => {
+      const proj = Array.isArray(s.projects) ? s.projects[0] : s.projects
+      const other =
+        s.kind === 'dm'
+          ? usersById.get(
+              (s.dm_user_a === userId ? s.dm_user_b : s.dm_user_a) as string
+            ) ?? null
+          : null
+      const last = lastBySession.get(s.id)
+      return {
+        id: s.id,
+        org_id: s.org_id,
+        kind: s.kind,
+        scope: s.scope,
+        privacy: s.privacy,
+        name: s.name,
+        description: s.description,
+        project_id: s.project_id,
+        dm_user_a: s.dm_user_a,
+        dm_user_b: s.dm_user_b,
+        created_by: s.created_by,
+        created_at: s.created_at,
+        project_name: proj?.name ?? null,
+        other_user: other,
+        unread_count: unreadBySession.get(s.id) ?? 0,
+        last_message_body: last?.body ?? null,
+        last_message_at: last?.at ?? null,
+      }
+    })
+    .sort((a, b) => {
+      const at = a.last_message_at ?? a.created_at
+      const bt = b.last_message_at ?? b.created_at
+      return bt.localeCompare(at)
+    })
+}
+
+export type ChatMessageWithAuthor = ChatMessageRow & {
+  author: UserRow
+}
+
+export async function getChatMessages(
+  sessionId: string,
+  opts?: { limit?: number; before?: string }
+): Promise<ChatMessageWithAuthor[]> {
+  let q = supabase
+    .from('chat_messages')
+    .select(
+      'id, session_id, author_id, body, reply_to_id, pinned_at, pinned_by, edited_at, created_at, users:author_id(id, email, first_name, last_name, nickname, job_title)'
+    )
+    .eq('session_id', sessionId)
+    .is('reply_to_id', null) // top-level only; threads loaded separately
+    .order('created_at', { ascending: true })
+  if (opts?.before) q = q.lt('created_at', opts.before)
+  if (opts?.limit) q = q.limit(opts.limit)
+
+  const { data, error } = await q
+  if (error) {
+    console.error('[queries] getChatMessages', error)
+    return []
+  }
+  return (data ?? []).map((row) => {
+    const r = row as unknown as ChatMessageRow & {
+      users: UserRow | UserRow[] | null
+    }
+    const u = Array.isArray(r.users) ? r.users[0] : r.users
+    return {
+      ...(r as ChatMessageRow),
+      author: u as UserRow,
+    }
+  })
+}
+
+// ─── Chat mutations ─────────────────────────────────────────────────────────
+
+export type NewChatSessionInput = {
+  org_id: string
+  name: string
+  description?: string
+  privacy?: ChatSessionPrivacy
+  /** When provided, scope='project' and project members auto-sync as members. */
+  project_id?: string | null
+  /** Otherwise scope='member_group' and these users become members. */
+  member_user_ids?: string[]
+}
+
+export async function createChatSession(
+  input: NewChatSessionInput
+): Promise<{ id: string } | { error: string }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in' }
+
+  const isProject = !!input.project_id
+  const scope = isProject ? 'project' : 'member_group'
+
+  const { data, error } = await supabase
+    .from('chat_sessions')
+    .insert({
+      org_id: input.org_id,
+      kind: 'channel',
+      scope,
+      privacy: input.privacy ?? 'public',
+      name: input.name.trim(),
+      description: input.description?.trim() || null,
+      project_id: input.project_id ?? null,
+      created_by: user.id,
+    })
+    .select('id')
+    .single()
+  if (error) {
+    console.error('[queries] createChatSession', error)
+    return { error: error.message }
+  }
+  const sessionId = (data as { id: string }).id
+
+  // Resolve membership: project members for project scope, explicit list otherwise.
+  let memberIds: string[] = []
+  if (isProject) {
+    const { data: pm } = await supabase
+      .from('project_members')
+      .select('user_id')
+      .eq('project_id', input.project_id!)
+    memberIds = (pm ?? []).map((r) => r.user_id as string)
+  } else {
+    memberIds = input.member_user_ids ?? []
+  }
+  if (!memberIds.includes(user.id)) memberIds.push(user.id)
+
+  const rows = memberIds.map((uid) => ({ session_id: sessionId, user_id: uid }))
+  if (rows.length > 0) {
+    const { error: mErr } = await supabase.from('chat_session_members').insert(rows)
+    if (mErr) console.error('[queries] add chat session members', mErr)
+  }
+  return { id: sessionId }
+}
+
+/**
+ * Open (or create) a 1-1 DM session between the current user and `otherUserId`
+ * in the given org. Returns the session id.
+ */
+export async function getOrCreateDm(
+  orgId: string,
+  otherUserId: string
+): Promise<{ id: string } | { error: string }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in' }
+  if (user.id === otherUserId) return { error: 'Cannot DM yourself' }
+
+  const [a, b] = user.id < otherUserId ? [user.id, otherUserId] : [otherUserId, user.id]
+
+  const { data: existing } = await supabase
+    .from('chat_sessions')
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('kind', 'dm')
+    .eq('dm_user_a', a)
+    .eq('dm_user_b', b)
+    .maybeSingle()
+  if (existing) return { id: (existing as { id: string }).id }
+
+  const { data, error } = await supabase
+    .from('chat_sessions')
+    .insert({
+      org_id: orgId,
+      kind: 'dm',
+      scope: 'dm',
+      privacy: 'private',
+      dm_user_a: a,
+      dm_user_b: b,
+      created_by: user.id,
+    })
+    .select('id')
+    .single()
+  if (error) return { error: error.message }
+  const sessionId = (data as { id: string }).id
+
+  await supabase.from('chat_session_members').insert([
+    { session_id: sessionId, user_id: a },
+    { session_id: sessionId, user_id: b },
+  ])
+  return { id: sessionId }
+}
+
+export async function sendChatMessage(input: {
+  session_id: string
+  body: string
+  reply_to_id?: string | null
+}): Promise<{ id: string } | { error: string }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in' }
+  const trimmed = input.body.trim()
+  if (!trimmed) return { error: 'Message body is required' }
+
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .insert({
+      session_id: input.session_id,
+      author_id: user.id,
+      body: trimmed,
+      reply_to_id: input.reply_to_id ?? null,
+    })
+    .select('id')
+    .single()
+  if (error) return { error: error.message }
+  return { id: (data as { id: string }).id }
+}
+
+export async function markChatSessionRead(sessionId: string): Promise<void> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return
+  await supabase
+    .from('chat_session_members')
+    .update({ last_read_at: new Date().toISOString() })
+    .eq('session_id', sessionId)
+    .eq('user_id', user.id)
 }

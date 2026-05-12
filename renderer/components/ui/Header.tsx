@@ -217,7 +217,7 @@ export default function Header({
           className="relative inline-flex items-center justify-center text-black p-1 rounded-md hover:bg-gray-extra-light transition-colors"
           aria-label="Notifications"
         >
-          <Icon name="Notification" size={15} />
+          <Icon name="Notification" size={18} />
           {hasNotifications && (
             <span className="absolute top-1 right-1 w-[5px] h-[5px] rounded-full bg-red-med" />
           )}

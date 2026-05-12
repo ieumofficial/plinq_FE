@@ -34,7 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'projects', icon: 'Folder', label: 'Projects' },
   { key: 'messages', icon: 'Chat', label: 'Messages' },
   { key: 'calendar', icon: 'Calendar', label: 'Calendar' },
-  { key: 'tasks', icon: 'Task', label: 'Action Items' },
+  { key: 'tasks', icon: 'Task', label: 'Tasks' },
   { key: 'organization', icon: 'Organization', label: 'Organization' },
 ]
 

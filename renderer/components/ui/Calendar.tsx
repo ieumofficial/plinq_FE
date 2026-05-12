@@ -183,14 +183,14 @@ export default function Calendar({
             </span>
             <span className="flex items-center gap-[5px]">
               <span className="w-[6px] h-[6px] rounded-full bg-red-main" />
-              <span className="text-gray-main text-[10px] leading-[1.5]">Action</span>
+              <span className="text-gray-main text-[10px] leading-[1.5]">Task</span>
             </span>
             <button
               type="button"
               onClick={onOpen}
-              className="flex items-center gap-[5px] pl-[10px] pr-[5px] py-[5px] rounded-[5px] hover:bg-white-item"
+              className="flex items-center gap-[5px] pl-[10px] pr-[5px] py-[5px] rounded-[5px] text-black hover:bg-white-item"
             >
-              <span className="text-black text-[10px] uppercase leading-none">open</span>
+              <span className="text-[10px] uppercase leading-none">open</span>
               <Icon name="ArrowRight" size={15} />
             </button>
           </div>

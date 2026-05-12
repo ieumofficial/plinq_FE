@@ -1177,6 +1177,28 @@ export async function getOrCreateDm(
   return { id: sessionId }
 }
 
+/** Members of a chat session (channel or DM). */
+export async function getChatSessionMembers(
+  sessionId: string
+): Promise<UserRow[]> {
+  const { data, error } = await supabase
+    .from('chat_session_members')
+    .select('users(id, email, first_name, last_name, nickname, job_title)')
+    .eq('session_id', sessionId)
+  if (error) {
+    console.error('[queries] getChatSessionMembers', error)
+    return []
+  }
+  const out: UserRow[] = []
+  for (const row of data ?? []) {
+    const u = (row as unknown as { users: UserRow | UserRow[] | null }).users
+    if (!u) continue
+    if (Array.isArray(u)) out.push(...u)
+    else out.push(u)
+  }
+  return out
+}
+
 export async function sendChatMessage(input: {
   session_id: string
   body: string

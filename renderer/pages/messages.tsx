@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Head from 'next/head'
 import { useQueryClient } from '@tanstack/react-query'
 import PersonalAppShell from '../components/PersonalAppShell'
@@ -17,9 +17,11 @@ import ChatComposer, {
 import CreateChatSessionModal from '../components/CreateChatSessionModal'
 import {
   useChatMessages,
+  useChatSessionMembers,
   useChatSessions,
   useCurrentUser,
   useMyOrg,
+  useUserProjects,
 } from '../lib/hooks'
 import {
   markChatSessionRead,
@@ -52,6 +54,59 @@ function formatTime(iso: string): string {
   })
 }
 
+function ymd(iso: string): string {
+  return iso.slice(0, 10)
+}
+
+/** Hex colors mirroring the ProjectLabel palette. */
+const PROJECT_COLOR_HEX: Record<string, string> = {
+  blue: '#2D5A9E',
+  green: '#2F6B45',
+  amber: '#B68A48',
+  red: '#9B3838',
+  purple: '#5B3D8A',
+  turquoise: '#558589',
+}
+
+/** Same hash-of-name palette UserGroup uses for initial-only avatars. */
+const NAME_COLOR_FALLBACK = [
+  '#5B7FB6',
+  '#588F6E',
+  '#B68A48',
+  '#5B3D8A',
+  '#9B3838',
+  '#455E6A',
+]
+function colorForName(name: string): string {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0
+  return NAME_COLOR_FALLBACK[Math.abs(h) % NAME_COLOR_FALLBACK.length]
+}
+
+function resolveProjectColor(color: string | null | undefined): string {
+  if (!color) return '#2D5A9E'
+  if (color.startsWith('#')) return color
+  return PROJECT_COLOR_HEX[color] ?? '#2D5A9E'
+}
+
+function formatDateDivider(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const today = ymd(now.toISOString())
+  const yesterdayDate = new Date(now)
+  yesterdayDate.setDate(now.getDate() - 1)
+  const yesterday = ymd(yesterdayDate.toISOString())
+  const that = ymd(iso)
+  const weekday = d.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  })
+  if (that === today) return `Today · ${weekday}`
+  if (that === yesterday) return `Yesterday · ${weekday}`
+  return weekday
+}
+
 function buildSessionGroups(sessions: ChatSessionWithMeta[]): {
   groups: ChatSessionGroup[]
   sessionsCount: number
@@ -68,8 +123,7 @@ function buildSessionGroups(sessions: ChatSessionWithMeta[]): {
   const toItem = (s: ChatSessionWithMeta) => ({
     id: s.id,
     name: s.name ?? '(untitled)',
-    projectTag:
-      s.scope === 'member_group' && s.project_name ? s.project_name : undefined,
+    projectTag: s.project_name ?? undefined,
     unreadCount: s.unread_count,
   })
   const groups: ChatSessionGroup[] = []
@@ -108,6 +162,12 @@ function MessagesBody() {
   const orgId = org?.id ?? null
 
   const { data: sessions = [] } = useChatSessions(user?.id, orgId)
+  const { data: projects = [] } = useUserProjects(user?.id)
+  const projectColorMap = useMemo(() => {
+    const m = new Map<string, string | null>()
+    for (const p of projects) m.set(p.id, p.color ?? null)
+    return m
+  }, [projects])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [filter, setFilter] = useState<ChatFilterKey>('all')
   const [search, setSearch] = useState('')
@@ -126,6 +186,17 @@ function MessagesBody() {
   )
 
   const { data: messages = [] } = useChatMessages(activeSessionId)
+  const { data: sessionMembers = [] } = useChatSessionMembers(activeSessionId)
+
+  // Auto-scroll the messages pane to the bottom when entering a session or
+  // when new messages arrive.
+  const messagesRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = messagesRef.current
+    if (!el) return
+    // Scroll instantly on session switch, smoothly on new messages.
+    el.scrollTop = el.scrollHeight
+  }, [activeSessionId, messages.length])
 
   // Mark read whenever the active session changes / new messages arrive.
   useEffect(() => {
@@ -339,7 +410,39 @@ function MessagesBody() {
                   orgName={org?.name ?? ''}
                   name={activeSession.name ?? '(untitled)'}
                   description={activeSession.description ?? undefined}
-                  members={[]}
+                  members={sessionMembers.map(userToMember)}
+                  memberCount={sessionMembers.length}
+                  eyebrowColor={
+                    activeSession.project_id
+                      ? resolveProjectColor(projectColorMap.get(activeSession.project_id))
+                      : undefined
+                  }
+                  tipNode={
+                    activeSession.scope === 'org_wide' ? (
+                      <>
+                        <strong className="text-black font-semibold">
+                          #{activeSession.name}
+                        </strong>{' '}
+                        is the org-wide default channel. Everyone at{' '}
+                        {org?.name ?? 'this organization'} is a member.
+                      </>
+                    ) : activeSession.scope === 'project' ? (
+                      <>
+                        <strong className="text-black font-semibold">
+                          #{activeSession.name}
+                        </strong>{' '}
+                        is the channel for the{' '}
+                        {activeSession.project_name ?? 'project'} team.
+                      </>
+                    ) : (
+                      <>
+                        <strong className="text-black font-semibold">
+                          #{activeSession.name}
+                        </strong>{' '}
+                        is a member group channel.
+                      </>
+                    )
+                  }
                 />
               ) : (
                 <ChatHeader
@@ -357,25 +460,51 @@ function MessagesBody() {
                   }
                   jobTitle={activeSession.other_user?.job_title ?? undefined}
                   isActive
+                  eyebrowColor={
+                    activeSession.other_user
+                      ? colorForName(
+                          activeSession.other_user.nickname ||
+                            `${activeSession.other_user.first_name} ${activeSession.other_user.last_name}`.trim() ||
+                            activeSession.other_user.email
+                        )
+                      : undefined
+                  }
                 />
               )}
             </div>
 
             {/* Messages */}
-            <div className="flex-1 min-h-0 overflow-y-auto py-[10px]">
+            <div ref={messagesRef} className="flex-1 min-h-0 overflow-y-auto py-[10px]">
               {messages.length === 0 ? (
                 <div className="px-[20px] py-[40px] text-center text-gray-secondary text-[12px]">
                   No messages yet. Say hi 👋
                 </div>
               ) : (
-                messages.map((m) => (
-                  <ChatMessage
-                    key={m.id}
-                    author={userToMember(m.author)}
-                    time={formatTime(m.created_at)}
-                    body={m.body}
-                  />
-                ))
+                messages.map((m, i) => {
+                  const prev = messages[i - 1]
+                  const showDivider = !prev || ymd(prev.created_at) !== ymd(m.created_at)
+                  return (
+                    <div key={m.id}>
+                      {showDivider && (
+                        <div className="flex items-center gap-[10px] my-[10px] px-[15px]">
+                          <div className="flex-1 h-px bg-gray-border-light" />
+                          <span
+                            className="bg-white-white border border-solid border-gray-border-light rounded-full px-[12px] py-[4px] text-[10px] text-gray-main tracking-[1px]"
+                            style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+                          >
+                            {formatDateDivider(m.created_at)}
+                          </span>
+                          <div className="flex-1 h-px bg-gray-border-light" />
+                        </div>
+                      )}
+                      <ChatMessage
+                        author={userToMember(m.author)}
+                        time={formatTime(m.created_at)}
+                        body={m.body}
+                      />
+                    </div>
+                  )
+                })
               )}
             </div>
 
@@ -423,7 +552,13 @@ function MessagesBody() {
               'en-US',
               { month: 'short', day: 'numeric', year: 'numeric' }
             )}`}
-            members={[] as ChatChannelMember[]}
+            members={
+              sessionMembers.map((u) => ({
+                member: userToMember(u),
+                tag: u.id === activeSession.created_by ? 'Lead' : undefined,
+              })) as ChatChannelMember[]
+            }
+            memberCount={sessionMembers.length}
           />
         </div>
       )}

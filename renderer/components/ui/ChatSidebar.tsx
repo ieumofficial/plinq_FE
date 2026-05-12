@@ -69,10 +69,10 @@ type Props = {
 // ─── Sub-pieces ─────────────────────────────────────────────────────────────
 
 const FILTERS: { key: ChatFilterKey; label: string; bg: string; text: string }[] = [
-  { key: 'all', label: 'All', bg: 'bg-blue-light', text: 'text-blue-main' },
-  { key: 'unread', label: 'Unread', bg: 'bg-red-light', text: 'text-red-main' },
-  { key: 'mentions', label: 'Mentions', bg: 'bg-brown-light', text: 'text-brown-main' },
-  { key: 'sessions', label: 'Sessions', bg: 'bg-purple-light', text: 'text-purple-main' },
+  { key: 'all', label: 'ALL', bg: 'bg-blue-light', text: 'text-blue-main' },
+  { key: 'unread', label: 'UNREAD', bg: 'bg-red-light', text: 'text-red-main' },
+  { key: 'mentions', label: 'MENTIONS', bg: 'bg-brown-light', text: 'text-brown-main' },
+  { key: 'sessions', label: 'SESSIONS', bg: 'bg-purple-light', text: 'text-purple-main' },
   { key: 'dms', label: 'DMs', bg: 'bg-green-light', text: 'text-green-main' },
 ]
 
@@ -93,7 +93,7 @@ function FilterChip({
     <button
       type="button"
       onClick={onClick}
-      className={`px-[7px] py-[3px] rounded-[2px] text-[10px] font-semibold uppercase tracking-[1px] whitespace-nowrap transition-opacity ${bg} ${text} ${
+      className={`px-[7px] py-[3px] rounded-[2px] text-[10px] font-semibold tracking-[1px] whitespace-nowrap transition-opacity ${bg} ${text} ${
         active ? 'opacity-100' : 'opacity-30 hover:opacity-60'
       }`}
     >

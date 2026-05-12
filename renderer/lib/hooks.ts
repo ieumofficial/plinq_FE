@@ -8,6 +8,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getChatMessages,
+  getChatSessionMembers,
   getChatSessions,
   getCurrentUser,
   getOrgMembers,
@@ -241,6 +242,15 @@ export function useChatSessions(
     queryFn: () => getChatSessions(userId!, orgId!),
     enabled: !!userId && !!orgId,
     staleTime: 30 * 1000,
+  })
+}
+
+export function useChatSessionMembers(sessionId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.chat.members(sessionId ?? ''),
+    queryFn: () => getChatSessionMembers(sessionId!),
+    enabled: !!sessionId,
+    staleTime: 60 * 1000,
   })
 }
 

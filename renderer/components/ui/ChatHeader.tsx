@@ -23,6 +23,8 @@ type ChannelProps = {
   members?: Member[]
   memberCount?: number
   pinnedCount?: number
+  /** Hex color for the eyebrow ("ORG · …"). Defaults to blue. */
+  eyebrowColor?: string
   onSearch?: () => void
   onShowMembers?: () => void
   onShowPinned?: () => void
@@ -42,13 +44,24 @@ type DmProps = {
   /** Project the user belongs to (small ProjectLabel + name pill below the title). */
   project?: { name: string; color?: string | null }
   tipNode?: ReactNode
+  /** Hex color for the eyebrow ("DIRECT · …"). Defaults to blue. */
+  eyebrowColor?: string
   onSearch?: () => void
 }
 
 type Props = ChannelProps | DmProps
 
-const Eyebrow = ({ children }: { children: ReactNode }) => (
-  <p className="text-purple-main text-[10px] font-medium uppercase tracking-[1.5px]">
+const Eyebrow = ({
+  children,
+  color,
+}: {
+  children: ReactNode
+  color?: string
+}) => (
+  <p
+    className="text-[10px] font-medium uppercase tracking-[1.5px]"
+    style={{ color: color ?? '#2D5A9E' }}
+  >
     {children}
   </p>
 )
@@ -72,6 +85,7 @@ export default function ChatHeader(props: Props) {
       members,
       memberCount,
       pinnedCount,
+      eyebrowColor,
       onSearch,
       onShowMembers,
       onShowPinned,
@@ -80,7 +94,7 @@ export default function ChatHeader(props: Props) {
       <header className="flex flex-col gap-[10px] w-full">
         <div className="flex items-start justify-between gap-[20px]">
           <div className="flex flex-col gap-[5px] min-w-0 flex-1">
-            <Eyebrow>org · {orgName}</Eyebrow>
+            <Eyebrow color={eyebrowColor}>org · {orgName}</Eyebrow>
             <h1 className="text-black text-[28px] font-semibold leading-tight truncate">
               #{name}
             </h1>
@@ -130,7 +144,7 @@ export default function ChatHeader(props: Props) {
   }
 
   // DM
-  const { name, member, presenceLabel = 'ACTIVE NOW', isActive, jobTitle, project, tipNode, onSearch } = props
+  const { name, member, presenceLabel = 'ACTIVE NOW', isActive, jobTitle, project, tipNode, eyebrowColor, onSearch } = props
   const initial = (member.name?.charAt(0) ?? '?').toUpperCase()
   return (
     <header className="flex flex-col gap-[10px] w-full">
@@ -152,7 +166,7 @@ export default function ChatHeader(props: Props) {
             </span>
           )}
           <div className="flex flex-col gap-[5px] min-w-0 flex-1">
-            <Eyebrow>direct · {presenceLabel}</Eyebrow>
+            <Eyebrow color={eyebrowColor}>direct · {presenceLabel}</Eyebrow>
             <div className="flex items-center gap-[10px]">
               <h1 className="text-black text-[28px] font-semibold leading-tight truncate">
                 {name}

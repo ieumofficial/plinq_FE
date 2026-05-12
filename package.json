@@ -7,7 +7,7 @@
   "type": "module",
   "main": "app/main.js",
   "scripts": {
-    "clean:icons": "find renderer/.next -name 'Icon?' -delete 2>/dev/null; true",
+    "clean:icons": "rimraf --glob \"renderer/.next/Icon*\"",
     "predev": "npm run clean:icons",
     "dev": "nextron",
     "build": "nextron build",

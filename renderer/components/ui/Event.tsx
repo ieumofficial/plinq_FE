@@ -8,7 +8,7 @@ export type EventColor = {
 
 export const EVENT_COLORS: Record<EventType, EventColor> = {
   meeting: { bg: '#E5DEEF', bar: '#5B3D8A', text: '#5B3D8A' },
-  task: { bg: '#E6ECEF', bar: '#16242E', text: '#16242E' },
+  task: { bg: '#F2DEDE', bar: '#9B3838', text: '#9B3838' },
   deadline: { bg: '#F2DEDE', bar: '#9B3838', text: '#9B3838' },
   project: { bg: '#DDE7F4', bar: '#2D5A9E', text: '#2D5A9E' },
 }
@@ -28,12 +28,12 @@ export default function Event({ title, type = 'meeting', color, size = 'small' }
   if (size === 'big') {
     return (
       <div
-        className="flex items-stretch gap-[5px] pr-[5px] rounded-[2px] w-full max-w-[114px] overflow-hidden"
+        className="flex items-stretch gap-[5px] pr-[5px] rounded-[2px] w-full overflow-hidden shrink-0"
         style={{ backgroundColor: c.bg }}
       >
         <div className="w-[3px] rounded-l-[2px] shrink-0" style={{ backgroundColor: c.bar }} />
         <p
-          className="font-sans text-[12px] font-semibold py-[3px] truncate"
+          className="font-sans text-[12px] font-semibold py-[3px] truncate min-w-0"
           style={{ color: c.text }}
         >
           {title}

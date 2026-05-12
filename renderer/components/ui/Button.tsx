@@ -45,7 +45,7 @@ const sizeStyles: Record<Size, { padding: string; text: string; gap: string; rou
     rounded: 'rounded-[5px]',
   },
   compact: {
-    padding: 'px-[10px] py-[7px]',
+    padding: 'h-[32px] px-[10px] py-[7px]',
     text: 'text-[12px] font-normal',
     gap: 'gap-[5px]',
     rounded: 'rounded-[5px]',

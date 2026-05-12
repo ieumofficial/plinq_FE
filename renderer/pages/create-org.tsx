@@ -2,7 +2,9 @@ import { useEffect, useState, type CSSProperties, type KeyboardEvent } from 'rea
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import DarkBackground from '../components/DarkBackground'
-import PlinqLogo from '../components/PlinqLogo'
+import Logo from '../components/ui/Logo'
+import Input from '../components/ui/Input'
+import Button from '../components/ui/Button'
 import { supabase } from '../lib/supabase'
 
 const noDrag: CSSProperties = { WebkitAppRegion: 'no-drag' } as CSSProperties
@@ -107,60 +109,50 @@ export default function CreateOrgPage() {
           className="flex-1 flex flex-col items-center justify-center gap-6 px-10 py-16"
           style={noDrag}
         >
-          {/* Logo */}
-          <PlinqLogo size="medium" />
+          <Logo variant="on-dark" size={32} />
 
-          {/* Header */}
           <div className="text-center">
             <h1 className="text-[28px] leading-tight">
-              <span className="text-[#EBEFF2] font-semibold">
+              <span className="text-gray-extra-light font-semibold">
                 Looks like you&rsquo;re{' '}
               </span>
               <span
-                className="text-[#5B7FB6] italic font-medium"
+                className="text-blue-med italic font-medium"
                 style={{ fontFamily: 'Inter, sans-serif' }}
               >
                 new!
               </span>
             </h1>
-            <p className="text-[#94A0AA] text-[12px] mt-2">
+            <p className="text-gray-secondary text-[12px] mt-2">
               Create an organization to get started.
             </p>
           </div>
 
           {/* Form */}
           <div className="w-full max-w-[380px] flex flex-col gap-4">
-            {/* Organization Name */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[#94A0AA] text-[10px] tracking-[1.5px] uppercase font-medium">
-                ORGANIZATION NAME
-              </label>
-              <input
-                type="text"
-                value={orgName}
-                onChange={(e) => setOrgName(e.target.value)}
-                placeholder="Enter organization name"
-                className="w-full backdrop-blur-sm bg-white/10 border border-[#D9D9D9]/40 rounded-[8px] px-4 py-3 text-white text-[12px] placeholder:text-[#6B7B86] outline-none focus:border-white/50 transition-colors"
-                autoFocus
-              />
-            </div>
+            <Input
+              label="ORGANIZATION NAME"
+              variant="translucent"
+              placeholder="Enter organization name"
+              value={orgName}
+              onChange={(e) => setOrgName(e.target.value)}
+              autoFocus
+            />
 
             {/* Step 2: Add Members */}
             {step === 2 && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-[#94A0AA] text-[10px] tracking-[1.5px] uppercase font-medium">
-                  ADD MEMBERS
-                </label>
-                <input
+                <Input
+                  label="ADD MEMBERS"
                   type="email"
+                  variant="translucent"
+                  placeholder="Type an email and press Enter"
                   value={memberEmail}
                   onChange={(e) => {
                     setMemberEmail(e.target.value)
                     setError('')
                   }}
                   onKeyDown={handleAddEmail}
-                  placeholder="Type an email and press Enter"
-                  className="w-full backdrop-blur-sm bg-white/10 border border-[#D9D9D9]/40 rounded-[8px] px-4 py-3 text-white text-[12px] placeholder:text-[#6B7B86] outline-none focus:border-white/50 transition-colors"
                   autoFocus
                 />
 
@@ -170,13 +162,13 @@ export default function CreateOrgPage() {
                     {memberEmails.map((email) => (
                       <div
                         key={email}
-                        className="flex items-center gap-2 bg-white/10 border border-[#EBEFF2]/30 rounded-full px-3 py-1.5 text-white text-[11px] truncate"
+                        className="flex items-center gap-2 bg-white/10 border border-gray-extra-light/30 rounded-full px-3 py-1.5 text-white text-[11px] truncate"
                       >
                         <span className="truncate flex-1">{email}</span>
                         <button
                           type="button"
                           onClick={() => handleRemoveEmail(email)}
-                          className="shrink-0 w-[16px] h-[16px] rounded-full bg-[#6B7B86]/50 flex items-center justify-center text-white/70 hover:bg-[#6B7B86] hover:text-white transition-colors cursor-pointer"
+                          className="shrink-0 w-[16px] h-[16px] rounded-full bg-gray-main/50 flex items-center justify-center text-white/70 hover:bg-gray-main hover:text-white transition-colors cursor-pointer"
                         >
                           <svg
                             width="8"
@@ -199,29 +191,28 @@ export default function CreateOrgPage() {
               </div>
             )}
 
-            {/* Error */}
             {error && (
-              <p className="text-[#EB7373] text-[11px]">{error}</p>
+              <p className="text-red-dark-mode text-[11px]">{error}</p>
             )}
 
             {/* Action button */}
             {step === 1 ? (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 onClick={handleContinue}
-                className="w-full bg-white border border-[#E6EAEE] rounded-[10px] px-4 py-3 text-[#16242E] text-[12px] font-semibold hover:bg-white/90 transition-colors mt-2 cursor-pointer"
+                className="w-full mt-2"
               >
                 Continue
-              </button>
+              </Button>
             ) : (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 onClick={handleCreate}
                 disabled={loading}
-                className="w-full bg-white border border-[#E6EAEE] rounded-[10px] px-4 py-3 text-[#16242E] text-[12px] font-semibold hover:bg-white/90 transition-colors mt-2 disabled:opacity-50 cursor-pointer"
+                className="w-full mt-2"
               >
                 {loading ? 'Creating...' : 'Create'}
-              </button>
+              </Button>
             )}
           </div>
         </div>

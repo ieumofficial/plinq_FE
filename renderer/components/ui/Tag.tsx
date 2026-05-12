@@ -41,18 +41,18 @@ const sizeStyles: Record<Size, { padding: string; text: string; iconSize: number
     rounded: 'rounded-[2px]',
   },
   md: {
-    padding: 'px-[5px] py-[2px]',
-    text: 'text-[10px] font-semibold tracking-[1px]',
+    padding: 'px-[7px] py-[3px]',
+    text: 'text-[12px] font-semibold tracking-[1px]',
     iconSize: 12,
     gap: 'gap-[3px]',
-    rounded: 'rounded-[3px]',
+    rounded: 'rounded-[2px]',
   },
   lg: {
-    padding: 'px-[8px] py-[4px]',
-    text: 'text-[12px] font-semibold tracking-[0.5px]',
+    padding: 'px-[10px] py-[5px]',
+    text: 'text-[12px] font-semibold tracking-[1px]',
     iconSize: 14,
     gap: 'gap-[4px]',
-    rounded: 'rounded-[4px]',
+    rounded: 'rounded-[3px]',
   },
 }
 

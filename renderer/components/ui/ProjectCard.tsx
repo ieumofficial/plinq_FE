@@ -1,11 +1,12 @@
-import Tag, { type TagColor } from './Tag'
+import StatusLabelBig, { type Status } from './StatusLabelBig'
 import UserGroup, { type Member } from './UserGroup'
 import Icon from './Icon'
 
 type Props = {
   name: string
   description: string
-  tag?: { label: string; color?: TagColor }
+  /** Project lifecycle status — shown as a colored chip in the card header. */
+  status?: Status
   /** 0–100 */
   progress: number
   members?: Member[]
@@ -15,7 +16,7 @@ type Props = {
 export default function ProjectCard({
   name,
   description,
-  tag,
+  status,
   progress,
   members,
   onOpen,
@@ -25,13 +26,7 @@ export default function ProjectCard({
     <div className="bg-white-item rounded-[5px] flex flex-col justify-between p-[10px] w-[170px] h-[225px]">
       <div className="flex flex-col gap-[10px] w-full">
         <div className="flex items-center justify-between w-full">
-          {tag ? (
-            <Tag color={tag.color ?? 'blue'} size="sm">
-              {tag.label}
-            </Tag>
-          ) : (
-            <span />
-          )}
+          {status ? <StatusLabelBig status={status} size="md" /> : <span />}
           <span className="font-sans text-[14px] font-semibold text-black">{pct}%</span>
         </div>
         <h3 className="font-sans text-[20px] font-semibold text-black leading-tight">{name}</h3>

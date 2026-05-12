@@ -1,8 +1,14 @@
+import type { CSSProperties } from 'react'
 import Input from './Input'
 import Button from './Button'
 import Icon from './Icon'
 
+const drag: CSSProperties = { WebkitAppRegion: 'drag' } as CSSProperties
+const noDrag: CSSProperties = { WebkitAppRegion: 'no-drag' } as CSSProperties
+
 type Props = {
+  /** Organization label shown in the left section. */
+  orgName?: string
   /** Top eyebrow line, e.g. "Workspace · Friday, April 10". */
   eyebrow?: string
   /** Big title line, e.g. "Good morning, Yujin". */
@@ -11,43 +17,167 @@ type Props = {
   userInitials?: string
   /** Whether the notification dot should appear. */
   hasNotifications?: boolean
+  /** OS hint for layout (Mac leaves room for traffic lights, Windows shows caption controls). Defaults from window.platform. */
+  os?: 'darwin' | 'win32' | 'linux'
   onAskAi?: () => void
   onCreateNew?: () => void
   onNotifications?: () => void
   onAvatarClick?: () => void
   onSearchChange?: (value: string) => void
+  onBack?: () => void
+  onForward?: () => void
+}
+
+function detectOs(): 'darwin' | 'win32' | 'linux' {
+  if (typeof window !== 'undefined' && window.platform) return window.platform.os as 'darwin' | 'win32' | 'linux'
+  return 'darwin'
+}
+
+function OrgBlock({ orgName }: { orgName: string }) {
+  return (
+    <div className="flex items-center gap-[5px]">
+      <span className="bg-primary-main text-white rounded-[2px] w-[23px] h-[23px] inline-flex items-center justify-center text-[12px] font-semibold uppercase shrink-0">
+        {orgName.charAt(0)}
+      </span>
+      <span className="text-black text-[12px] font-semibold capitalize whitespace-nowrap truncate">
+        {orgName}
+      </span>
+    </div>
+  )
+}
+
+function CaptionButton({
+  onClick,
+  variant = 'default',
+  children,
+  ariaLabel,
+}: {
+  onClick?: () => void
+  variant?: 'default' | 'close'
+  children: React.ReactNode
+  ariaLabel: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={noDrag}
+      aria-label={ariaLabel}
+      className={`w-[46px] h-full inline-flex items-center justify-center text-black transition-colors ${
+        variant === 'close' ? 'hover:bg-red-med hover:text-white' : 'hover:bg-gray-extra-light'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function MinIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
+      <path d="M0 5 L10 5" stroke="currentColor" strokeWidth="1" />
+    </svg>
+  )
+}
+function MaxIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
+      <rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" strokeWidth="1" />
+    </svg>
+  )
+}
+function CloseIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
+      <path d="M0 0 L10 10 M10 0 L0 10" stroke="currentColor" strokeWidth="1" />
+    </svg>
+  )
 }
 
 export default function Header({
+  orgName,
   eyebrow,
   title,
   userInitials = 'YP',
   hasNotifications = false,
+  os = detectOs(),
   onAskAi,
   onCreateNew,
   onNotifications,
   onAvatarClick,
   onSearchChange,
+  onBack,
+  onForward,
 }: Props) {
+  const isMac = os === 'darwin'
+  const isWindows = os === 'win32'
   const hasGreeting = !!(eyebrow || title)
 
-  return (
-    <header className={`flex items-center px-[25px] py-[15px] w-full ${hasGreeting ? 'justify-between' : 'justify-end'}`}>
-      {hasGreeting && (
-        <div className="flex flex-col gap-[5px] min-w-0 flex-1">
-          {eyebrow && (
-            <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px] truncate">
-              {eyebrow}
-            </p>
-          )}
-          {title && (
-            <p className="text-black text-[14px] font-semibold truncate">{title}</p>
-          )}
-        </div>
-      )}
+  const sendIpc = (channel: string) => () => {
+    if (typeof window !== 'undefined' && window.ipc) window.ipc.send(channel)
+  }
 
-      <div className="flex items-center gap-[10px] shrink-0">
-        <div className="w-[240px]">
+  return (
+    <header
+      className="h-[64px] w-full flex items-stretch shrink-0 border-b border-solid border-gray-border"
+      style={{ ...drag, backgroundColor: '#F8F9FA' }}
+    >
+      {/* LEFT 200px — Mac: traffic lights (left) + Org block (right) via justify-between.
+          Windows: org block left-aligned. macOS draws its own traffic lights via
+          titleBarStyle:'hiddenInset' on top of the spacer below. */}
+      <div
+        className="w-[200px] flex items-center"
+        style={{
+          ...drag,
+          paddingTop: 15,
+          paddingBottom: 15,
+          paddingLeft: 16,
+          paddingRight: 16,
+          justifyContent: isMac ? 'space-between' : 'flex-start',
+        }}
+      >
+        {isMac && <div style={{ width: 52, height: 12 }} aria-hidden />}
+        {orgName && <OrgBlock orgName={orgName} />}
+      </div>
+
+      {/* CENTER — nav arrows + greeting */}
+      <div className="flex-1 min-w-0 flex items-center gap-[20px] px-[25px]" style={drag}>
+        <div className="flex items-center gap-[10px] shrink-0" style={noDrag}>
+          <button
+            type="button"
+            onClick={onBack}
+            className="p-1 rounded text-primary-main hover:bg-gray-extra-light transition-colors"
+            aria-label="Back"
+          >
+            <Icon name="ArrowLeft" size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={onForward}
+            className="p-1 rounded text-primary-main hover:bg-gray-extra-light transition-colors"
+            aria-label="Forward"
+          >
+            <Icon name="ArrowRight" size={15} />
+          </button>
+        </div>
+        {hasGreeting && (
+          <div className="flex flex-col gap-[5px] min-w-0 flex-1" style={drag}>
+            {eyebrow && (
+              <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px] truncate">
+                {eyebrow}
+              </p>
+            )}
+            {title && <p className="text-black text-[14px] font-semibold truncate">{title}</p>}
+          </div>
+        )}
+      </div>
+
+      {/* RIGHT — actions */}
+      <div
+        className="flex items-center gap-[10px] pl-[10px] shrink-0"
+        style={{ ...noDrag, paddingRight: isWindows ? 0 : 16 }}
+      >
+        <div className="w-[240px]" style={noDrag}>
           <Input
             variant="search"
             placeholder="Global Search"
@@ -63,6 +193,7 @@ export default function Header({
         <button
           type="button"
           onClick={onNotifications}
+          style={noDrag}
           className="relative inline-flex items-center justify-center text-black p-1 rounded-md hover:bg-gray-extra-light transition-colors"
           aria-label="Notifications"
         >
@@ -74,11 +205,31 @@ export default function Header({
         <button
           type="button"
           onClick={onAvatarClick}
+          style={noDrag}
           className="bg-primary-main text-white rounded-full w-[28px] h-[28px] inline-flex items-center justify-center text-[12px] font-semibold uppercase shrink-0"
         >
           {userInitials}
         </button>
       </div>
+
+      {/* WINDOWS caption controls (min / max / close) */}
+      {isWindows && (
+        <div className="flex items-stretch shrink-0" style={noDrag}>
+          <CaptionButton onClick={sendIpc('window-minimize')} ariaLabel="Minimize">
+            <MinIcon />
+          </CaptionButton>
+          <CaptionButton onClick={sendIpc('window-maximize')} ariaLabel="Maximize">
+            <MaxIcon />
+          </CaptionButton>
+          <CaptionButton
+            variant="close"
+            onClick={sendIpc('window-close')}
+            ariaLabel="Close"
+          >
+            <CloseIcon />
+          </CaptionButton>
+        </div>
+      )}
     </header>
   )
 }

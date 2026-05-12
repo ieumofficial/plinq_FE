@@ -40,7 +40,7 @@ export default function ActionItem({
             {priority && (
               <>
                 {date && <span className="w-px h-[10px] bg-gray-border-light" />}
-                <PriorityTag priority={priority} size="sm" />
+                <PriorityTag priority={priority} />
               </>
             )}
           </div>

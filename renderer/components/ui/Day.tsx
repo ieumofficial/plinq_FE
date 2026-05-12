@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import Event, { type EventType, type EventColor } from './Event'
 
 export type DayEvent = {
@@ -26,6 +27,8 @@ type BigProps = CommonProps & {
   size: 'big'
   /** Max events to show before "+N more" overflow chip. */
   maxEvents?: number
+  /** When true, the cell uses `w-full h-full` instead of the default 132×144. */
+  fillParent?: boolean
 }
 
 type Props = SmallProps | BigProps
@@ -77,7 +80,45 @@ export default function Day(props: Props) {
   }
 
   // Big
-  const max = props.maxEvents ?? BIG_MAX_DEFAULT
+  const fill = props.fillParent ?? false
+  const sizeClass = fill ? 'w-full h-full min-h-[80px] min-w-0' : 'w-[132px] h-[144px]'
+
+  // Each event chip = 18px (text 12 + py-3 padding) + 2px gap = 20px row height.
+  // The "+N more" line uses ~14px (text-12 + leading).
+  const EVENT_ROW = 20
+  const OVERFLOW_ROW = 14
+
+  const eventsRef = useRef<HTMLDivElement>(null)
+  // When fillParent, slice events based on measured container height.
+  // When fixed-size, fall back to the static `maxEvents` prop / BIG_MAX_DEFAULT.
+  const [measuredMax, setMeasuredMax] = useState<number | null>(null)
+
+  useLayoutEffect(() => {
+    if (!fill) return
+    const el = eventsRef.current
+    if (!el) return
+    const update = () => {
+      const h = el.clientHeight
+      if (h <= 0) return
+      // First, try fitting all events without overflow.
+      const fitsAll = Math.floor(h / EVENT_ROW)
+      if (fitsAll >= events.length) {
+        setMeasuredMax(events.length)
+        return
+      }
+      // Otherwise reserve space for the "+N" line and recompute.
+      const fitsWithOverflow = Math.max(0, Math.floor((h - OVERFLOW_ROW) / EVENT_ROW))
+      setMeasuredMax(fitsWithOverflow)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [fill, events.length])
+
+  const max = fill
+    ? (measuredMax ?? events.length)
+    : (props.maxEvents ?? BIG_MAX_DEFAULT)
   const visible = events.slice(0, max)
   const overflow = events.length - visible.length
 
@@ -85,24 +126,39 @@ export default function Day(props: Props) {
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col items-start gap-[5px] p-[9px] w-[132px] h-[144px] border-b border-r border-solid border-[#F4F6F8] text-left transition-colors ${
-        isToday ? 'bg-primary-dark/10' : ''
-      } ${outOfBound ? 'opacity-35' : ''}`}
+      className={`flex flex-col items-start gap-[5px] p-[9px] ${sizeClass} border-b border-r border-solid border-[#EDEEF0] text-left transition-colors overflow-hidden ${
+        isToday ? 'bg-primary-dark' : ''
+      }`}
     >
-      {isToday ? (
-        <span className="bg-primary-dark text-white rounded-full w-[22px] h-[22px] inline-flex items-center justify-center text-[14px] font-semibold shrink-0">
+      <div
+        className={`flex flex-col items-start gap-[5px] w-full min-h-0 flex-1 ${
+          outOfBound ? 'opacity-35' : ''
+        }`}
+      >
+        <span
+          className={`text-[14px] font-semibold shrink-0 ${
+            isToday ? 'text-white' : 'text-primary-dark'
+          }`}
+        >
           {date}
         </span>
-      ) : (
-        <span className="text-primary-dark text-[14px] font-semibold">{date}</span>
-      )}
-      <div className="flex flex-col gap-[2px] w-full overflow-hidden">
-        {visible.map((e) => (
-          <Event key={e.id} title={e.title} type={e.type} color={e.color} size="big" />
-        ))}
-        {overflow > 0 && (
-          <span className="text-primary-main text-[12px] font-semibold">+{overflow}</span>
-        )}
+        <div
+          ref={eventsRef}
+          className="flex flex-col gap-[2px] w-full flex-1 min-h-0 overflow-hidden"
+        >
+          {visible.map((e) => (
+            <Event key={e.id} title={e.title} type={e.type} color={e.color} size="big" />
+          ))}
+          {overflow > 0 && (
+            <span
+              className={`text-[12px] font-semibold shrink-0 ${
+                isToday ? 'text-gray-extra-light' : 'text-primary-main'
+              }`}
+            >
+              +{overflow}
+            </span>
+          )}
+        </div>
       </div>
     </button>
   )

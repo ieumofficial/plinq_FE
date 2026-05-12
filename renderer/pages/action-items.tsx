@@ -1,165 +1,193 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Head from 'next/head'
-import AuthLayout from '../components/AuthLayout'
-import CreateNewModal from '../components/CreateNewModal'
+import PersonalAppShell from '../components/PersonalAppShell'
+import Input from '../components/ui/Input'
+import Button from '../components/ui/Button'
+import Filter from '../components/ui/Filter'
+import Checkbox from '../components/ui/Checkbox'
+import StatusLabelBig from '../components/ui/StatusLabelBig'
+import PriorityTag from '../components/ui/PriorityTag'
+import Table, { TableHeader, TableRow, TableCell, type Column } from '../components/ui/Table'
+import { useCurrentUser, useUserActionItems } from '../lib/hooks'
+import { type TaskWithProject } from '../lib/queries'
+import { dbStatusToUi, dbPriorityToUi, formatDueDate } from '../lib/types'
 
-type ActionItem = {
-  id: number
-  title: string
-  dueDate: string
-  dueRemaining: string
-  stage: string
-  priority: string
-}
+type FilterKey = 'all' | 'mine' | 'overdue' | 'completed'
 
-type ProjectGroup = {
-  projectName: string
-  items: ActionItem[]
-}
-
-const projectGroups: ProjectGroup[] = [
-  {
-    projectName: 'Project 1',
-    items: [
-      { id: 1, title: 'Update Wireframe', dueDate: '04.12', dueRemaining: '2 days', stage: 'Backlog', priority: 'High' },
-      { id: 2, title: 'Update Wireframe', dueDate: '04.12', dueRemaining: '2 days', stage: 'Backlog', priority: 'High' },
-      { id: 3, title: 'Update Wireframe', dueDate: '04.12', dueRemaining: '2 days', stage: 'Backlog', priority: 'High' },
-    ],
-  },
-  {
-    projectName: 'Project 2',
-    items: [
-      { id: 4, title: 'Update Wireframe', dueDate: '04.12', dueRemaining: '2 days', stage: 'Backlog', priority: 'High' },
-      { id: 5, title: 'Update Wireframe', dueDate: '04.12', dueRemaining: '2 days', stage: 'Backlog', priority: 'High' },
-      { id: 6, title: 'Update Wireframe', dueDate: '04.12', dueRemaining: '2 days', stage: 'Backlog', priority: 'High' },
-    ],
-  },
-  {
-    projectName: 'Project 3',
-    items: [
-      { id: 7, title: 'Update Wireframe', dueDate: '04.12', dueRemaining: '2 days', stage: 'Backlog', priority: 'High' },
-      { id: 8, title: 'Update Wireframe', dueDate: '04.12', dueRemaining: '2 days', stage: 'Backlog', priority: 'High' },
-      { id: 9, title: 'Update Wireframe', dueDate: '04.12', dueRemaining: '2 days', stage: 'Backlog', priority: 'High' },
-    ],
-  },
+const COLS: Column[] = [
+  { key: 'task', label: 'Action', width: 'flex-[2]' },
+  { key: 'status', label: 'Status', width: 'w-[130px]' },
+  { key: 'priority', label: 'Priority', width: 'w-[90px]' },
+  { key: 'due', label: 'Due', width: 'w-[100px]' },
 ]
 
-type FilterStatus = 'Planned' | 'In Progress' | 'Delayed' | 'Completed'
-
-const filters: { label: FilterStatus; active: boolean }[] = [
-  { label: 'Planned', active: false },
-  { label: 'In Progress', active: true },
-  { label: 'Delayed', active: false },
-  { label: 'Completed', active: false },
-]
-
-const totalItems = 100
+function isOverdue(t: TaskWithProject): boolean {
+  if (!t.due_date) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return new Date(t.due_date + 'T00:00:00') < today && t.status !== 'done'
+}
 
 export default function ActionItemsPage() {
-  const [showCreateTask, setShowCreateTask] = useState(false)
+  const { data: user } = useCurrentUser()
+  const { data: tasks = [], isLoading } = useUserActionItems(user?.id, { includeDone: true })
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<FilterKey>('all')
+
+  const counts = useMemo(() => {
+    const all = tasks.length
+    const mine = tasks.filter((t) => t.status !== 'done').length
+    const overdue = tasks.filter(isOverdue).length
+    const completed = tasks.filter((t) => t.status === 'done').length
+    return { all, mine, overdue, completed }
+  }, [tasks])
+
+  const filteredTasks = useMemo(() => {
+    let arr = tasks
+    if (filter === 'mine') arr = arr.filter((t) => t.status !== 'done')
+    if (filter === 'overdue') arr = arr.filter(isOverdue)
+    if (filter === 'completed') arr = arr.filter((t) => t.status === 'done')
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      arr = arr.filter(
+        (t) =>
+          t.title.toLowerCase().includes(q) ||
+          t.project_name?.toLowerCase().includes(q)
+      )
+    }
+    return arr
+  }, [tasks, filter, search])
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, TaskWithProject[]>()
+    for (const t of filteredTasks) {
+      const key = t.project_name ?? 'No project'
+      const arr = map.get(key) ?? []
+      arr.push(t)
+      map.set(key, arr)
+    }
+    return Array.from(map.entries())
+  }, [filteredTasks])
 
   return (
     <>
       <Head>
-        <title>Action Items - Plow</title>
+        <title>plinq · Action Items</title>
       </Head>
-      <AuthLayout>
-        <div className="absolute top-[29px] left-[36px] right-[36px] flex flex-col gap-[20px]">
-          {/* Page header */}
-          <div className="flex items-center justify-between w-full">
-            <h1 className="font-sans font-medium text-[50px] leading-[24px] tracking-[0.2px] text-black">
-              Action Items
+      <PersonalAppShell active="tasks">
+        <div className="p-6 flex flex-col gap-6">
+          {/* Toolbar */}
+          <div className="flex items-end justify-between gap-4">
+            <h1 className="text-black text-[28px] font-semibold leading-tight">
+              Grouped by{' '}
+              <em
+                className="italic text-blue-main font-medium"
+                style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
+              >
+                project.
+              </em>
             </h1>
-            <button
-              type="button"
-              onClick={() => setShowCreateTask(true)}
-              className="px-[20px] py-[16px] bg-black text-white font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] rounded-[16px] cursor-pointer border-0 whitespace-nowrap"
-            >
-              Add new
-            </button>
-          </div>
-
-          {/* Search + Filter row */}
-          <div className="flex items-center gap-[20px]">
-            {/* Search input */}
-            <div className="w-[390px] h-[44px] bg-white border border-[#afb1b6] rounded-[10px] flex items-center px-[12px]">
-              <span className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-[#afb1b6]">
-                Search
-              </span>
-            </div>
-
-            {/* Status filter pills */}
             <div className="flex items-center gap-[10px]">
-              {filters.map((f) => (
-                <button
-                  key={f.label}
-                  type="button"
-                  className={`h-[16px] flex items-center justify-center px-[8px] py-px font-sans font-medium text-[12px] leading-[normal] tracking-[0.2px] cursor-pointer ${
-                    f.active
-                      ? 'bg-black text-white border-0'
-                      : 'bg-transparent text-black border border-black'
-                  }`}
-                >
-                  {f.label}
-                </button>
+              <div className="bg-gray-extra-light rounded-[5px] p-1 inline-flex gap-1">
+                <Filter
+                  label="All"
+                  count={counts.all}
+                  selected={filter === 'all'}
+                  onClick={() => setFilter('all')}
+                />
+                <Filter
+                  label="Mine"
+                  count={counts.mine}
+                  selected={filter === 'mine'}
+                  onClick={() => setFilter('mine')}
+                />
+                <Filter
+                  label="Overdue"
+                  count={counts.overdue}
+                  selected={filter === 'overdue'}
+                  onClick={() => setFilter('overdue')}
+                />
+                <Filter
+                  label="Done"
+                  count={counts.completed}
+                  selected={filter === 'completed'}
+                  onClick={() => setFilter('completed')}
+                />
+              </div>
+              <Input
+                variant="search"
+                placeholder="Search tasks"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <Button size="compact" variant="secondary" iconLeft="Filter">
+                Sort
+              </Button>
+              <Button size="compact" iconLeft="Add">
+                New task
+              </Button>
+            </div>
+          </div>
+
+          {/* Tables grouped by project */}
+          {isLoading && tasks.length === 0 ? (
+            <p className="text-gray-secondary text-[12px]">Loading…</p>
+          ) : grouped.length === 0 ? (
+            <div className="bg-white-white border border-gray-border-light rounded-[10px] p-12 text-center">
+              <p className="text-gray-secondary text-[14px]">
+                {tasks.length === 0
+                  ? "You don't have any action items yet."
+                  : 'No tasks match this filter.'}
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {grouped.map(([projectName, rows]) => (
+                <div key={projectName} className="flex flex-col gap-2">
+                  <h2 className="text-black text-[14px] font-semibold uppercase tracking-[1px]">
+                    {projectName} <span className="text-gray-secondary">· {rows.length}</span>
+                  </h2>
+                  <Table>
+                    <TableHeader columns={COLS} />
+                    {rows.map((t, i) => (
+                      <TableRow key={t.id} isLast={i === rows.length - 1}>
+                        <TableCell width="flex-[2]">
+                          <Checkbox checked={t.status === 'done'} />
+                          <span
+                            className={`text-[14px] ${
+                              t.status === 'done'
+                                ? 'text-gray-secondary line-through'
+                                : 'text-black'
+                            }`}
+                          >
+                            {t.title}
+                          </span>
+                        </TableCell>
+                        <TableCell width="w-[130px]">
+                          <StatusLabelBig status={dbStatusToUi(t.status)} size="md" />
+                        </TableCell>
+                        <TableCell width="w-[90px]">
+                          <PriorityTag priority={dbPriorityToUi(t.priority)} />
+                        </TableCell>
+                        <TableCell width="w-[100px]">
+                          <span
+                            className={`text-[14px] font-semibold tracking-[-0.2px] ${
+                              isOverdue(t) ? 'text-red-main' : 'text-gray-main'
+                            }`}
+                            style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+                          >
+                            {formatDueDate(t.due_date) ?? '—'}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </Table>
+                </div>
               ))}
-              <span className="font-sans font-medium text-[12px] leading-[normal] tracking-[0.2px] text-black">
-                | {totalItems} total
-              </span>
             </div>
-          </div>
-
-          {/* Table column headers */}
-          <div className="flex items-center justify-end px-[20px] gap-[50px] font-sans font-semibold text-[16px] leading-[normal] tracking-[0.2px] text-black text-center">
-            <span className="w-[150px]">Due Date</span>
-            <span className="w-[150px]">Stage</span>
-            <span className="w-[150px]">Priority</span>
-          </div>
-
-          {/* Project groups */}
-          {projectGroups.map((group) => (
-            <div key={group.projectName} className="flex flex-col gap-[0px]">
-              {/* Project header bar */}
-              <div className="w-[135px] h-[35px] bg-black flex items-center justify-center">
-                <span className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-white text-center">
-                  {group.projectName}
-                </span>
-              </div>
-
-              {/* Action item rows */}
-              <div className="flex flex-col">
-                {group.items.map((item) => (
-                  <div key={item.id}>
-                    {/* Divider line */}
-                    <div className="w-full h-[1px] bg-[#afb1b6]" />
-                    {/* Row content */}
-                    <div className="flex items-center justify-between px-[20px] py-[22px]">
-                      <span className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-black w-[240px]">
-                        {item.title}
-                      </span>
-                      <div className="flex items-center gap-[50px]">
-                        <span className="font-sans font-medium text-[16px] leading-[24px] tracking-[0.2px] text-black text-center w-[150px]">
-                          {item.dueDate} ({item.dueRemaining})
-                        </span>
-                        <span className="w-[150px] h-[21px] border border-black flex items-center justify-center font-sans font-medium text-[16px] leading-[normal] tracking-[0.2px] text-black">
-                          {item.stage}
-                        </span>
-                        <span className="w-[150px] h-[21px] border border-black flex items-center justify-center font-sans font-medium text-[16px] leading-[normal] tracking-[0.2px] text-black">
-                          {item.priority}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+          )}
         </div>
-      </AuthLayout>
-
-      {showCreateTask && (
-        <CreateNewModal type="task" onClose={() => setShowCreateTask(false)} />
-      )}
+      </PersonalAppShell>
     </>
   )
 }

@@ -9,6 +9,7 @@ import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
 import { useCurrentUser, useMyOrg, useProject, useProjectCounts } from '../lib/hooks'
+import { useSidebarPref } from '../lib/sidebarPref'
 import { dbStatusToUi } from '../lib/types'
 
 // ─── Create New context ─────────────────────────────────────────────────────
@@ -78,6 +79,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
   const { data: org } = useMyOrg(user?.id)
   const { data: project } = useProject(projectId)
   const { data: counts } = useProjectCounts(projectId)
+  const { collapsed: stackedSidebar, toggle: toggleSidebar } = useSidebarPref()
 
   useEffect(() => {
     if (userFetched && !user) router.push('/')
@@ -148,16 +150,18 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
         }
         sidebar={
           <SideMenu
+            sectionLabel={stackedSidebar ? undefined : 'Personal Space'}
             items={PERSONAL_RAIL_ITEMS}
             footerItems={PERSONAL_FOOTER}
             userInitials={initials}
             userName={userName}
-            stacked
+            stacked={stackedSidebar}
             onCreateNew={openMenu}
             onItemClick={(k) => {
               const route = personalRoute(k, org?.id ?? null)
               if (route) router.push(route)
             }}
+            onToggleSidebar={toggleSidebar}
           />
         }
         panel={

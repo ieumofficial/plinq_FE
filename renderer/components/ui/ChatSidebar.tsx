@@ -5,7 +5,7 @@
  * Figma "Stacked Side Menu / Page=Chat" frame (id 1140:9173). 250px wide.
  */
 
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import Icon from './Icon'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -317,8 +317,20 @@ export default function ChatSidebar({
   activeId,
   onItemClick,
 }: Props) {
+  // Slide-in: start at 0 width, expand to 250px on the next paint so the
+  // sidebar animates open whenever the Messages route mounts it.
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setOpen(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+
   return (
-    <aside className="bg-[#F8F9FA] border-t border-r border-solid border-gray-border-light w-[250px] shrink-0 h-full flex flex-col overflow-hidden">
+    <aside
+      className={`bg-[#F4F6F8] border-t border-r border-solid border-gray-border-light shrink-0 h-full flex flex-col overflow-hidden transition-[width] duration-200 ease-in-out ${
+        open ? 'w-[250px]' : 'w-0'
+      }`}
+    >
       {/* Title block */}
       <div className="flex flex-col gap-[5px] p-[10px]">
         <p className="text-primary-main text-[10px] font-medium uppercase tracking-[1.5px]">

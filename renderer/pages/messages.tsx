@@ -454,7 +454,7 @@ export default function MessagesPage() {
       <Head>
         <title>plinq · Messages</title>
       </Head>
-      <PersonalAppShell active="messages" stackedSidebar>
+      <PersonalAppShell active="messages">
         <MessagesBody />
       </PersonalAppShell>
     </>

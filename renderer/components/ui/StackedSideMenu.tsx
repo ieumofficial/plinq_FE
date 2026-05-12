@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import Icon, { type IconName } from './Icon'
 import ProjectLabel from './ProjectLabel'
 import StatusLabelBig, { type Status } from './StatusLabelBig'
@@ -65,21 +65,29 @@ export default function StackedSideMenu({
   const isProject = header.kind === 'project'
   const sectionLabel = isProject ? 'Project' : 'Organization'
 
+  // Slide-in: start at 0 width, expand to 210px on the next paint so the panel
+  // animates open whenever the parent route mounts it.
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setOpen(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+
   return (
-    <aside className="bg-[#F8F9FA] border-t border-r border-[#E6EAEE] w-[210px] shrink-0 h-full flex flex-col relative">
+    <aside
+      className={`bg-[#F4F6F8] border-t border-r border-[#E6EAEE] shrink-0 h-full flex flex-col relative overflow-hidden transition-[width] duration-200 ease-in-out ${
+        open ? 'w-[210px]' : 'w-0'
+      }`}
+    >
       {/* BACK */}
       <div className="flex flex-col items-start py-[5px]">
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-[5px] pl-[10px] pr-[5px] py-[5px] rounded-[5px] hover:bg-white-white/60"
+          className="flex items-center gap-[5px] pl-[10px] pr-[5px] py-[5px] rounded-[5px] text-black hover:bg-white-white/60"
         >
           <Icon name="ArrowLeft" size={15} />
-          <span
-            className="text-black text-[10px] uppercase leading-none"
-          >
-            back
-          </span>
+          <span className="text-[10px] uppercase leading-none">back</span>
         </button>
       </div>
 

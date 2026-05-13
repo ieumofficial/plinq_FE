@@ -10,6 +10,7 @@ import { queryKeys } from '../lib/queryKeys'
 import type { MeetingRecurrence, MeetingType, UserRow } from '../lib/types'
 import InviteByEmailModal from './InviteByEmailModal'
 import { zoomBackend } from '../lib/zoomBackend'
+import { supabase } from '../lib/supabase'
 
 type WhenMode = 'now' | 'later'
 
@@ -333,6 +334,16 @@ export default function CreateMeetingModal({
       } else {
         window.open(zoomStartUrl, '_blank')
       }
+    }
+
+    // For "Right now" meetings, flip status to `recording` immediately so
+    // the card lands in live mode (Open Zoom + End meeting buttons) instead
+    // of looking like a stale `planned` row.
+    if (when === 'now') {
+      await supabase
+        .from('meetings')
+        .update({ status: 'recording' })
+        .eq('id', result.id)
     }
 
     queryClient.invalidateQueries({ queryKey: queryKeys.meetings.all })

@@ -13,6 +13,11 @@ const handler = {
       ipcRenderer.removeListener(channel, subscription)
     }
   },
+  /** Request a value from a main-process handler (registered via
+   *  `ipcMain.handle(channel, ...)`). Mirrors `ipcRenderer.invoke`. */
+  invoke<T = unknown>(channel: string, ...args: unknown[]): Promise<T> {
+    return ipcRenderer.invoke(channel, ...args) as Promise<T>
+  },
 }
 
 contextBridge.exposeInMainWorld('ipc', handler)

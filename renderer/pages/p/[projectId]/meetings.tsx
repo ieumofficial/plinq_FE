@@ -11,10 +11,13 @@ import ZoomConnectButton from '../../../components/ZoomConnectButton'
 import { useProject, useProjectMeetings } from '../../../lib/hooks'
 import { queryKeys } from '../../../lib/queryKeys'
 import { supabase } from '../../../lib/supabase'
+import { deleteMeeting as deleteMeetingRow } from '../../../lib/queries'
 import { userToMember, type MeetingType } from '../../../lib/types'
 import MeetingTypeLabel from '../../../components/ui/MeetingTypeLabel'
 import MeetingInsights from '../../../components/MeetingInsights'
-import { analyzeMeeting, parseSummary } from '../../../lib/aiAnalyze'
+import InPersonRecorder from '../../../components/InPersonRecorder'
+import MeetingMinutesModal from '../../../components/MeetingMinutesModal'
+import { analyzeAudio, parseSummary } from '../../../lib/aiAnalyze'
 
 function dateBlock(iso: string): { top: string; bottom: string } {
   const d = new Date(iso)
@@ -81,14 +84,120 @@ function MeetingsBody({ projectId }: { projectId: string }) {
   const [analyzeState, setAnalyzeState] = useState<
     Record<string, { analyzing: boolean; error: string | null }>
   >({})
+  // Which meeting's full minutes modal is open (null when closed).
+  const [openMinutes, setOpenMinutes] = useState<{
+    id: string
+    name: string
+  } | null>(null)
+  // Meeting IDs whose inline Insights card is collapsed. Default expanded
+  // for everyone so a fresh analysis is visible without an extra click.
+  const [collapsedInsights, setCollapsedInsights] = useState<Set<string>>(
+    new Set(),
+  )
 
-  async function handleAnalyze(meetingId: string) {
+  function toggleInsights(meetingId: string) {
+    setCollapsedInsights((prev) => {
+      const next = new Set(prev)
+      if (next.has(meetingId)) next.delete(meetingId)
+      else next.add(meetingId)
+      return next
+    })
+  }
+
+  async function handleDelete(meetingId: string, meetingName: string) {
+    const ok = window.confirm(
+      `"${meetingName}" 미팅과 모든 회의록을 삭제할까요? 되돌릴 수 없습니다.`,
+    )
+    if (!ok) return
+    const result = await deleteMeetingRow(meetingId)
+    if ('error' in result) {
+      window.alert(`삭제 실패: ${result.error}`)
+      return
+    }
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.project.meetings(projectId),
+    })
+  }
+
+  async function handleAnalyzeFile(meetingId: string, file: File) {
     setAnalyzeState((prev) => ({
       ...prev,
       [meetingId]: { analyzing: true, error: null },
     }))
     try {
-      await analyzeMeeting(meetingId)
+      await analyzeAudio(meetingId, file)
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.project.meetings(projectId),
+      })
+      setAnalyzeState((prev) => ({
+        ...prev,
+        [meetingId]: { analyzing: false, error: null },
+      }))
+    } catch (e) {
+      setAnalyzeState((prev) => ({
+        ...prev,
+        [meetingId]: { analyzing: false, error: (e as Error).message },
+      }))
+    }
+  }
+
+  // One-click "use the recording I just made" — the Electron main process
+  // walks Documents/Zoom, reads the latest m4a, hands the bytes back via
+  // IPC, then we run the same upload-and-analyze pipeline. The manual
+  // file picker stays as a secondary path for the cases the auto-finder
+  // can't cover (browser preview, non-default Zoom folder, etc.).
+  async function handleAutoImport(meetingId: string) {
+    setAnalyzeState((prev) => ({
+      ...prev,
+      [meetingId]: { analyzing: true, error: null },
+    }))
+    try {
+      if (typeof window === 'undefined' || !window.ipc?.invoke) {
+        throw new Error(
+          '브라우저 프리뷰에서는 자동 가져오기를 지원하지 않습니다 — Electron 앱에서 사용하거나 "파일 선택"으로 업로드하세요.',
+        )
+      }
+      type FindResult =
+        | {
+            found: true
+            filename: string
+            mime: string
+            bytes: Uint8Array
+            folder: string
+            scannedPath: string
+          }
+        | {
+            found: false
+            scannedPath: string
+            reason:
+              | 'no-zoom-folder'
+              | 'no-subfolders'
+              | 'no-audio-files'
+              | 'all-too-small'
+            checkedFolders: { folder: string; files: string[] }[]
+            error?: string
+          }
+      const result = await window.ipc.invoke<FindResult>(
+        'import-latest-zoom-recording',
+      )
+      if (!result.found) {
+        if (result.error) {
+          throw new Error(`Zoom 폴더 읽기 실패: ${result.error}`)
+        }
+        const path = result.scannedPath || '(unknown)'
+        const reasonMsg = {
+          'no-zoom-folder': `Zoom 폴더가 없어요 — ${path}`,
+          'no-subfolders': `${path} 폴더는 있는데 회의 녹화 하위 폴더가 없어요. Zoom에서 회의 녹화가 정말 시작됐는지 확인해주세요.`,
+          'no-audio-files': `최근 폴더에 audio/video 파일이 없어요. Zoom이 아직 저장 중일 수 있습니다 (보통 종료 후 30초~5분). 잠시 후 재시도하거나 '파일 직접 선택'을 사용하세요.\n검색 경로: ${path}`,
+          'all-too-small': `오디오 파일이 너무 작아요 (10KB 미만 — Zoom이 저장 중). 1분 뒤 다시 시도하세요.\n검색 경로: ${path}`,
+        }[result.reason]
+        throw new Error(reasonMsg)
+      }
+      const blob = new Blob([new Uint8Array(result.bytes)], {
+        type: result.mime,
+      })
+      const file = new File([blob], result.filename, { type: result.mime })
+      await analyzeAudio(meetingId, file)
       await queryClient.invalidateQueries({
         queryKey: queryKeys.project.meetings(projectId),
       })
@@ -319,21 +428,32 @@ function MeetingsBody({ projectId }: { projectId: string }) {
                         {(showJoin || isLive) && (() => {
                           const url = m.location_or_url
                           const isUrl = !!url && /^https?:\/\//i.test(url)
-                          // Live mode: card shows "Open Zoom" (reopen the
-                          // call if user closed it) + "End meeting" (flips
-                          // status to processed so the AI pipeline kicks in).
+                          // Live mode branches by meeting type:
+                          //  - Zoom (URL present): Open Zoom + End meeting
+                          //  - In-person (no URL): inline mic recorder that
+                          //    captures audio with MediaRecorder and pipes
+                          //    the blob through `analyze-audio` on stop.
                           if (isLive) {
+                            if (!isUrl) {
+                              return (
+                                <InPersonRecorder
+                                  meetingId={m.id}
+                                  busy={az.analyzing}
+                                  onAnalyze={(file) =>
+                                    handleAnalyzeFile(m.id, file)
+                                  }
+                                />
+                              )
+                            }
                             return (
                               <div className="flex items-center gap-[8px] shrink-0">
-                                {isUrl && (
-                                  <button
-                                    type="button"
-                                    onClick={() => openExternal(url!)}
-                                    className="bg-white-white border border-gray-border text-black text-[12px] px-[10px] py-[10px] rounded-[5px] hover:bg-white-item"
-                                  >
-                                    Open Zoom
-                                  </button>
-                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => openExternal(url!)}
+                                  className="bg-white-white border border-gray-border text-black text-[12px] px-[10px] py-[10px] rounded-[5px] hover:bg-white-item"
+                                >
+                                  Open Zoom
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => void endMeeting(m.id)}
@@ -411,29 +531,93 @@ function MeetingsBody({ projectId }: { projectId: string }) {
                         </div>
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(m.id, m.name)}
+                      title="미팅 삭제"
+                      aria-label="Delete meeting"
+                      className="self-start text-gray-secondary hover:text-red-main text-[18px] leading-none px-1 -mt-1"
+                    >
+                      ×
+                    </button>
                   </article>
                   {showAnalysisCard && (
                     <div className="bg-white-white border border-gray-border-light rounded-[10px] p-[15px] ml-[75px]">
                       {insights ? (
-                        <MeetingInsights data={insights} />
+                        <div className="flex flex-col gap-[10px]">
+                          <div className="flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={() => toggleInsights(m.id)}
+                              className="inline-flex items-center gap-2 text-gray-main hover:text-black"
+                              aria-expanded={!collapsedInsights.has(m.id)}
+                            >
+                              <span className="text-[12px] w-3 inline-block">
+                                {collapsedInsights.has(m.id) ? '▶' : '▼'}
+                              </span>
+                              <span className="text-[10px] font-semibold uppercase tracking-[1.5px]">
+                                회의록
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setOpenMinutes({ id: m.id, name: m.name })
+                              }
+                              className="text-[12px] text-blue-main hover:underline"
+                            >
+                              회의록 전체 보기 →
+                            </button>
+                          </div>
+                          {!collapsedInsights.has(m.id) && (
+                            <MeetingInsights data={insights} />
+                          )}
+                        </div>
                       ) : (
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-black text-[13px] font-semibold">
-                              AI 회의록 — 로컬 녹화 분석 곧 지원
+                              AI 회의록 — 방금 녹화한 회의 자동 분석
                             </p>
                             <p className="text-gray-main text-[11px] mt-1">
-                              회의 종료 후 PC에 저장된 m4a 파일을 자동으로 가져와 분석합니다.
+                              Documents/Zoom 의 최신 녹화를 자동으로 가져와 전사 + 4섹션 추출합니다.
                             </p>
+                            {az.error && (
+                              <p className="text-red-med text-[11px] mt-2 break-words">
+                                {az.error}
+                              </p>
+                            )}
                           </div>
-                          <button
-                            type="button"
-                            disabled
-                            title="Local audio import coming next iteration"
-                            className="bg-gray-disabled text-gray-main text-[12px] px-[15px] py-[8px] rounded-[5px] shrink-0 cursor-not-allowed"
-                          >
-                            Coming soon
-                          </button>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => void handleAutoImport(m.id)}
+                              disabled={az.analyzing}
+                              className="bg-blue-main text-white text-[12px] px-[15px] py-[8px] rounded-[5px] hover:opacity-90 disabled:opacity-50 disabled:cursor-wait"
+                            >
+                              {az.analyzing ? '분석 중…' : 'Auto import latest'}
+                            </button>
+                            <label
+                              className={`text-[11px] text-gray-main hover:text-black ${
+                                az.analyzing
+                                  ? 'opacity-50 cursor-wait'
+                                  : 'cursor-pointer'
+                              }`}
+                            >
+                              또는 파일 직접 선택…
+                              <input
+                                type="file"
+                                accept="audio/*,video/mp4,.m4a,.mp4,.mp3,.wav,.webm"
+                                className="hidden"
+                                disabled={az.analyzing}
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0]
+                                  if (f) void handleAnalyzeFile(m.id, f)
+                                  e.target.value = ''
+                                }}
+                              />
+                            </label>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -443,6 +627,14 @@ function MeetingsBody({ projectId }: { projectId: string }) {
               })
             )}
           </div>
+
+          {openMinutes && (
+            <MeetingMinutesModal
+              meetingId={openMinutes.id}
+              meetingName={openMinutes.name}
+              onClose={() => setOpenMinutes(null)}
+            />
+          )}
     </div>
   )
 }

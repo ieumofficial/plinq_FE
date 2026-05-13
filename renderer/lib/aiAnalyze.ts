@@ -78,8 +78,52 @@ export function parseSummary(raw: string | null | undefined): ExtractedMeeting |
   }
 }
 
-/** Kick off the AI pipeline for a single meeting. Resolves with the
- *  freshly-extracted data on success; throws on Zoom/Gemini errors.
+/** Upload a local Zoom recording (m4a) to the `analyze-audio` Edge
+ *  Function and resolve with the extracted insights. We bypass
+ *  `supabase.functions.invoke` here because that path JSON-stringifies
+ *  the body — we need to ship raw audio bytes with an `audio/*`
+ *  Content-Type instead. */
+export async function analyzeAudio(
+  meetingId: string,
+  file: File | Blob,
+): Promise<{ transcript: string; extracted: ExtractedMeeting }> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !anonKey) {
+    throw new Error('Supabase env vars are missing')
+  }
+  const url = `${supabaseUrl}/functions/v1/analyze-audio?meetingId=${encodeURIComponent(meetingId)}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': (file as File).type || 'audio/mp4',
+      Authorization: `Bearer ${anonKey}`,
+      apikey: anonKey,
+    },
+    body: file,
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    try {
+      const body = JSON.parse(text)
+      throw new Error(body.error || `HTTP ${res.status}`)
+    } catch (e) {
+      // not JSON or already a real Error — surface what we can
+      if (e instanceof Error && e.message && !e.message.startsWith('HTTP'))
+        throw e
+      throw new Error(text.slice(0, 300) || `HTTP ${res.status}`)
+    }
+  }
+  const data = JSON.parse(text) as
+    | { ok: true; transcript: string; extracted: ExtractedMeeting }
+    | { error: string }
+  if ('error' in data) throw new Error(data.error)
+  return { transcript: data.transcript, extracted: data.extracted }
+}
+
+/** Legacy: kick off the cloud-recording pipeline. Kept for Pro accounts
+ *  that have Zoom cloud recording on. Free users should use
+ *  `analyzeAudio()` with a local file instead.
  *  supabase-js's FunctionsHttpError.message is always the generic
  *  "Edge Function returned a non-2xx status code" — to surface the real
  *  message from the function body we have to dig into `error.context`,

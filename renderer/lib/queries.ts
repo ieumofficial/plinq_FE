@@ -680,9 +680,13 @@ export async function getProjectTasks(projectId: string): Promise<ProjectTask[]>
   if (tasks.length === 0) return []
 
   const taskIds = tasks.map((t) => t.id)
+  // task_assignees has TWO FKs to users (user_id, assigned_by) — use the
+  // `users:user_id` alias so PostgREST follows the correct relationship.
   const { data: assignRows, error: aErr } = await supabase
     .from('task_assignees')
-    .select('task_id, users(id, email, first_name, last_name, nickname, job_title)')
+    .select(
+      'task_id, users:user_id(id, email, first_name, last_name, nickname, job_title)'
+    )
     .in('task_id', taskIds)
   if (aErr) console.error('[queries] task assignees', aErr)
 
@@ -700,19 +704,18 @@ export async function getProjectTasks(projectId: string): Promise<ProjectTask[]>
 
 export type ProjectMember = UserRow & {
   role: import('./types').ProjectRoleDb
-  joined_at: string
 }
 
 export async function getProjectMembersWithRoles(
   projectId: string
 ): Promise<ProjectMember[]> {
+  // NOTE: project_members has no joined_at / created_at column (see
+  // 20260412000006_create_project.sql) — don't add one here without first
+  // adding it in a migration.
   const { data, error } = await supabase
     .from('project_members')
-    .select(
-      'role, joined_at, users(id, email, first_name, last_name, nickname, job_title)'
-    )
+    .select('role, users(id, email, first_name, last_name, nickname, job_title)')
     .eq('project_id', projectId)
-    .order('joined_at', { ascending: true })
   if (error) {
     console.error('[queries] getProjectMembersWithRoles', error)
     return []
@@ -721,12 +724,11 @@ export async function getProjectMembersWithRoles(
   for (const row of data ?? []) {
     const r = row as unknown as {
       role: import('./types').ProjectRoleDb
-      joined_at: string
       users: UserRow | UserRow[] | null
     }
     if (!r.users) continue
     const us = Array.isArray(r.users) ? r.users : [r.users]
-    for (const u of us) out.push({ ...u, role: r.role, joined_at: r.joined_at })
+    for (const u of us) out.push({ ...u, role: r.role })
   }
   return out
 }

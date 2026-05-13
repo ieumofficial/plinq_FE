@@ -24,11 +24,6 @@ const COLS: Column[] = [
   { key: 'more', label: '', width: 'w-[40px]' },
 ]
 
-function joinedLabel(iso: string): string {
-  const d = new Date(iso)
-  return `Joined ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-}
-
 function StatCard({
   eyebrow,
   value,
@@ -75,17 +70,16 @@ export default function MembersPage() {
 
   const stats = useMemo(() => {
     const roles = new Set<string>()
-    let recent = 0
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
+    let leads = 0
     for (const m of members) {
       if (m.job_title) roles.add(m.job_title)
-      if (new Date(m.joined_at).getTime() > cutoff) recent += 1
+      if (m.role === 'lead') leads += 1
     }
     return {
       total: members.length,
       roles: roles.size,
       inMeeting: 0, // requires live presence; placeholder
-      recent,
+      leads,
     }
   }, [members])
 
@@ -148,9 +142,9 @@ export default function MembersPage() {
               subtitle={`of ${stats.total} members`}
             />
             <StatCard
-              eyebrow="Recently Joined"
-              value={stats.recent}
-              subtitle="added in the last 30 days"
+              eyebrow="Leads"
+              value={stats.leads}
+              subtitle={`of ${stats.total} members`}
             />
           </div>
 
@@ -171,8 +165,8 @@ export default function MembersPage() {
                         <span className="text-black text-[14px] font-semibold">
                           {m.nickname || `${m.first_name} ${m.last_name}`.trim()}
                         </span>
-                        <span className="text-gray-secondary text-[10px]">
-                          {joinedLabel(m.joined_at)}
+                        <span className="text-gray-secondary text-[10px] capitalize">
+                          {m.role}
                         </span>
                       </span>
                     </span>

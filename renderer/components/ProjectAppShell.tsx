@@ -41,6 +41,7 @@ export type ProjectActiveKey =
   | 'meetings'
   | 'members'
   | 'knowledge'
+  | 'settings'
 
 const PERSONAL_RAIL_ITEMS: NavItem[] = [
   { key: 'dashboard', icon: 'Dashboard', label: 'Dashboard' },
@@ -136,6 +137,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
     { key: 'meetings', icon: 'Meeting', label: 'Meetings', count: counts?.meetings },
     { key: 'members', icon: 'People', label: 'Members', count: counts?.members },
     { key: 'knowledge', icon: 'File', label: 'Knowledge Base', count: counts?.docs },
+    { key: 'settings', icon: 'Settings', label: 'Settings' },
   ]
 
   const goPage = (key: ProjectActiveKey) => {

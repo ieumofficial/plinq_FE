@@ -27,7 +27,9 @@ import {
   getUserCalendarEvents,
   getUserProjects,
   getUserUpcomingMeetings,
+  updateProject,
   type NewDocInput,
+  type ProjectPatch,
   type ProjectWithStats,
 } from './queries'
 import { supabase } from './supabase'
@@ -280,6 +282,20 @@ export function useCreateKnowledgeDoc() {
     },
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: queryKeys.project.docs(variables.project_id) })
+    },
+  })
+}
+
+export function useUpdateProject() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { projectId: string; patch: ProjectPatch }) => {
+      const r = await updateProject(input.projectId, input.patch)
+      if ('error' in r) throw new Error(r.error)
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: queryKeys.project.one(variables.projectId) })
+      qc.invalidateQueries({ queryKey: queryKeys.projects.all })
     },
   })
 }

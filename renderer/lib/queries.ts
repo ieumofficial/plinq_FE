@@ -241,6 +241,41 @@ export async function addProjectInvite(input: {
   return { ok: true }
 }
 
+// ─── Project mutations ──────────────────────────────────────────────────────
+
+export type ProjectPatch = Partial<{
+  name: string
+  description: string | null
+  color: string
+  status: import('./types').ProjectStatusDb
+  lead_id: string | null
+}>
+
+export async function updateProject(
+  projectId: string,
+  patch: ProjectPatch
+): Promise<{ ok: true } | { error: string }> {
+  // Use .select() so RLS-filtered updates surface as 0 returned rows. Without
+  // this, Supabase reports success even when the policy silently dropped the
+  // write, so the user sees "saved" but nothing actually changed.
+  const { data, error } = await supabase
+    .from('projects')
+    .update(patch)
+    .eq('id', projectId)
+    .select('id')
+  if (error) {
+    console.error('[queries] updateProject', error)
+    return { error: error.message }
+  }
+  if (!data || data.length === 0) {
+    return {
+      error:
+        "Couldn't save changes — you may not have permission. Only the project lead or an admin can edit project details.",
+    }
+  }
+  return { ok: true }
+}
+
 // ─── Task mutations ─────────────────────────────────────────────────────────
 
 export type NewTaskInput = {

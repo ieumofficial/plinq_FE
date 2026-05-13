@@ -6,6 +6,9 @@ export type Column = {
   /** Tailwind width class (e.g. 'w-[120px]', 'flex-1') or arbitrary string. */
   width?: string
   align?: 'left' | 'center' | 'right'
+  /** Extra classes applied to the header cell (e.g. 'ml-[20px]' to nudge the
+   *  column heading so it lines up with a cell that has the same offset). */
+  className?: string
 }
 
 type TableProps = {
@@ -40,7 +43,7 @@ export function TableHeader({ columns, className }: HeaderProps) {
         return (
           <div
             key={c.key}
-            className={`flex items-center ${alignClass[c.align ?? 'left']} ${c.width ?? 'flex-1'} ${isFlex ? 'min-w-0' : 'shrink-0'}`}
+            className={`flex items-center ${alignClass[c.align ?? 'left']} ${c.width ?? 'flex-1'} ${isFlex ? 'min-w-0' : 'shrink-0'} ${c.className ?? ''}`}
           >
             <span className="text-gray-main text-[12px] font-medium uppercase tracking-[1.5px] truncate">
               {c.label}

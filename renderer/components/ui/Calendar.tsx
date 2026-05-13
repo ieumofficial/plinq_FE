@@ -118,44 +118,48 @@ export default function Calendar({
       {/* Toolbar — only for monthly view */}
       {isMonthly && (
         <div className="flex items-center justify-between">
-          <h2 className="text-black text-[32px] font-semibold leading-tight">
-            {MONTH_NAMES[monthIndex]}{' '}
+          <h2 className="flex items-center gap-[5px] leading-none whitespace-nowrap text-[35px]">
+            <span className="text-black font-semibold">
+              {MONTH_NAMES[monthIndex]}
+            </span>
             <em
-              className="italic text-gray-secondary font-normal"
+              className="italic text-gray-main font-semibold"
               style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
             >
               {month.getFullYear()}
             </em>
           </h2>
-          <div className="flex items-center gap-[10px]">
-            <button
-              type="button"
-              onClick={onPrevMonth}
-              className="text-primary-main p-[7px] rounded-[5px] border border-solid border-gray-border-light bg-white-white hover:bg-white-main"
-              aria-label="Previous month"
-            >
-              <Icon name="ArrowLeft" size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={onToday}
-              className="px-[15px] py-[7px] rounded-[5px] border border-solid border-gray-border-light bg-white-white hover:bg-white-main text-black text-[12px]"
-            >
-              Today
-            </button>
-            <button
-              type="button"
-              onClick={onNextMonth}
-              className="text-primary-main p-[7px] rounded-[5px] border border-solid border-gray-border-light bg-white-white hover:bg-white-main"
-              aria-label="Next month"
-            >
-              <Icon name="ArrowRight" size={15} />
-            </button>
+          <div className="flex items-center gap-[20px]">
+            <div className="flex items-center gap-[5px]">
+              <button
+                type="button"
+                onClick={onPrevMonth}
+                className="text-primary-main h-[32px] px-[5px] py-[10px] rounded-[5px] border border-solid border-gray-border-light bg-white-white hover:bg-white-main inline-flex items-center justify-center"
+                aria-label="Previous month"
+              >
+                <Icon name="ArrowLeft" size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={onToday}
+                className="h-[32px] px-[15px] py-[10px] rounded-[5px] border border-solid border-gray-border-light bg-white-white hover:bg-white-main text-black text-[12px] inline-flex items-center justify-center"
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={onNextMonth}
+                className="text-primary-main h-[32px] px-[5px] py-[10px] rounded-[5px] border border-solid border-gray-border-light bg-white-white hover:bg-white-main inline-flex items-center justify-center"
+                aria-label="Next month"
+              >
+                <Icon name="ArrowRight" size={15} />
+              </button>
+            </div>
             {onCreateNew && (
               <button
                 type="button"
                 onClick={onCreateNew}
-                className="bg-primary-main text-white-main px-[15px] py-[7px] rounded-[5px] inline-flex items-center gap-[5px] text-[12px] hover:bg-primary-dark"
+                className="bg-primary-main text-white-main h-[32px] px-[15px] py-[10px] rounded-[5px] inline-flex items-center justify-center gap-[5px] text-[12px] hover:bg-primary-dark"
               >
                 <Icon name="Add" size={15} />
                 New
@@ -178,11 +182,11 @@ export default function Calendar({
           </div>
           <div className="flex items-center gap-[10px]">
             <span className="flex items-center gap-[5px]">
-              <span className="w-[6px] h-[6px] rounded-full bg-purple-main" />
+              <span className="w-[6px] h-[6px] rounded-full bg-blue-main" />
               <span className="text-gray-main text-[10px] leading-[1.5]">Meeting</span>
             </span>
             <span className="flex items-center gap-[5px]">
-              <span className="w-[6px] h-[6px] rounded-full bg-red-main" />
+              <span className="w-[6px] h-[6px] rounded-full bg-brown-med" />
               <span className="text-gray-main text-[10px] leading-[1.5]">Task</span>
             </span>
             <button
@@ -197,42 +201,54 @@ export default function Calendar({
         </div>
       )}
 
-      {/* Weekday header */}
+      {/* Card wrapping weekday header + grid — only for monthly view */}
       <div
-        className="grid"
-        style={{
-          gridTemplateColumns: isMonthly
-            ? 'repeat(7, minmax(0, 1fr))'
-            : 'repeat(7, 76px)',
-          gap: isMonthly ? 0 : 4,
-        }}
+        className={
+          isMonthly
+            ? 'flex-1 min-h-0 flex flex-col gap-[12px] bg-white-white rounded-[10px] border border-gray-border-light p-[20px]'
+            : 'flex flex-col gap-[12px]'
+        }
       >
-        {weekdays.map((w, i) => (
-          <div
-            key={i}
-            className="text-gray-secondary text-[10px] font-medium uppercase tracking-[1.5px] text-center py-1"
-          >
-            {w}
-          </div>
-        ))}
-      </div>
+        {/* Weekday header */}
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: isMonthly
+              ? 'repeat(7, minmax(0, 1fr))'
+              : 'repeat(7, 76px)',
+            gap: isMonthly ? 0 : 4,
+          }}
+        >
+          {weekdays.map((w, i) => (
+            <div
+              key={i}
+              className={`text-gray-secondary font-medium uppercase tracking-[1.5px] py-1 ${
+                isMonthly
+                  ? 'text-[15px] text-left pl-[8px]'
+                  : 'text-[10px] text-center'
+              }`}
+            >
+              {w}
+            </div>
+          ))}
+        </div>
 
-      {/* Day grid */}
-      <div
-        className={`grid ${
-          isMonthly ? 'flex-1 min-h-0 border-t border-l border-solid border-[#EDEEF0]' : ''
-        }`}
-        style={{
-          gridTemplateColumns: isMonthly
-            ? 'repeat(7, minmax(0, 1fr))'
-            : 'repeat(7, 76px)',
-          gridTemplateRows: isMonthly
-            ? `repeat(${weeks}, minmax(0, 1fr))`
-            : undefined,
-          gap: isMonthly ? 0 : 4,
-        }}
-      >
-        {grid.map((d) => {
+        {/* Day grid */}
+        <div
+          className={`grid ${
+            isMonthly ? 'flex-1 min-h-0 border-t border-l border-solid border-[#EDEEF0]' : ''
+          }`}
+          style={{
+            gridTemplateColumns: isMonthly
+              ? 'repeat(7, minmax(0, 1fr))'
+              : 'repeat(7, 76px)',
+            gridTemplateRows: isMonthly
+              ? `repeat(${weeks}, minmax(0, 1fr))`
+              : undefined,
+            gap: isMonthly ? 0 : 4,
+          }}
+        >
+          {grid.map((d) => {
           const dEvents = eventsByDate.get(ymd(d)) ?? []
           const outOfBound = d.getMonth() !== monthIndex
           const isToday = isSameDate(d, today)
@@ -279,6 +295,7 @@ export default function Calendar({
             />
           )
         })}
+        </div>
       </div>
     </div>
   )

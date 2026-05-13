@@ -7,10 +7,10 @@ export type EventColor = {
 }
 
 export const EVENT_COLORS: Record<EventType, EventColor> = {
-  meeting: { bg: '#E5DEEF', bar: '#5B3D8A', text: '#5B3D8A' },
-  task: { bg: '#F2DEDE', bar: '#9B3838', text: '#9B3838' },
-  deadline: { bg: '#F2DEDE', bar: '#9B3838', text: '#9B3838' },
-  project: { bg: '#DDE7F4', bar: '#2D5A9E', text: '#2D5A9E' },
+  meeting: { bg: '#DDE7F4', bar: '#2D5A9E', text: '#2D5A9E' }, // blue
+  task: { bg: '#F4E6CD', bar: '#B68A48', text: '#8A5A1E' }, // amber
+  deadline: { bg: '#F2DEDE', bar: '#9B3838', text: '#9B3838' }, // red
+  project: { bg: '#F2DEDE', bar: '#9B3838', text: '#9B3838' }, // red (Project Due)
 }
 
 type Props = {

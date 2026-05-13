@@ -26,14 +26,41 @@ Read a meeting transcript and extract structured insight. BE GENEROUS —
 when there is ANY signal at all, surface it. Prefer extracting too much
 over too little.
 
+You will be given an ordered list of AGENDA ITEMS (대주제) that the meeting
+was scheduled to cover. Your job is to map every portion of the transcript
+to one of these agenda items, or to an "other" bucket if it does not fit
+any of them. Each agenda item gets its own summary AND its own transcript
+excerpt (the actual lines from the transcript that belong under it).
+
 Return STRICT JSON with this exact shape — no markdown fences, no commentary:
 {
-  "summary": "concrete recap — see Summary style below",
+  "summary": "concrete overall recap — see Summary style below",
   "keyDecisions": ["..."],
   "actionItems": [{"task": "...", "owner": "person if named, else null", "dueDate": "ISO or natural-language phrase if mentioned, else null"}],
   "followUps": ["topics raised that need follow-up but were not decided"],
-  "unresolved": ["items that came up repeatedly and remain unresolved"]
+  "unresolved": ["items that came up repeatedly and remain unresolved"],
+  "byAgenda": [
+    {
+      "agendaId": "<exact uuid from input>",
+      "summary": "1-3 sentence agenda-specific recap, same style as overall summary",
+      "transcript": "the [MM:SS] Speaker N: lines from the transcript that belong under this agenda, joined by newlines. Copy lines verbatim — do not rewrite."
+    }
+  ],
+  "other": {
+    "summary": "1-2 sentences covering content not belonging to any agenda (small talk, off-topic, tangents). Empty string if nothing.",
+    "transcript": "transcript lines that did not fit any agenda, joined by newlines. Empty string if nothing."
+  }
 }
+
+byAgenda rules:
+- Include EVERY input agenda in the output array, in the same order, even
+  if there is little or no content for it (use a short summary like
+  "Not discussed" and empty transcript in that case).
+- agendaId MUST be the exact uuid string from the input — do not invent.
+- Transcript lines must be COPIED verbatim from the input transcript
+  (keep the [MM:SS] prefix and speaker label).
+- A single transcript line belongs to AT MOST ONE bucket (agenda or other).
+- Order transcript lines chronologically (by timestamp) within each bucket.
 
 Language: ALL output strings (summary, decisions, action items, follow-ups,
 unresolved) MUST be in English, regardless of the language spoken in the
@@ -81,6 +108,17 @@ Hard rules:
 - Only return empty arrays for a category when the transcript truly says
   nothing about it.`
 
+type AgendaBucket = {
+  agendaId: string
+  summary: string
+  transcript: string
+}
+
+type OtherBucket = {
+  summary: string
+  transcript: string
+}
+
 type Extracted = {
   summary?: string
   keyDecisions: string[]
@@ -91,7 +129,11 @@ type Extracted = {
   }[]
   followUps: string[]
   unresolved: string[]
+  byAgenda: AgendaBucket[]
+  other: OtherBucket
 }
+
+type AgendaInput = { id: string; title: string; order: number }
 
 function uint8ArrayToBase64(bytes: Uint8Array): string {
   const CHUNK = 0x8000
@@ -238,6 +280,20 @@ Deno.serve(async (req) => {
       return json({ error: 'Meeting not found in plinq DB' }, 404)
     }
 
+    const { data: agendaRows, error: agendaErr } = await supabase
+      .from('meeting_agendas')
+      .select('id, title, order')
+      .eq('meeting_id', meetingId)
+      .order('order', { ascending: true })
+    if (agendaErr) {
+      console.error('[analyze-audio] meeting_agendas fetch', agendaErr)
+    }
+    const agendas: AgendaInput[] = (agendaRows ?? []).map((r) => ({
+      id: r.id as string,
+      title: r.title as string,
+      order: r.order as number,
+    }))
+
     const audioBytes = new Uint8Array(await req.arrayBuffer())
     if (audioBytes.length === 0) {
       return json({ error: 'Empty body — send the audio file as raw bytes' }, 400)
@@ -321,6 +377,12 @@ or mixed), every line you output must be in English.
       )
     ).trim()
 
+    const agendaPromptBlock = agendas.length
+      ? `Agenda items (in order — map transcript content to these):\n${agendas
+          .map((a, i) => `  ${i + 1}. [agendaId=${a.id}] ${a.title}`)
+          .join('\n')}`
+      : 'Agenda items: (none — leave byAgenda empty and put everything in "other")'
+
     const rawExtract = (
       await callWithRetry((model) =>
         geminiGenerate({
@@ -332,7 +394,7 @@ or mixed), every line you output must be in English.
               role: 'user',
               parts: [
                 {
-                  text: `Transcript:\n\n${transcript}\n\nReturn the JSON now.`,
+                  text: `${agendaPromptBlock}\n\nTranscript:\n\n${transcript}\n\nReturn the JSON now.`,
                 },
               ],
             },
@@ -341,24 +403,53 @@ or mixed), every line you output must be in English.
       )
     ).trim()
 
+    const validAgendaIds = new Set(agendas.map((a) => a.id))
     let extracted: Extracted = {
       summary: undefined,
       keyDecisions: [],
       actionItems: [],
       followUps: [],
       unresolved: [],
+      byAgenda: [],
+      other: { summary: '', transcript: '' },
     }
     const jStart = rawExtract.indexOf('{')
     const jEnd = rawExtract.lastIndexOf('}')
     if (jStart >= 0 && jEnd >= 0) {
       try {
         const parsed = JSON.parse(rawExtract.slice(jStart, jEnd + 1))
+        const rawByAgenda = Array.isArray(parsed.byAgenda) ? parsed.byAgenda : []
+        const byAgenda: AgendaBucket[] = []
+        for (const b of rawByAgenda) {
+          if (!b || typeof b.agendaId !== 'string') continue
+          if (!validAgendaIds.has(b.agendaId)) continue
+          byAgenda.push({
+            agendaId: b.agendaId,
+            summary: typeof b.summary === 'string' ? b.summary : '',
+            transcript: typeof b.transcript === 'string' ? b.transcript : '',
+          })
+        }
+        const other =
+          parsed.other && typeof parsed.other === 'object'
+            ? {
+                summary:
+                  typeof parsed.other.summary === 'string'
+                    ? parsed.other.summary
+                    : '',
+                transcript:
+                  typeof parsed.other.transcript === 'string'
+                    ? parsed.other.transcript
+                    : '',
+              }
+            : { summary: '', transcript: '' }
         extracted = {
           summary: parsed.summary,
           keyDecisions: parsed.keyDecisions ?? [],
           actionItems: parsed.actionItems ?? [],
           followUps: parsed.followUps ?? [],
           unresolved: parsed.unresolved ?? [],
+          byAgenda,
+          other,
         }
       } catch (_) {
         /* fall through with empty defaults — transcript still saved. */
@@ -377,6 +468,30 @@ or mixed), every line you output must be in English.
     )
     if (saveErr) {
       return json({ error: `Save failed: ${saveErr.message}` }, 500)
+    }
+
+    // Per-agenda summary persistence: write each agenda's summary + transcript
+    // excerpt into meeting_agendas.summary as JSON so the FE can show
+    // anganda-grouped sections without a separate table.
+    if (extracted.byAgenda.length > 0) {
+      const updates = extracted.byAgenda.map((b) =>
+        supabase
+          .from('meeting_agendas')
+          .update({
+            summary: JSON.stringify({
+              summary: b.summary,
+              transcript: b.transcript,
+            }),
+            generated_by_ai: true,
+          })
+          .eq('id', b.agendaId),
+      )
+      const results = await Promise.all(updates)
+      for (const r of results) {
+        if (r.error) {
+          console.error('[analyze-audio] meeting_agendas summary update', r.error)
+        }
+      }
     }
 
     // Persist per-turn segments so the UI can render timestamps and so

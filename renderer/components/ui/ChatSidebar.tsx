@@ -24,6 +24,8 @@ export type ChatSessionItem = {
   unreadCount?: number
   /** Whether unread items include @mentions (renders @ icon in the badge). */
   hasMention?: boolean
+  /** User id of the session creator — used to gate the right-click delete menu. */
+  createdBy?: string | null
 }
 
 export type ChatSessionGroup = {
@@ -64,6 +66,11 @@ type Props = {
   /** id of the currently selected session/dm row. */
   activeId?: string
   onItemClick?: (id: string, kind: 'session' | 'dm') => void
+
+  /** Current user id — used to decide which sessions show the Delete action. */
+  currentUserId?: string
+  /** Called when the user picks "Delete" from a session row's context menu. */
+  onDeleteSession?: (id: string) => void
 }
 
 // ─── Sub-pieces ─────────────────────────────────────────────────────────────
@@ -150,15 +157,18 @@ function SessionRow({
   item,
   active,
   onClick,
+  onContextMenu,
 }: {
   item: ChatSessionItem
   active: boolean
   onClick?: () => void
+  onContextMenu?: (e: React.MouseEvent) => void
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={onContextMenu}
       aria-current={active ? 'page' : undefined}
       className={`flex items-center justify-between gap-[10px] px-[10px] py-[8px] rounded-[8px] w-full transition-colors ${
         active
@@ -187,6 +197,57 @@ function SessionRow({
         <NotificationBadge count={item.unreadCount} hasMention={item.hasMention} />
       )}
     </button>
+  )
+}
+
+function ContextMenu({
+  x,
+  y,
+  canDelete,
+  onDelete,
+  onClose,
+}: {
+  x: number
+  y: number
+  canDelete: boolean
+  onDelete: () => void
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose() }} />
+      <div
+        className="fixed z-50 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md py-[5px] flex flex-col min-w-[160px]"
+        style={{ left: x, top: y }}
+      >
+        <button
+          type="button"
+          disabled={!canDelete}
+          title={canDelete ? undefined : 'Only the session creator can delete this session'}
+          onClick={() => {
+            if (!canDelete) return
+            onClose()
+            onDelete()
+          }}
+          className={`flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left transition-colors ${
+            canDelete
+              ? 'text-red-main hover:bg-white-item cursor-pointer'
+              : 'text-gray-secondary cursor-not-allowed'
+          }`}
+        >
+          <Icon name="Cross" size={15} />
+          <span>Delete session</span>
+        </button>
+      </div>
+    </>
   )
 }
 
@@ -316,6 +377,8 @@ export default function ChatSidebar({
   dms = [],
   activeId,
   onItemClick,
+  currentUserId,
+  onDeleteSession,
 }: Props) {
   // Slide-in: start at 0 width, expand to 250px on the next paint so the
   // sidebar animates open whenever the Messages route mounts it.
@@ -324,6 +387,15 @@ export default function ChatSidebar({
     const id = requestAnimationFrame(() => setOpen(true))
     return () => cancelAnimationFrame(id)
   }, [])
+
+  // Right-click context menu — appears at the cursor for sessions the current
+  // user created. `targetId` is the session id under the menu.
+  const [menu, setMenu] = useState<{
+    x: number
+    y: number
+    targetId: string
+    canDelete: boolean
+  } | null>(null)
 
   return (
     <aside
@@ -398,14 +470,27 @@ export default function ChatSidebar({
           {sessionGroups.map((g, i) => (
             <div key={`${g.label}-${i}`} className="flex flex-col gap-[3px]">
               <GroupSubHeader>{g.label}</GroupSubHeader>
-              {g.items.map((it) => (
-                <SessionRow
-                  key={it.id}
-                  item={it}
-                  active={it.id === activeId}
-                  onClick={() => onItemClick?.(it.id, 'session')}
-                />
-              ))}
+              {g.items.map((it) => {
+                const canDelete =
+                  !!currentUserId && !!it.createdBy && it.createdBy === currentUserId
+                return (
+                  <SessionRow
+                    key={it.id}
+                    item={it}
+                    active={it.id === activeId}
+                    onClick={() => onItemClick?.(it.id, 'session')}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      setMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        targetId: it.id,
+                        canDelete,
+                      })
+                    }}
+                  />
+                )
+              })}
             </div>
           ))}
         </div>
@@ -425,6 +510,16 @@ export default function ChatSidebar({
           </div>
         </div>
       </div>
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          canDelete={menu.canDelete}
+          onClose={() => setMenu(null)}
+          onDelete={() => onDeleteSession?.(menu.targetId)}
+        />
+      )}
     </aside>
   )
 }

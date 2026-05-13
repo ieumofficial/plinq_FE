@@ -7,6 +7,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  deleteChatSession,
   getChatMessages,
   getChatSessionMembers,
   getChatSessions,
@@ -260,5 +261,19 @@ export function useChatMessages(sessionId: string | null | undefined) {
     queryFn: () => getChatMessages(sessionId!),
     enabled: !!sessionId,
     staleTime: 10 * 1000,
+  })
+}
+
+/** Delete a chat session. Invalidates chat caches on success. */
+export function useDeleteChatSession() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (sessionId: string) => {
+      const result = await deleteChatSession(sessionId)
+      if ('error' in result) throw new Error(result.error)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.chat.all })
+    },
   })
 }

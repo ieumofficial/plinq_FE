@@ -1144,6 +1144,22 @@ export async function createChatSession(
 }
 
 /**
+ * Delete a chat session. RLS policy enforces creator-only access on the DB
+ * side; this just issues the DELETE. Related rows (messages, members) are
+ * removed via FK ON DELETE CASCADE.
+ */
+export async function deleteChatSession(
+  sessionId: string
+): Promise<{ ok: true } | { error: string }> {
+  const { error } = await supabase.from('chat_sessions').delete().eq('id', sessionId)
+  if (error) {
+    console.error('[queries] deleteChatSession', error)
+    return { error: error.message }
+  }
+  return { ok: true }
+}
+
+/**
  * Open (or create) a 1-1 DM session between the current user and `otherUserId`
  * in the given org. Returns the session id.
  */

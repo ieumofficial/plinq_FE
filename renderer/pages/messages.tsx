@@ -20,6 +20,7 @@ import {
   useChatSessionMembers,
   useChatSessions,
   useCurrentUser,
+  useDeleteChatSession,
   useMyOrg,
   useUserProjects,
 } from '../lib/hooks'
@@ -125,6 +126,7 @@ function buildSessionGroups(sessions: ChatSessionWithMeta[]): {
     name: s.name ?? '(untitled)',
     projectTag: s.project_name ?? undefined,
     unreadCount: s.unread_count,
+    createdBy: s.created_by,
   })
   const groups: ChatSessionGroup[] = []
   if (orgWide.length > 0)
@@ -173,6 +175,18 @@ function MessagesBody() {
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [draft, setDraft] = useState('')
+  const { mutate: deleteSession } = useDeleteChatSession()
+
+  const handleDeleteSession = (id: string) => {
+    const target = sessions.find((s) => s.id === id)
+    const name = target?.name ?? 'this session'
+    if (!window.confirm(`Delete #${name}? This cannot be undone.`)) return
+    deleteSession(id, {
+      onSuccess: () => {
+        if (activeSessionId === id) setActiveSessionId(null)
+      },
+    })
+  }
 
   useEffect(() => {
     if (!activeSessionId && sessions.length > 0) {
@@ -393,6 +407,8 @@ function MessagesBody() {
         activeId={activeSessionId ?? undefined}
         onItemClick={(id) => setActiveSessionId(id)}
         onCreateClick={() => setCreateOpen(true)}
+        currentUserId={user?.id}
+        onDeleteSession={handleDeleteSession}
       />
 
       {/* Conversation pane */}

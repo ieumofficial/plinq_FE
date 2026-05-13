@@ -16,7 +16,7 @@ import ProjectLabel from './ui/ProjectLabel'
 import { createChatSession } from '../lib/queries'
 import { useCurrentUser, useOrgMembers, useUserProjects } from '../lib/hooks'
 import { queryKeys } from '../lib/queryKeys'
-import type { ChatSessionPrivacy, UserRow } from '../lib/types'
+import type { UserRow } from '../lib/types'
 
 type Mode = 'project' | 'members'
 
@@ -44,7 +44,6 @@ export default function CreateChatSessionModal({
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [privacy, setPrivacy] = useState<ChatSessionPrivacy>('public')
   const [mode, setMode] = useState<Mode>('project')
   const [projectId, setProjectId] = useState<string | null>(null)
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
@@ -59,7 +58,6 @@ export default function CreateChatSessionModal({
     if (!open) return
     setName('')
     setDescription('')
-    setPrivacy('public')
     setMode('project')
     setProjectId(null)
     setMemberIds([])
@@ -95,7 +93,7 @@ export default function CreateChatSessionModal({
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, name, description, privacy, mode, projectId, memberIds, projectPickerOpen])
+  }, [open, name, description, mode, projectId, memberIds, projectPickerOpen])
 
   const project = useMemo(
     () => projects.find((p) => p.id === projectId),
@@ -151,7 +149,6 @@ export default function CreateChatSessionModal({
       org_id: orgId,
       name: name.trim().replace(/^#/, ''),
       description: description || undefined,
-      privacy,
       project_id: mode === 'project' ? projectId : null,
       member_user_ids: mode === 'members' ? memberIds : undefined,
     })
@@ -191,49 +188,23 @@ export default function CreateChatSessionModal({
 
         {/* Body */}
         <div className="px-[20px] py-[20px] flex flex-col gap-[15px]">
-          {/* Session name + Privacy */}
-          <div className="grid grid-cols-[1fr_180px] gap-[15px]">
-            <div className="flex flex-col gap-1 relative">
-              <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                Session Name *
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-secondary text-[12px] pointer-events-none">
-                  #
-                </span>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="cutover-war-room"
-                  autoFocus
-                  className="w-full bg-white-white border border-gray-border rounded-lg pl-7 pr-3 py-2 text-[12px] text-black outline-none focus:border-primary-main h-[39px]"
-                />
-              </div>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                Privacy *
-              </label>
-              <div className="bg-white-item flex items-start gap-[5px] p-[5px] rounded-[5px] h-[39px]">
-                {(['public', 'private'] as ChatSessionPrivacy[]).map((p) => {
-                  const sel = privacy === p
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setPrivacy(p)}
-                      className={`flex-1 flex items-center justify-center px-[10px] py-[5px] rounded-[5px] text-[12px] font-semibold whitespace-nowrap transition-colors ${
-                        sel
-                          ? 'bg-[#E6ECEF] text-primary-main'
-                          : 'bg-white-item text-black hover:bg-white-white'
-                      }`}
-                    >
-                      {p === 'public' ? 'Public' : 'Private'}
-                    </button>
-                  )
-                })}
-              </div>
+          {/* Session name */}
+          <div className="flex flex-col gap-1 relative">
+            <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
+              Session Name *
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-secondary text-[12px] pointer-events-none">
+                #
+              </span>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="cutover-war-room"
+                autoFocus
+                className="w-full bg-white-white border border-gray-border rounded-lg pl-7 pr-3 py-2 text-[12px] text-black outline-none focus:border-primary-main h-[39px]"
+              />
             </div>
           </div>
 

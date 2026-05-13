@@ -408,11 +408,37 @@ function MeetingDetailBody({
       {/* Generated Action Items */}
       {insights && insights.actionItems.length > 0 && (
         <section className="flex flex-col gap-[12px]">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <h2 className="text-black text-[16px] font-semibold">
               {insights.actionItems.length} actions extracted from the
               conversation
             </h2>
+            <div className="flex items-center gap-[15px] text-[12px] shrink-0">
+              <button
+                type="button"
+                onClick={() => void handleAcceptAll(insights.actionItems)}
+                disabled={
+                  accept.running ||
+                  accept.inserted !== null ||
+                  insights.actionItems.length === 0
+                }
+                className="text-blue-main hover:underline disabled:text-gray-secondary disabled:no-underline disabled:cursor-not-allowed"
+              >
+                {accept.running
+                  ? 'Accepting…'
+                  : accept.inserted !== null
+                    ? `Accepted ${accept.inserted}`
+                    : `Accept all ${insights.actionItems.length}`}
+              </button>
+              <button
+                type="button"
+                disabled
+                title="Manual task creation coming next iteration"
+                className="text-gray-main disabled:text-gray-secondary disabled:cursor-not-allowed"
+              >
+                + Add manually
+              </button>
+            </div>
           </div>
           <div className="border border-gray-border-light rounded-[10px] overflow-hidden bg-white-white">
             {insights.actionItems.map((item, i) => (

@@ -242,17 +242,18 @@ export default function InPersonRecorder({ meetingId, busy, onAnalyze }: Props) 
             Stop &amp; analyze
           </button>
         </div>
-        {(finalCaption || interimCaption) && (
-          <p
-            className="text-[11px] leading-[16px] text-gray-main max-w-[320px] text-right max-h-[64px] overflow-y-auto"
-            aria-live="polite"
-          >
-            {finalCaption}
-            {interimCaption && (
-              <span className="text-gray-secondary"> {interimCaption}</span>
-            )}
-          </p>
-        )}
+        <p
+          className="text-[11px] leading-[16px] text-gray-main max-w-[320px] text-right max-h-[64px] overflow-y-auto min-h-[16px]"
+          aria-live="polite"
+        >
+          {finalCaption}
+          {interimCaption && (
+            <span className="text-gray-secondary"> {interimCaption}</span>
+          )}
+          {!finalCaption && !interimCaption && (
+            <span className="text-gray-secondary italic">Listening…</span>
+          )}
+        </p>
       </div>
     )
   }

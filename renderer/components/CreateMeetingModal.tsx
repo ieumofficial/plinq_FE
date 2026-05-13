@@ -530,9 +530,11 @@ export default function CreateMeetingModal({
             )}
           </div>
 
-          {/* Date / Start / End / Repeat / Repeat Until — only when scheduling */}
+          {/* Date / Start / End / Repeat / Repeat Until — only when scheduling.
+              Wider START/END columns so Korean locale "오후 02:00" fits
+              without truncating the AM/PM marker. */}
           {when === 'later' && (
-          <div className="grid grid-cols-[210px_85px_85px_105px_150px] gap-[8px]">
+          <div className="grid grid-cols-[180px_110px_110px_100px_130px] gap-[8px]">
             {/* Date */}
             <div className="flex flex-col gap-1">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
@@ -568,7 +570,6 @@ export default function CreateMeetingModal({
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
                 className="bg-white-white border border-gray-border rounded-lg px-3 py-2 text-[12px] text-black outline-none focus:border-primary-main h-[39px]"
-                style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
               />
             </div>
             {/* End */}
@@ -581,7 +582,6 @@ export default function CreateMeetingModal({
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
                 className="bg-white-white border border-gray-border rounded-lg px-3 py-2 text-[12px] text-black outline-none focus:border-primary-main h-[39px]"
-                style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
               />
             </div>
             {/* Repeat */}

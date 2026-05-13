@@ -5,6 +5,17 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from './supabase'
 
+export type AgendaBucket = {
+  agendaId: string
+  summary: string
+  transcript: string
+}
+
+export type OtherBucket = {
+  summary: string
+  transcript: string
+}
+
 export type ExtractedMeeting = {
   summary?: string
   keyDecisions: string[]
@@ -15,6 +26,11 @@ export type ExtractedMeeting = {
   }[]
   followUps: string[]
   unresolved: string[]
+  /** Per-agenda summary + transcript excerpt — populated when the
+   *  meeting had agendas at analysis time. Empty array on legacy rows. */
+  byAgenda: AgendaBucket[]
+  /** Content that did not fit any agenda. Empty fields when nothing. */
+  other: OtherBucket
 }
 
 export type MeetingMinutesRow = {
@@ -90,12 +106,33 @@ export function parseSummary(raw: string | null | undefined): ExtractedMeeting |
   if (trimmed.startsWith('{')) {
     try {
       const obj = JSON.parse(trimmed)
+      const byAgenda: AgendaBucket[] = []
+      if (Array.isArray(obj.byAgenda)) {
+        for (const b of obj.byAgenda) {
+          if (!b || typeof b.agendaId !== 'string') continue
+          byAgenda.push({
+            agendaId: b.agendaId,
+            summary: typeof b.summary === 'string' ? b.summary : '',
+            transcript: typeof b.transcript === 'string' ? b.transcript : '',
+          })
+        }
+      }
+      const other: OtherBucket =
+        obj.other && typeof obj.other === 'object'
+          ? {
+              summary: typeof obj.other.summary === 'string' ? obj.other.summary : '',
+              transcript:
+                typeof obj.other.transcript === 'string' ? obj.other.transcript : '',
+            }
+          : { summary: '', transcript: '' }
       return {
         summary: obj.summary,
         keyDecisions: obj.keyDecisions ?? [],
         actionItems: obj.actionItems ?? [],
         followUps: obj.followUps ?? [],
         unresolved: obj.unresolved ?? [],
+        byAgenda,
+        other,
       }
     } catch {
       /* fall through */
@@ -107,7 +144,82 @@ export function parseSummary(raw: string | null | undefined): ExtractedMeeting |
     actionItems: [],
     followUps: [],
     unresolved: [],
+    byAgenda: [],
+    other: { summary: '', transcript: '' },
   }
+}
+
+export type MeetingAgendaRow = {
+  id: string
+  meeting_id: string
+  title: string
+  order: number
+  /** AI-generated summary for this agenda — JSON `{summary, transcript}`
+   *  written by `analyze-audio`, or null if the meeting hasn't been
+   *  analyzed (or analysis predates agenda-grouping). */
+  summary: string | null
+  generated_by_ai: boolean
+}
+
+export type ParsedMeetingAgenda = {
+  id: string
+  title: string
+  order: number
+  summary: string | null
+  transcript: string | null
+  generated_by_ai: boolean
+}
+
+export const meetingAgendasQueryKey = (meetingId: string) =>
+  ['meeting_agendas', meetingId] as const
+
+/** Fetch the meeting's agenda items ordered by `order`, with each
+ *  agenda's AI summary JSON pre-parsed into `{summary, transcript}` so
+ *  the UI can read fields directly. */
+export function useMeetingAgendas(meetingId: string | null | undefined) {
+  return useQuery({
+    queryKey: meetingAgendasQueryKey(meetingId ?? ''),
+    enabled: !!meetingId,
+    queryFn: async (): Promise<ParsedMeetingAgenda[]> => {
+      if (!meetingId) return []
+      const { data, error } = await supabase
+        .from('meeting_agendas')
+        .select('id, meeting_id, title, order, summary, generated_by_ai')
+        .eq('meeting_id', meetingId)
+        .order('order', { ascending: true })
+      if (error) throw error
+      const rows = (data as MeetingAgendaRow[]) ?? []
+      return rows.map((r) => {
+        let summary: string | null = null
+        let transcript: string | null = null
+        if (r.summary) {
+          const t = r.summary.trim()
+          if (t.startsWith('{')) {
+            try {
+              const obj = JSON.parse(t) as {
+                summary?: string
+                transcript?: string
+              }
+              summary = obj.summary ?? null
+              transcript = obj.transcript ?? null
+            } catch {
+              summary = r.summary
+            }
+          } else {
+            summary = r.summary
+          }
+        }
+        return {
+          id: r.id,
+          title: r.title,
+          order: r.order,
+          summary,
+          transcript,
+          generated_by_ai: r.generated_by_ai,
+        }
+      })
+    },
+  })
 }
 
 /**

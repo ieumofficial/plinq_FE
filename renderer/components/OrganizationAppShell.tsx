@@ -8,7 +8,12 @@ import CreateNewMenu, { type CreateType } from './CreateNewMenu'
 import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
-import { useCurrentUser, useMyOrg, useOrgMembers } from '../lib/hooks'
+import {
+  useCurrentUser,
+  useMyOrg,
+  useOrgMembers,
+  useUserProjects,
+} from '../lib/hooks'
 import { useSidebarPref, useSpaceTransition } from '../lib/sidebarPref'
 
 // ─── Create New context ─────────────────────────────────────────────────────
@@ -29,8 +34,7 @@ export type OrgActiveKey =
   | 'dashboard'
   | 'projects'
   | 'members'
-  | 'knowledge'
-  | 'org-chart'
+  | 'settings'
 
 const PERSONAL_RAIL_ITEMS: NavItem[] = [
   { key: 'dashboard', icon: 'Dashboard', label: 'Dashboard' },
@@ -75,6 +79,7 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
   const { data: user, isFetched: userFetched } = useCurrentUser()
   const { data: org } = useMyOrg(user?.id)
   const { data: members = [] } = useOrgMembers(orgId)
+  const { data: orgProjects = [] } = useUserProjects(user?.id)
   const { collapsed: stackedSidebar, toggle: toggleSidebar } = useSidebarPref()
   useSpaceTransition(`org:${orgId}`)
 
@@ -113,10 +118,9 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
 
   const items: StackedNavItem[] = [
     { key: 'dashboard', icon: 'Dashboard', label: 'Dashboard' },
-    { key: 'projects', icon: 'Folder', label: 'Projects' },
+    { key: 'projects', icon: 'Folder', label: 'Projects', count: orgProjects.length },
     { key: 'members', icon: 'People', label: 'Members', count: members.length },
-    { key: 'knowledge', icon: 'File', label: 'Knowledge / Governance' },
-    { key: 'org-chart', icon: 'Organization', label: 'Org Chart' },
+    { key: 'settings', icon: 'Settings', label: 'Settings' },
   ]
 
   const goPage = (key: OrgActiveKey) => {

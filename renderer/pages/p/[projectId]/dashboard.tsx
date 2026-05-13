@@ -248,24 +248,28 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
 
   // Dynamic capacity hooks — slice each list to fit. `min: 1` ensures every
   // section keeps at least one row visible even at the smallest viewport.
-  const [kanbanColRef, kanbanFit] = useFitCount<HTMLDivElement>({
+  // The third tuple value is the unused pixels under the fit count; we use
+  // it to decide whether a trailing "+N more" chip can be added without
+  // dropping one of the visible items.
+  const [kanbanColRef, kanbanFit, kanbanFree] = useFitCount<HTMLDivElement>({
     itemHeight: 78,
     gap: 8,
     min: 1,
     max: 6,
   })
-  const [meetingsListRef, meetingsFit] = useFitCount<HTMLDivElement>({
+  const [meetingsListRef, meetingsFit, meetingsFree] = useFitCount<HTMLDivElement>({
     itemHeight: 62,
     gap: 5,
     min: 1,
     max: 4,
   })
-  const [membersListRef, membersFit] = useFitCount<HTMLDivElement>({
+  const [membersListRef, membersFit, membersFree] = useFitCount<HTMLDivElement>({
     itemHeight: 52,
     gap: 5,
     min: 1,
     max: 4,
   })
+  const TRAILING_PX = 22
 
   const stats = useMemo(() => {
     const byStatus = new Map<TaskStatusDb, number>()
@@ -405,11 +409,15 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
           >
             <div className="grid grid-cols-4 gap-[10px] flex-1 min-h-0">
               {kanbanByCol.map((c, colIdx) => {
-                // Swap one card for the "+N more" line when overflow exists,
-                // so the indicator always has room without clipping the last card.
                 const hasOverflow = c.items.length > kanbanFit
+                // Only the first column owns the measurement — its leftover
+                // free space is a fair proxy for all four columns since they
+                // share the same height. Keep the fitted count when there's
+                // already room for the chip; drop one otherwise.
                 const visible = hasOverflow
-                  ? Math.max(1, kanbanFit - 1)
+                  ? kanbanFree >= TRAILING_PX
+                    ? kanbanFit
+                    : Math.max(1, kanbanFit - 1)
                   : kanbanFit
                 const hidden = c.items.length - visible
                 return (
@@ -489,7 +497,9 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
               (() => {
                 const hasOverflow = upcomingMeetings.length > meetingsFit
                 const visible = hasOverflow
-                  ? Math.max(1, meetingsFit - 1)
+                  ? meetingsFree >= TRAILING_PX
+                    ? meetingsFit
+                    : Math.max(1, meetingsFit - 1)
                   : meetingsFit
                 const hidden = upcomingMeetings.length - visible
                 return (
@@ -555,9 +565,8 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
                 doneLabel={`${stats.done} of ${stats.total} tasks`}
               />
             </div>
-            {/* Velocity / Days-left tiles — hidden on short viewports where
-                the card would otherwise clip the health breakdown bars. */}
-            <div className="hidden [@media(min-height:900px)]:grid grid-cols-2 gap-[10px] border-t border-gray-border-light pt-[15px] mt-[10px]">
+            {/* Velocity / Days-left tiles — hidden on the shortest viewports. */}
+            <div className="hidden [@media(min-height:800px)]:grid grid-cols-2 gap-[10px] border-t border-gray-border-light pt-[15px] mt-[10px]">
               <div
                 className="flex flex-col gap-[2px] p-[12px] rounded-[10px]"
                 style={{ backgroundColor: '#F8FAFB' }}
@@ -609,7 +618,9 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
                 </p>
               </div>
             </div>
-            <div className="hidden [@media(min-height:900px)]:flex flex-col gap-[6px] mt-[15px]">
+            {/* Per-status breakdown bars — the lowest-priority chunk, so
+                this is the first piece to go when the viewport gets short. */}
+            <div className="hidden [@media(min-height:950px)]:flex flex-col gap-[6px] mt-[15px]">
               {HEALTH_BREAKDOWN.map((b) => {
                 const count = stats.byStatus.get(b.key) ?? 0
                 const pct =
@@ -668,7 +679,9 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
             ) : (() => {
               const hasOverflow = members.length > membersFit
               const visible = hasOverflow
-                ? Math.max(1, membersFit - 1)
+                ? membersFree >= TRAILING_PX
+                  ? membersFit
+                  : Math.max(1, membersFit - 1)
                 : membersFit
               const hidden = members.length - visible
               return (

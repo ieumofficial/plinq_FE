@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import OrganizationAppShell from '../../../components/OrganizationAppShell'
@@ -15,6 +15,7 @@ import {
 } from '../../../lib/hooks'
 import { userToMember } from '../../../lib/types'
 import type { ProjectStatusDb } from '../../../lib/types'
+import { usePinnedProjects } from '../../../lib/pinPref'
 
 // ─── Health helpers ───────────────────────────────────────────────────────────
 
@@ -44,6 +45,94 @@ function projectHealth(p: { status: ProjectStatusDb; nextDueDate: string | null 
   }
   if (p.status === 'done') return 'healthy'
   return 'on-track'
+}
+
+// ─── Quarter picker ──────────────────────────────────────────────────────────
+
+const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'] as const
+type Quarter = (typeof QUARTERS)[number]
+
+function QuarterPicker({
+  year,
+  quarter,
+  years,
+  onChange,
+}: {
+  year: number
+  quarter: Quarter
+  years: number[]
+  onChange: (next: { year: number; quarter: Quarter }) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="h-[32px] px-[12px] inline-flex items-center gap-[6px] rounded-[5px] border border-solid border-gray-border-light bg-white-white hover:bg-white-item text-black text-[12px]"
+      >
+        <span>
+          {quarter} {year}
+        </span>
+        <Icon name="ArrowRight" size={13} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-[36px] z-20 w-[200px] bg-white-white border border-gray-border-light rounded-[8px] shadow-[0_8px_24px_rgba(22,36,46,0.12)] overflow-hidden">
+          <ul className="flex flex-col py-[5px]">
+            {years.map((y) => {
+              const active = y === year
+              return (
+                <li key={y}>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ year: y, quarter })}
+                    className={`w-full px-[15px] py-[6px] text-left text-[12px] hover:bg-white-item ${
+                      active ? 'text-black font-semibold' : 'text-gray-main'
+                    }`}
+                  >
+                    {y}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="border-t border-solid border-gray-border-light grid grid-cols-4 p-[5px] gap-[3px]">
+            {QUARTERS.map((q) => {
+              const active = q === quarter
+              return (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => {
+                    onChange({ year, quarter: q })
+                    setOpen(false)
+                  }}
+                  className={`py-[6px] text-[12px] rounded-[5px] ${
+                    active
+                      ? 'bg-white-item text-black font-semibold'
+                      : 'text-gray-main hover:bg-white-item'
+                  }`}
+                >
+                  {q}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ─── Small building blocks ────────────────────────────────────────────────────
@@ -79,15 +168,15 @@ function MetricCard({
   hint: string
 }) {
   return (
-    <div className="flex-1 min-w-0 bg-white-white border border-gray-border-light rounded-[10px] px-[15px] py-[10px] flex flex-col gap-[3px]">
+    <div className="flex-1 min-w-0 bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[20px] flex flex-col gap-[3px]">
       <p
         className="text-[10px] font-medium uppercase tracking-[1.5px]"
         style={{ color: eyebrowColor }}
       >
         {eyebrow}
       </p>
-      <p className="text-black text-[26px] font-semibold leading-none">{value}</p>
-      <p className="text-gray-main text-[10px] leading-[1.3]">{hint}</p>
+      <p className="text-black text-[38px] font-semibold leading-none">{value}</p>
+      <p className="text-gray-main text-[10px] leading-[1.5]">{hint}</p>
     </div>
   )
 }
@@ -107,7 +196,7 @@ function FeatureCallout({
 }) {
   return (
     <div
-      className="flex-1 min-w-0 border border-gray-border-light rounded-[10px] px-[15px] py-[10px] flex flex-col gap-[5px] items-start"
+      className="flex-1 min-w-0 border border-gray-border-light rounded-[10px] px-[20px] py-[20px] flex flex-col gap-[8px] items-start"
       style={{
         backgroundImage:
           'linear-gradient(167deg, rgb(46, 67, 78) 0%, rgb(31, 47, 56) 100%)',
@@ -116,12 +205,16 @@ function FeatureCallout({
       <p className="text-[10px] font-medium uppercase tracking-[1.5px] text-[#b8c5cf] w-full">
         {eyebrow}
       </p>
-      <p className="text-white text-[14px] font-semibold leading-tight w-full line-clamp-2">{title}</p>
-      <p className="text-[#b5c2cc] text-[10px] leading-[1.3] w-full line-clamp-2">{body}</p>
+      <p className="text-white text-[14px] font-semibold leading-tight w-full line-clamp-2">
+        {title}
+      </p>
+      <p className="text-[#b5c2cc] text-[10px] leading-[1.4] w-full line-clamp-2">
+        {body}
+      </p>
       <button
         type="button"
         onClick={onCta}
-        className="mt-auto bg-white border border-gray-border-light rounded-[5px] px-[15px] py-[5px] text-black text-[11px]"
+        className="mt-auto bg-white border border-gray-border-light rounded-[5px] px-[15px] py-[6px] text-black text-[11px]"
       >
         {ctaLabel}
       </button>
@@ -136,6 +229,7 @@ function ProjectMiniCard({
   members,
   progress,
   health,
+  onOpen,
 }: {
   name: string
   color?: string | null
@@ -143,39 +237,52 @@ function ProjectMiniCard({
   members: Member[]
   progress: number
   health: Health
+  onOpen?: () => void
 }) {
   const pct = Math.max(0, Math.min(100, progress))
   const healthColor = HEALTH_COLOR[health]
   return (
-    <div className="bg-[#f8fafb] rounded-[10px] p-[15px] flex flex-col justify-between min-h-[115px] gap-[10px]">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-[10px] min-w-0">
-          <ProjectLabel name={name} color={color ?? 'blue'} size="md" />
-          <span className="text-black text-[20px] font-semibold truncate">{name}</span>
+    <button
+      type="button"
+      onClick={onOpen}
+      className="bg-[#f8fafb] rounded-[10px] p-[15px] flex flex-col justify-between min-h-[115px] gap-[12px] text-left hover:bg-[#eef3f5] transition-colors"
+    >
+      {/* Top — name + description tight together. */}
+      <div className="flex flex-col gap-[4px] w-full min-w-0">
+        <div className="flex items-center justify-between gap-[10px]">
+          <div className="flex items-center gap-[10px] min-w-0">
+            <ProjectLabel name={name} color={color ?? 'blue'} size="md" />
+            <span className="text-black text-[20px] font-semibold truncate">
+              {name}
+            </span>
+          </div>
+          <div className="flex items-center gap-[5px] shrink-0">
+            <Tag color={healthColor} size="md">
+              {HEALTH_LABEL[health]}
+            </Tag>
+            <Icon name="ArrowRight" size={15} />
+          </div>
         </div>
-        <div className="flex items-center gap-[5px] shrink-0">
-          <Tag color={healthColor} size="md">
-            {HEALTH_LABEL[health]}
-          </Tag>
-          <Icon name="Pin" size={12} />
-        </div>
+        <p className="text-gray-main text-[10px] leading-[1.4] line-clamp-1 pl-[38px]">
+          {description}
+        </p>
       </div>
-      <p className="text-gray-main text-[10px] leading-[1.5] line-clamp-1">{description}</p>
-      <div className="flex items-center gap-[15px]">
+      {/* Bottom — avatars + progress bar + % */}
+      <div className="flex items-center gap-[15px] w-full">
         {members.length > 0 && (
           <UserGroup members={members} size={15} max={5} overflowVariant="blue" />
         )}
-        <div className="bg-gray-progress flex-1 h-[4px] rounded-full overflow-hidden">
+        <div className="bg-gray-progress flex-1 h-[7px] rounded-full overflow-hidden">
           <div className="bg-blue-main h-full rounded-full" style={{ width: `${pct}%` }} />
         </div>
         <span
-          className="text-black text-[10px] font-semibold tracking-[1px]"
+          className="text-black text-[13px] font-semibold tracking-[0.5px] shrink-0"
           style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
         >
           {pct}%
         </span>
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -357,13 +464,41 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
 
   const { data: members = [] } = useOrgMembers(orgId)
   const { data: allProjects = [] } = useUserProjects(userId)
+  const { pinned: pinnedProjectIds } = usePinnedProjects(orgId)
+
+  // Quarter picker — initialized to today's quarter; user can rewind a
+  // couple of years if they want a historical view.
+  const today = useMemo(() => new Date(), [])
+  const currentYear = today.getFullYear()
+  const currentQuarter: Quarter = (`Q${Math.floor(today.getMonth() / 3) + 1}` as Quarter)
+  const [selectedYear, setSelectedYear] = useState(currentYear)
+  const [selectedQuarter, setSelectedQuarter] = useState<Quarter>(currentQuarter)
+
+  // Projects whose next-due date sits inside the selected quarter. If a
+  // project has no due date yet we fall back to "include only when the
+  // selected quarter is the current one" so the dashboard isn't blank for
+  // an org that has only just-started projects.
+  const quarterProjects = useMemo(() => {
+    const qIndex = QUARTERS.indexOf(selectedQuarter)
+    const start = new Date(selectedYear, qIndex * 3, 1).getTime()
+    const end = new Date(selectedYear, qIndex * 3 + 3, 0, 23, 59, 59, 999).getTime()
+    const isCurrent =
+      selectedYear === currentYear && selectedQuarter === currentQuarter
+    return allProjects.filter((p) => {
+      if (p.nextDueDate) {
+        const t = new Date(p.nextDueDate).getTime()
+        return t >= start && t <= end
+      }
+      return isCurrent
+    })
+  }, [allProjects, selectedYear, selectedQuarter, currentYear, currentQuarter])
 
   const activeProjects = useMemo(
     () =>
-      allProjects.filter((p) =>
+      quarterProjects.filter((p) =>
         (['planned', 'in_progress', 'review'] as ProjectStatusDb[]).includes(p.status)
       ),
-    [allProjects]
+    [quarterProjects]
   )
 
   const onTrackCount = useMemo(
@@ -379,8 +514,8 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
     return n
   }, [activeProjects])
   const plannedCount = useMemo(
-    () => allProjects.filter((p) => p.status === 'planned').length,
-    [allProjects]
+    () => quarterProjects.filter((p) => p.status === 'planned').length,
+    [quarterProjects]
   )
 
   const stageCounts = useMemo<Record<Stage['key'], number>>(() => {
@@ -391,23 +526,23 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
       done: 0,
       blocked: 0,
     }
-    for (const p of allProjects) {
+    for (const p of quarterProjects) {
       acc[p.status] += p.tasksTotal
     }
     return acc
-  }, [allProjects])
+  }, [quarterProjects])
 
   const leadIds = useMemo(() => {
     const s = new Set<string>()
-    for (const p of allProjects) if (p.lead_id) s.add(p.lead_id)
+    for (const p of quarterProjects) if (p.lead_id) s.add(p.lead_id)
     return s
-  }, [allProjects])
+  }, [quarterProjects])
   const contributorIds = useMemo(() => {
     const s = new Set<string>()
-    for (const p of allProjects) for (const m of p.members) s.add(m.id)
+    for (const p of quarterProjects) for (const m of p.members) s.add(m.id)
     for (const id of leadIds) s.delete(id)
     return s
-  }, [allProjects, leadIds])
+  }, [quarterProjects, leadIds])
 
   const leadAvatars = useMemo(
     () => members.filter((m) => leadIds.has(m.id)).slice(0, 5).map(userToMember),
@@ -429,10 +564,10 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
       <div className="shrink-0 flex items-end justify-between gap-[10px]">
         <div className="flex flex-col gap-[5px]">
           <p className="text-red-main text-[10px] font-medium uppercase tracking-[1.5px]">
-            {orgName} · Q2 {new Date().getFullYear()}
+            {orgName} · {selectedQuarter} {selectedYear}
           </p>
           <h1 className="text-black text-[35px] font-semibold leading-tight">
-            {members.length} people, {allProjects.length} projects,{' '}
+            {members.length} people, {quarterProjects.length} projects,{' '}
             <em
               className="italic font-semibold text-gray-main"
               style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
@@ -441,14 +576,15 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
             </em>
           </h1>
         </div>
-        <div className="flex items-center gap-[10px]">
-          <Button size="compact" variant="secondary">
-            Q2 {new Date().getFullYear()}
-          </Button>
-          <Button size="compact" variant="secondary" iconLeft="Filter">
-            Filter
-          </Button>
-        </div>
+        <QuarterPicker
+          year={selectedYear}
+          quarter={selectedQuarter}
+          years={[currentYear - 2, currentYear - 1, currentYear]}
+          onChange={({ year, quarter }) => {
+            setSelectedYear(year)
+            setSelectedQuarter(quarter)
+          }}
+        />
       </div>
 
       {/* STATS ROW */}
@@ -456,8 +592,8 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
         <MetricCard
           eyebrow="Total projects"
           eyebrowColor="#2d5a9e"
-          value={allProjects.length}
-          hint={`${activeProjects.length} active`}
+          value={quarterProjects.length}
+          hint={`+${quarterProjects.length} this quarter`}
         />
         <MetricCard
           eyebrow="On track"
@@ -494,15 +630,15 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
         />
       </div>
 
-      {/* ACTIVE PROJECTS — flex-1 shared with the bottom row so we always
-          fit the viewport. Internal grid clips overflowing cards rather than
-          pushing the bottom row off-screen. */}
-      <section className="flex-1 min-h-0 bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[10px] overflow-hidden">
+      {/* ACTIVE PROJECTS — the Portfolio is the centerpiece, so it gets
+          the heavier share of the leftover space. The bottom strip clips
+          overflowing rows rather than scrolls. */}
+      <section className="flex-[1.6] min-h-0 bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[10px] overflow-hidden">
         <div className="shrink-0 flex items-center justify-between">
           <SectionEyebrow eyebrow="Portfolio" title="Active projects" />
           <div className="flex items-center gap-[10px]">
             <Tag color="gray" size="md" icon="Pin">
-              {`${activeProjects.length} active`}
+              {`${pinnedProjectIds.size} pinned`}
             </Tag>
             <Tag color="red" size="md">
               {`${atRiskCount} delayed`}
@@ -513,15 +649,17 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
               iconRight="ArrowRight"
               onClick={() => router.push(`/o/${orgId}/projects`)}
             >
-              {`View all ${allProjects.length}`}
+              {`View all ${quarterProjects.length}`}
             </Button>
           </div>
         </div>
         {activeProjects.length === 0 ? (
-          <p className="text-gray-secondary text-[12px]">No active projects yet.</p>
+          <p className="text-gray-secondary text-[12px]">
+            No active projects this quarter.
+          </p>
         ) : (
-          <div className="flex-1 min-h-0 grid grid-cols-2 gap-[10px] overflow-hidden auto-rows-[minmax(115px,1fr)]">
-            {activeProjects.map((p) => (
+          <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-2 gap-[10px] overflow-hidden">
+            {activeProjects.slice(0, 6).map((p) => (
               <ProjectMiniCard
                 key={p.id}
                 name={p.name}
@@ -530,15 +668,15 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
                 members={p.members.map(userToMember)}
                 progress={p.progressPct ?? 0}
                 health={projectHealth(p)}
+                onOpen={() => router.push(`/p/${p.id}/dashboard`)}
               />
             ))}
           </div>
         )}
       </section>
 
-      {/* BOTTOM ROW — shares remaining vertical space with the Portfolio
-          card above so neither one absorbs all the shrinkage on small
-          viewports. Internal sections clip overflow rather than scroll. */}
+      {/* BOTTOM ROW — slimmer strip beneath the Portfolio; clips overflow
+          rather than scrolls. */}
       <div className="flex-1 min-h-0 flex gap-[10px]">
         <section className="flex-1 min-w-0 bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[10px] overflow-hidden">
           <div className="flex items-center justify-between">
@@ -573,10 +711,10 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
             badgeColor="blue"
           />
           <MemberOverviewRow
-            label="All Members"
+            label="New members"
             count={members.length}
             avatars={allMemberAvatars}
-            caption={`Total in ${orgName}`}
+            caption={`Recently added to ${orgName}`}
             badge="Healthy"
             badgeColor="purple"
           />

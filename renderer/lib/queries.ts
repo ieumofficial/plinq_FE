@@ -824,7 +824,7 @@ export async function getProjectDocs(projectId: string): Promise<ProjectDoc[]> {
     return []
   }
   return (data ?? []).map((row) => {
-    const r = row as unknown as ProjectDoc & {
+    const r = row as ProjectDoc & {
       users: UserRow | UserRow[] | null
     }
     const u = Array.isArray(r.users) ? r.users[0] : r.users
@@ -841,6 +841,56 @@ export async function getProjectDocs(projectId: string): Promise<ProjectDoc[]> {
     }
   })
 }
+
+export type NewDocInput = {
+  project_id: string
+  name: string
+  source?: ProjectDoc['source']
+  file_url?: string | null
+  file_type?: string | null
+}
+
+export async function deleteKnowledgeDoc(
+  docId: string
+): Promise<{ ok: true } | { error: string }> {
+  const { error } = await supabase
+    .from('knowledge_documents')
+    .delete()
+    .eq('id', docId)
+  if (error) {
+    console.error('[queries] deleteKnowledgeDoc', error)
+    return { error: error.message }
+  }
+  return { ok: true }
+}
+
+export async function createKnowledgeDoc(
+  input: NewDocInput
+): Promise<{ id: string } | { error: string }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in' }
+
+  const { data, error } = await supabase
+    .from('knowledge_documents')
+    .insert({
+      project_id: input.project_id,
+      name: input.name.trim(),
+      source: input.source ?? 'uploaded',
+      file_url: input.file_url ?? null,
+      file_type: input.file_type ?? null,
+      uploaded_by: user.id,
+    })
+    .select('id')
+    .single()
+  if (error) {
+    console.error('[queries] createKnowledgeDoc', error)
+    return { error: error.message }
+  }
+  return { id: (data as { id: string }).id }
+}
+
 
 // ─── Calendar (month-range events) ───────────────────────────────────────────
 

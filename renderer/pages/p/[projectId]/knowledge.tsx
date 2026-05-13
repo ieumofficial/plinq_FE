@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import ProjectAppShell from '../../../components/ProjectAppShell'
@@ -5,22 +6,32 @@ import Button from '../../../components/ui/Button'
 import Icon from '../../../components/ui/Icon'
 import FileLabel, { type FileCategory } from '../../../components/ui/FileLabel'
 import UserGroup from '../../../components/ui/UserGroup'
+import FilterChecklist from '../../../components/ui/FilterChecklist'
+import NewDocModal from '../../../components/NewDocModal'
 import Table, {
   TableHeader,
   TableRow,
   TableCell,
   type Column,
 } from '../../../components/ui/Table'
-import { useProject, useProjectDocs } from '../../../lib/hooks'
+import {
+  useCurrentUser,
+  useDeleteKnowledgeDoc,
+  useProject,
+  useProjectDocs,
+  useProjectMembersWithRoles,
+} from '../../../lib/hooks'
+import { usePinnedDocs } from '../../../lib/pinPref'
 import { userToMember } from '../../../lib/types'
 import type { ProjectDoc } from '../../../lib/queries'
 
 const COLS: Column[] = [
   { key: 'title', label: 'Title', width: 'flex-[2]' },
-  { key: 'type', label: 'Type', width: 'w-[140px]' },
-  { key: 'tag', label: 'Tag', width: 'w-[200px]' },
-  { key: 'size', label: 'Size', width: 'w-[80px]' },
+  { key: 'type', label: 'Type', width: 'w-[120px]' },
+  { key: 'tag', label: 'Tag', width: 'w-[160px]' },
+  { key: 'size', label: 'Size', width: 'w-[70px]', className: 'ml-[20px]' },
   { key: 'edited', label: 'Edited', width: 'w-[140px]' },
+  { key: 'more', label: '', width: 'w-[40px]' },
 ]
 
 const SOURCE_TO_CATEGORY: Record<ProjectDoc['source'], FileCategory> = {
@@ -28,6 +39,16 @@ const SOURCE_TO_CATEGORY: Record<ProjectDoc['source'], FileCategory> = {
   meeting: 'decisions',
   auto_generated: 'references',
 }
+
+const TAG_OPTIONS: {
+  key: ProjectDoc['source']
+  label: string
+  color: string
+}[] = [
+  { key: 'uploaded', label: 'Project context', color: '#5B7FB6' },
+  { key: 'meeting', label: 'Decisions', color: '#B68A48' },
+  { key: 'auto_generated', label: 'References', color: '#588F6E' },
+]
 
 function relativeDate(iso: string): string {
   const d = new Date(iso)
@@ -37,6 +58,26 @@ function relativeDate(iso: string): string {
   if (diffDays === 1) return 'Yesterday'
   if (diffDays < 7) return `${diffDays}d ago`
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function useClickOutside(open: boolean, onClose: () => void) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open, onClose])
+  return ref
 }
 
 function PinnedCard({ doc }: { doc: ProjectDoc }) {
@@ -52,6 +93,7 @@ function PinnedCard({ doc }: { doc: ProjectDoc }) {
           </p>
         </div>
       </div>
+      <div className="h-px bg-gray-border-light w-full" />
       <div className="flex items-center justify-between gap-2">
         <FileLabel variant="text" category={cat} />
         {doc.uploader && (
@@ -70,136 +112,435 @@ function PinnedCard({ doc }: { doc: ProjectDoc }) {
 export default function KnowledgePage() {
   const router = useRouter()
   const projectId = router.query.projectId as string | undefined
-  const { data: project } = useProject(projectId)
-  const { data: docs = [] } = useProjectDocs(projectId)
-
-  const pinned = docs.slice(0, 3)
-  const all = docs
-
   if (!projectId) return null
-
   return (
     <>
       <Head>
         <title>plinq · Knowledge Base</title>
       </Head>
       <ProjectAppShell projectId={projectId} active="knowledge">
-        <div className="p-6 flex flex-col gap-6">
-          {/* Toolbar */}
-          <div className="flex items-end justify-between gap-4">
-            <div className="flex flex-col gap-[5px]">
-              <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                {(project?.name ?? '').toUpperCase()} · KNOWLEDGE BASE · {docs.length} DOCS
-              </p>
-              <h1 className="text-black text-[28px] font-semibold leading-tight">
-                The project's{' '}
-                <em
-                  className="italic text-blue-main font-medium"
-                  style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
-                >
-                  memory.
-                </em>
-              </h1>
-            </div>
-            <div className="flex items-center gap-[10px]">
-              <Button size="compact" variant="secondary" iconLeft="Filter">
-                Tag
-              </Button>
-              <Button size="compact" variant="secondary" iconLeft="Filter">
-                Sort: Recent
-              </Button>
-              <Button size="compact" iconLeft="Add">
-                New doc
-              </Button>
-            </div>
-          </div>
-
-          {/* Pinned */}
-          {pinned.length > 0 && (
-            <div className="flex flex-col gap-[10px]">
-              <div className="flex items-center gap-[10px]">
-                <Icon name="Pin" size={15} />
-                <h2 className="text-black text-[14px] font-semibold">Pinned</h2>
-                <span
-                  className="text-gray-secondary text-[12px] font-medium"
-                  style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
-                >
-                  {pinned.length}
-                </span>
-              </div>
-              <div className="flex gap-[10px]">
-                {pinned.map((d) => (
-                  <PinnedCard key={d.id} doc={d} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* All docs */}
-          <div className="flex flex-col gap-[10px]">
-            <div className="flex items-center gap-[10px]">
-              <h2 className="text-black text-[14px] font-semibold">All docs</h2>
-              <span
-                className="text-gray-secondary text-[12px] font-medium"
-                style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
-              >
-                {all.length}
-              </span>
-            </div>
-            <Table>
-              <TableHeader columns={COLS} />
-              {all.length === 0 ? (
-                <div className="px-4 py-8 text-center text-gray-secondary text-[12px]">
-                  No documents yet.
-                </div>
-              ) : (
-                all.map((d, i) => {
-                  const cat = SOURCE_TO_CATEGORY[d.source]
-                  return (
-                    <TableRow key={d.id} isLast={i === all.length - 1}>
-                      <TableCell width="flex-[2]">
-                        <span className="flex items-center gap-[10px]">
-                          <FileLabel variant="icon" category={cat} />
-                          <span className="text-[14px] text-black">{d.name}</span>
-                        </span>
-                      </TableCell>
-                      <TableCell width="w-[140px]">
-                        <span className="text-[14px] text-black">
-                          {d.file_type ?? 'Doc'}
-                        </span>
-                      </TableCell>
-                      <TableCell width="w-[200px]">
-                        <FileLabel variant="text" category={cat} />
-                      </TableCell>
-                      <TableCell width="w-[80px]">
-                        <span
-                          className="text-[12px] font-semibold tracking-[-0.2px] text-gray-main"
-                          style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
-                        >
-                          —
-                        </span>
-                      </TableCell>
-                      <TableCell width="w-[140px]">
-                        <span className="flex items-center gap-[8px]">
-                          {d.uploader && (
-                            <UserGroup
-                              members={[userToMember(d.uploader)]}
-                              size={20}
-                            />
-                          )}
-                          <span className="text-[12px] text-black">
-                            {relativeDate(d.uploaded_at)}
-                          </span>
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
-              )}
-            </Table>
-          </div>
-        </div>
+        <KnowledgeBody projectId={projectId} />
       </ProjectAppShell>
     </>
+  )
+}
+
+function KnowledgeBody({ projectId }: { projectId: string }) {
+  const { data: project } = useProject(projectId)
+  const { data: me } = useCurrentUser()
+  const { data: members = [] } = useProjectMembersWithRoles(projectId)
+  const { data: docs = [] } = useProjectDocs(projectId)
+  const { isPinned, toggle: togglePin } = usePinnedDocs(projectId)
+  const { mutate: deleteDoc } = useDeleteKnowledgeDoc()
+
+  const isAdmin = useMemo(() => {
+    if (!me) return false
+    return members.some((m) => m.id === me.id && m.role === 'admin')
+  }, [me, members])
+
+  const [tagFilter, setTagFilter] = useState<Set<ProjectDoc['source']>>(
+    () => new Set(TAG_OPTIONS.map((t) => t.key))
+  )
+  const [tagOpen, setTagOpen] = useState(false)
+  const tagRef = useClickOutside(tagOpen, () => setTagOpen(false))
+  const [sortRecent, setSortRecent] = useState(true)
+  const [newDocOpen, setNewDocOpen] = useState(false)
+  const [previewDoc, setPreviewDoc] = useState<ProjectDoc | null>(null)
+  const [rowMenuDoc, setRowMenuDoc] = useState<ProjectDoc | null>(null)
+  const rowMenuRef = useClickOutside(!!rowMenuDoc, () => setRowMenuDoc(null))
+
+  const allTagsOn = tagFilter.size === TAG_OPTIONS.length
+
+  const toggleTag = (key: ProjectDoc['source']) => {
+    setTagFilter((prev) => {
+      // From "All" mode → narrow to just this one tag.
+      if (prev.size === TAG_OPTIONS.length) return new Set([key])
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+  const toggleAllTag = () => {
+    setTagFilter((prev) =>
+      prev.size === TAG_OPTIONS.length
+        ? new Set()
+        : new Set(TAG_OPTIONS.map((t) => t.key))
+    )
+  }
+
+  const tagCounts = useMemo(() => {
+    const m = new Map<ProjectDoc['source'], number>()
+    for (const d of docs) m.set(d.source, (m.get(d.source) ?? 0) + 1)
+    return m
+  }, [docs])
+
+  const filtered = useMemo(() => {
+    let arr = docs
+    if (tagFilter.size < TAG_OPTIONS.length) {
+      arr = arr.filter((d) => tagFilter.has(d.source))
+    }
+    const sorted = [...arr].sort((a, b) => {
+      const da = new Date(a.uploaded_at).getTime()
+      const db = new Date(b.uploaded_at).getTime()
+      return sortRecent ? db - da : da - db
+    })
+    return sorted
+  }, [docs, tagFilter, sortRecent])
+
+  const pinned = useMemo(
+    () => docs.filter((d) => isPinned(d.id)),
+    [docs, isPinned]
+  )
+
+  const tagFilterLabel = allTagsOn ? 'Tag' : `Tag · ${tagFilter.size}`
+
+  return (
+    <div className="p-6 flex flex-col gap-6">
+      {/* Toolbar */}
+      <div className="flex items-end justify-between gap-4">
+        <div className="flex flex-col gap-[5px]">
+          <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
+            {(project?.name ?? '').toUpperCase()} · KNOWLEDGE BASE · {docs.length} DOCS
+          </p>
+          <h1 className="text-black text-[35px] font-semibold leading-tight">
+            The project's{' '}
+            <em
+              className="italic font-semibold text-gray-main"
+              style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
+            >
+              memory.
+            </em>
+          </h1>
+        </div>
+        <div className="flex items-center gap-[10px]">
+          <div ref={tagRef} className="relative">
+            <Button
+              size="compact"
+              variant="secondary"
+              iconLeft="Filter"
+              onClick={() => setTagOpen((s) => !s)}
+            >
+              {tagFilterLabel}
+            </Button>
+            {tagOpen && (
+              <div className="absolute top-[40px] right-0 z-20 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md p-[10px] flex flex-col gap-[2px] min-w-[240px]">
+                <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px] px-[2px] mb-[5px]">
+                  Tag
+                </p>
+                <FilterChecklist
+                  label="All"
+                  count={docs.length}
+                  color="#455E6A"
+                  checked={allTagsOn}
+                  onChange={toggleAllTag}
+                />
+                <div className="h-px bg-gray-border-light my-[5px]" />
+                {TAG_OPTIONS.map((t) => (
+                  <FilterChecklist
+                    key={t.key}
+                    label={t.label}
+                    count={tagCounts.get(t.key) ?? 0}
+                    color={t.color}
+                    checked={tagFilter.has(t.key)}
+                    onChange={() => toggleTag(t.key)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+          <Button
+            size="compact"
+            variant="secondary"
+            iconLeft="Filter"
+            onClick={() => setSortRecent((s) => !s)}
+          >
+            Sort: {sortRecent ? 'Recent' : 'Old'}
+          </Button>
+          <Button size="compact" iconLeft="Add" onClick={() => setNewDocOpen(true)}>
+            New doc
+          </Button>
+        </div>
+      </div>
+
+      {/* Pinned */}
+      {pinned.length > 0 && (
+        <div className="flex flex-col gap-[10px]">
+          <div className="flex items-center gap-[10px]">
+            <Icon name="Pin" size={15} className="text-black" />
+            <h2 className="text-black text-[14px] font-semibold">Pinned</h2>
+            <span
+              className="text-gray-secondary text-[12px] font-medium"
+              style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+            >
+              {pinned.length}
+            </span>
+          </div>
+          <div className="flex gap-[10px]">
+            {pinned.slice(0, 3).map((d) => (
+              <PinnedCard key={d.id} doc={d} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* All docs */}
+      <div className="flex flex-col gap-[10px]">
+        <div className="flex items-center gap-[10px]">
+          <h2 className="text-black text-[14px] font-semibold">All docs</h2>
+          <span
+            className="text-gray-secondary text-[12px] font-medium"
+            style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+          >
+            {filtered.length}
+          </span>
+        </div>
+        <Table>
+          <TableHeader columns={COLS} className="!gap-[20px]" />
+          {filtered.length === 0 ? (
+            <div className="px-4 py-8 text-center text-gray-secondary text-[12px]">
+              {docs.length === 0 ? 'No documents yet.' : 'No docs match the filter.'}
+            </div>
+          ) : (
+            filtered.map((d, i) => {
+              const cat = SOURCE_TO_CATEGORY[d.source]
+              const pinnedNow = isPinned(d.id)
+              return (
+                <TableRow
+                  key={d.id}
+                  isLast={i === filtered.length - 1}
+                  onClick={() => setPreviewDoc(d)}
+                  className="!gap-[20px]"
+                >
+                  <TableCell width="flex-[2]">
+                    <span className="flex items-center gap-[10px] min-w-0">
+                      <FileLabel variant="icon" category={cat} />
+                      {pinnedNow && (
+                        <Icon
+                          name="Pin"
+                          size={16}
+                          className="text-gray-main shrink-0"
+                        />
+                      )}
+                      <span className="text-[14px] text-black truncate">{d.name}</span>
+                    </span>
+                  </TableCell>
+                  <TableCell width="w-[120px]">
+                    <span className="text-[14px] text-gray-main">
+                      {d.file_type ?? 'Doc'}
+                    </span>
+                  </TableCell>
+                  <TableCell width="w-[160px]">
+                    <FileLabel variant="text" category={cat} />
+                  </TableCell>
+                  <TableCell width="w-[70px]" className="ml-[20px]">
+                    <span
+                      className="text-[12px] font-semibold tracking-[-0.2px] text-gray-main"
+                      style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+                    >
+                      —
+                    </span>
+                  </TableCell>
+                  <TableCell width="w-[140px]">
+                    <span className="flex items-center gap-[8px]">
+                      {d.uploader && (
+                        <UserGroup members={[userToMember(d.uploader)]} size={20} />
+                      )}
+                      <span className="text-[12px] text-black">
+                        {relativeDate(d.uploaded_at)}
+                      </span>
+                    </span>
+                  </TableCell>
+                  <TableCell width="w-[40px]">
+                    <div
+                      className="relative"
+                      ref={rowMenuDoc?.id === d.id ? rowMenuRef : undefined}
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setRowMenuDoc((prev) => (prev?.id === d.id ? null : d))
+                        }}
+                        className="text-gray-main hover:bg-white-item p-1 rounded transition-colors w-[28px] h-[28px] inline-flex items-center justify-center"
+                        aria-label="Document actions"
+                      >
+                        <Icon name="Dot-Menu" size={15} />
+                      </button>
+
+                      {rowMenuDoc?.id === d.id && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className={`absolute z-30 right-0 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md min-w-[180px] py-[5px] ${
+                            // Open upward for the last 2 rows so the menu
+                            // isn't clipped by the table's scroll container.
+                            i >= filtered.length - 2 && filtered.length > 2
+                              ? 'bottom-[32px]'
+                              : 'top-[32px]'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              togglePin(d.id)
+                              setRowMenuDoc(null)
+                            }}
+                            className="w-full flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left text-black hover:bg-white-item transition-colors"
+                          >
+                            <Icon name="Pin" size={13} className="text-gray-main" />
+                            <span>{pinnedNow ? 'Unpin' : 'Pin'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!isAdmin}
+                            title={isAdmin ? undefined : 'Only project admins can delete docs'}
+                            onClick={() => {
+                              if (!window.confirm(`Delete "${d.name}"?`)) return
+                              deleteDoc(
+                                { docId: d.id, projectId },
+                                { onSuccess: () => setRowMenuDoc(null) }
+                              )
+                            }}
+                            className="w-full flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left text-red-main hover:bg-white-item transition-colors disabled:text-gray-secondary disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                          >
+                            <Icon name="Cross" size={13} />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )
+            })
+          )}
+        </Table>
+      </div>
+
+      {/* New doc modal */}
+      <NewDocModal
+        open={newDocOpen}
+        projectId={projectId}
+        projectName={project?.name ?? undefined}
+        onClose={() => setNewDocOpen(false)}
+      />
+
+      {/* Preview modal */}
+      {previewDoc && (
+        <DocPreviewModal
+          doc={previewDoc}
+          onClose={() => setPreviewDoc(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function DocPreviewModal({
+  doc,
+  onClose,
+}: {
+  doc: ProjectDoc
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const cat = SOURCE_TO_CATEGORY[doc.source]
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-[40px]"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white-white rounded-[10px] shadow-2xl w-[720px] max-w-[95vw] h-[600px] max-h-[88vh] flex flex-col"
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-[10px] px-[20px] pt-[20px] pb-[15px] border-b border-gray-border-light">
+          <div className="flex items-start gap-[12px] min-w-0">
+            <FileLabel variant="icon" category={cat} size="lg" />
+            <div className="flex flex-col gap-[3px] min-w-0">
+              <p className="text-blue-main text-[10px] font-semibold uppercase tracking-[1.5px]">
+                Knowledge · Preview
+              </p>
+              <h2 className="text-black text-[18px] font-semibold leading-tight truncate">
+                {doc.name}
+              </h2>
+              <div className="flex items-center gap-[10px] mt-[3px]">
+                <FileLabel variant="text" category={cat} />
+                <span className="text-gray-secondary text-[10px]">
+                  {doc.file_type ?? 'Doc'}
+                </span>
+                <span className="text-gray-secondary text-[10px]">·</span>
+                <span className="text-gray-secondary text-[10px]">
+                  {doc.uploader
+                    ? doc.uploader.nickname ||
+                      `${doc.uploader.first_name} ${doc.uploader.last_name}`.trim()
+                    : '—'}
+                </span>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="text-gray-main hover:bg-white-item rounded p-1 transition-colors shrink-0"
+          >
+            <Icon name="Cross" size={13} />
+          </button>
+        </div>
+
+        {/* Preview body — blind placeholder until real file rendering ships */}
+        <div className="relative flex-1 min-h-0 bg-white-main p-[20px] overflow-auto flex items-center justify-center">
+          <div
+            aria-hidden
+            className="w-full max-w-[480px] aspect-[3/4] bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-sm flex flex-col p-[30px] gap-[10px] overflow-hidden"
+            style={{
+              filter: 'blur(4px)',
+              userSelect: 'none',
+              pointerEvents: 'none',
+            }}
+          >
+            <div className="h-[18px] w-[60%] bg-gray-extra-light rounded-[3px]" />
+            <div className="h-[10px] w-[40%] bg-gray-extra-light rounded-[3px]" />
+            <div className="mt-[20px] flex flex-col gap-[8px]">
+              {Array.from({ length: 12 }, (_, i) => (
+                <div
+                  key={i}
+                  className="h-[8px] bg-gray-extra-light rounded-[3px]"
+                  style={{ width: `${65 + ((i * 13) % 30)}%` }}
+                />
+              ))}
+            </div>
+            <div className="mt-[15px] h-[100px] bg-gray-extra-light rounded-[3px]" />
+            <div className="mt-[10px] flex flex-col gap-[8px]">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div
+                  key={i}
+                  className="h-[8px] bg-gray-extra-light rounded-[3px]"
+                  style={{ width: `${50 + ((i * 17) % 35)}%` }}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <p
+              className="text-gray-main text-[12px] bg-white-white/90 px-[14px] py-[8px] rounded-[5px] border border-gray-border-light shadow-sm tracking-[0.5px]"
+              style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+            >
+              Preview
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

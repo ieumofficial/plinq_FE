@@ -355,8 +355,9 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      {/* Two-column main grid */}
-      <div className="flex gap-[10px] items-start">
+      {/* Two-column main grid — items-stretch keeps both columns the same
+          total height so the trailing cards (Meetings / Members) bottom-align. */}
+      <div className="flex gap-[10px] items-stretch">
         {/* LEFT — Kanban snapshot + Meetings */}
         <div className="flex-1 min-w-0 flex flex-col gap-[10px]">
           {/* Kanban snapshot */}
@@ -370,7 +371,7 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
                 <button
                   type="button"
                   onClick={() => router.push(`/p/${projectId}/kanban`)}
-                  className="text-black text-[12px] font-normal flex items-center gap-[8px]"
+                  className="text-black text-[12px] font-normal flex items-center gap-[8px] px-[8px] py-[5px] rounded-[5px] hover:bg-white-item transition-colors"
                 >
                   OPEN
                   <Icon name="ArrowRight" size={13} />
@@ -427,6 +428,7 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
 
           {/* Meetings */}
           <CardSection
+            className="flex-1"
             eyebrow={`Meetings · ${meetings.length} indexed`}
             eyebrowColor={EYEBROW.blue}
             title="Ongoing & upcoming"
@@ -434,7 +436,7 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
               <button
                 type="button"
                 onClick={() => router.push(`/p/${projectId}/meetings`)}
-                className="text-black text-[12px] font-normal flex items-center gap-[8px]"
+                className="text-black text-[12px] font-normal flex items-center gap-[8px] px-[8px] py-[5px] rounded-[5px] hover:bg-white-item transition-colors"
               >
                 ALL
                 <Icon name="ArrowRight" size={13} />
@@ -582,6 +584,7 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
 
           {/* Members */}
           <CardSection
+            className="flex-1"
             eyebrow={`Members · ${members.length} active`}
             eyebrowColor={EYEBROW.green}
             title="Who is shipping what"
@@ -589,7 +592,7 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
               <button
                 type="button"
                 onClick={() => router.push(`/p/${projectId}/members`)}
-                className="text-black text-[12px] font-normal flex items-center gap-[8px]"
+                className="text-black text-[12px] font-normal flex items-center gap-[8px] px-[8px] py-[5px] rounded-[5px] hover:bg-white-item transition-colors"
               >
                 MANAGE
                 <Icon name="ArrowRight" size={13} />

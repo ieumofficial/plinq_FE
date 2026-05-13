@@ -484,6 +484,10 @@ export async function getProjectMembers(projectId: string): Promise<UserRow[]> {
 
 export type TaskWithProject = TaskRow & {
   project_name: string | null
+  project_color: string | null
+  source_meeting_name: string | null
+  source_meeting_scheduled_at: string | null
+  creator_name: string | null
 }
 
 /**
@@ -508,7 +512,7 @@ export async function getUserActionItems(
   let q = supabase
     .from('tasks')
     .select(
-      'id, project_id, team_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, created_by, created_at, updated_at, projects(name)'
+      'id, project_id, team_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, source_meeting_id, created_by, created_at, updated_at, projects(name, color), meetings:source_meeting_id(name, scheduled_at), users:created_by(first_name, last_name, nickname, email)'
     )
     .in('id', taskIds)
     .order('due_date', { ascending: true, nullsFirst: false })
@@ -523,12 +527,23 @@ export async function getUserActionItems(
   }
   return (data ?? []).map((row) => {
     const r = row as unknown as TaskRow & {
-      projects: { name: string } | { name: string }[] | null
+      projects: { name: string; color: string | null } | { name: string; color: string | null }[] | null
+      meetings: { name: string; scheduled_at: string } | { name: string; scheduled_at: string }[] | null
+      users: { first_name: string; last_name: string; nickname: string | null; email: string } | { first_name: string; last_name: string; nickname: string | null; email: string }[] | null
     }
     const proj = Array.isArray(r.projects) ? r.projects[0] : r.projects
+    const mtg = Array.isArray(r.meetings) ? r.meetings[0] : r.meetings
+    const usr = Array.isArray(r.users) ? r.users[0] : r.users
+    const creatorName = usr
+      ? usr.nickname || `${usr.first_name} ${usr.last_name}`.trim() || usr.email
+      : null
     return {
       ...(r as TaskRow),
       project_name: proj?.name ?? null,
+      project_color: proj?.color ?? null,
+      source_meeting_name: mtg?.name ?? null,
+      source_meeting_scheduled_at: mtg?.scheduled_at ?? null,
+      creator_name: creatorName,
     }
   })
 }

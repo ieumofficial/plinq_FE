@@ -283,10 +283,10 @@ function ProjectsPageBody() {
     <div className="p-6 flex flex-col gap-6">
       {/* Toolbar */}
       <div className="flex items-end justify-between gap-4">
-        <h1 className="text-black text-[33px] font-semibold leading-tight">
-          Open a project to{' '}
+        <h1 className="flex items-center gap-[5px] leading-none whitespace-nowrap text-[35px]">
+          <span className="text-black font-semibold">Open a project to</span>
           <em
-            className="italic text-blue-main font-medium"
+            className="italic text-gray-main font-semibold"
             style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
           >
             focus.

@@ -114,7 +114,7 @@ export default function Calendar({
   const weekdays = isMonthly ? WEEKDAYS_FULL : WEEKDAYS_SHORT
 
   return (
-    <div className={`flex flex-col gap-[12px] ${isMonthly ? 'h-full' : ''}`}>
+    <div className="flex flex-1 flex-col gap-[12px] min-h-0 h-full">
       {/* Toolbar — only for monthly view */}
       {isMonthly && (
         <div className="flex items-center justify-between">
@@ -201,21 +201,22 @@ export default function Calendar({
         </div>
       )}
 
-      {/* Card wrapping weekday header + grid — only for monthly view */}
+      {/* Card wrapping weekday header + grid — only for monthly view.
+          Dashboard variant declares the @container/calgrid on this wrapper so
+          BOTH the weekday header and the day grid can scale with the same
+          query (the day grid lives inside this flex column). */}
       <div
         className={
           isMonthly
             ? 'flex-1 min-h-0 flex flex-col gap-[12px] bg-white-white rounded-[10px] border border-gray-border-light p-[20px]'
-            : 'flex flex-col gap-[12px]'
+            : 'flex-1 min-h-0 flex flex-col gap-[8px] @container/calgrid'
         }
       >
         {/* Weekday header */}
         <div
-          className="grid"
+          className="grid shrink-0"
           style={{
-            gridTemplateColumns: isMonthly
-              ? 'repeat(7, minmax(0, 1fr))'
-              : 'repeat(7, 76px)',
+            gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
             gap: isMonthly ? 0 : 4,
           }}
         >
@@ -225,7 +226,7 @@ export default function Calendar({
               className={`text-gray-secondary font-medium uppercase tracking-[1.5px] py-1 ${
                 isMonthly
                   ? 'text-[15px] text-left pl-[8px]'
-                  : 'text-[10px] text-center'
+                  : 'text-[10px] text-center @[420px]/calgrid:text-[11px] @[560px]/calgrid:text-[12px] @[700px]/calgrid:text-[14px] @[900px]/calgrid:text-[16px]'
               }`}
             >
               {w}
@@ -236,15 +237,13 @@ export default function Calendar({
         {/* Day grid */}
         <div
           className={`grid ${
-            isMonthly ? 'flex-1 min-h-0 border-t border-l border-solid border-[#EDEEF0]' : ''
+            isMonthly
+              ? 'flex-1 min-h-0 border-t border-l border-solid border-[#EDEEF0]'
+              : 'flex-1 min-h-0'
           }`}
           style={{
-            gridTemplateColumns: isMonthly
-              ? 'repeat(7, minmax(0, 1fr))'
-              : 'repeat(7, 76px)',
-            gridTemplateRows: isMonthly
-              ? `repeat(${weeks}, minmax(0, 1fr))`
-              : undefined,
+            gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+            gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))`,
             gap: isMonthly ? 0 : 4,
           }}
         >
@@ -260,7 +259,6 @@ export default function Calendar({
             return (
               <div
                 key={d.toISOString()}
-                style={{ width: 76, height: 76 }}
                 aria-hidden
               />
             )
@@ -286,6 +284,7 @@ export default function Calendar({
             <Day
               key={d.toISOString()}
               size="small"
+              fluid
               date={d.getDate()}
               events={dEvents}
               isToday={isToday}

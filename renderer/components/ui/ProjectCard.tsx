@@ -11,6 +11,9 @@ type Props = {
   progress: number
   members?: Member[]
   onOpen?: () => void
+  /** Drop the fixed 170×225 size and fill the parent — used in responsive
+   *  grids where cards should shrink/grow with the available column. */
+  fluid?: boolean
 }
 
 export default function ProjectCard({
@@ -20,10 +23,15 @@ export default function ProjectCard({
   progress,
   members,
   onOpen,
+  fluid = false,
 }: Props) {
   const pct = Math.max(0, Math.min(100, progress))
   return (
-    <div className="bg-white-item rounded-[5px] flex flex-col justify-between p-[10px] w-[170px] h-[225px]">
+    <div
+      className={`bg-white-item rounded-[5px] flex flex-col justify-between p-[10px] ${
+        fluid ? 'w-full min-w-0 h-full' : 'w-[170px] h-[225px]'
+      }`}
+    >
       <div className="flex flex-col gap-[10px] w-full">
         <div className="flex items-center justify-between w-full">
           {status ? <StatusLabelBig status={status} size="md" /> : <span />}

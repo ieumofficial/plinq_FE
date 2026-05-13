@@ -238,9 +238,9 @@ function ActionItemsBody() {
   }
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="flex-1 min-h-0 flex flex-col p-6 gap-6">
       {/* Toolbar */}
-      <div className="flex items-end justify-between gap-4">
+      <div className="shrink-0 flex items-end justify-between gap-4">
         <h1 className="flex items-center gap-[5px] leading-none whitespace-nowrap text-[35px]">
           <span className="text-black font-semibold">Grouped by</span>
           <em
@@ -294,7 +294,8 @@ function ActionItemsBody() {
         </div>
       </div>
 
-      {/* Grouped tables */}
+      {/* Grouped tables — shrinks to content when items are few, scrolls when overflowing */}
+      <div className="min-h-0 overflow-y-auto">
       {isLoading && tasks.length === 0 ? (
         <p className="text-gray-secondary text-[12px]">Loading…</p>
       ) : grouped.length === 0 ? (
@@ -411,6 +412,7 @@ function ActionItemsBody() {
           })}
         </div>
       )}
+      </div>
     </div>
   )
 }

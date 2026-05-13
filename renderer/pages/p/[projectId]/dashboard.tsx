@@ -13,6 +13,7 @@ import {
   useProjectMembersWithRoles,
   useProjectTasks,
 } from '../../../lib/hooks'
+import { useFitCount } from '../../../lib/useFitCount'
 import {
   dbPriorityToUi,
   userToMember,
@@ -84,9 +85,9 @@ function CardSection({
 }) {
   return (
     <section
-      className={`bg-white-white border border-gray-border-light rounded-[10px] p-[20px] ${className ?? ''}`}
+      className={`bg-white-white border border-gray-border-light rounded-[10px] p-[20px] flex flex-col min-h-0 overflow-hidden ${className ?? ''}`}
     >
-      <div className="flex items-start justify-between gap-[15px] mb-[15px]">
+      <div className="shrink-0 flex items-start justify-between gap-[15px] mb-[15px]">
         <div className="flex flex-col gap-[5px] min-w-0">
           <p
             className="text-[10px] font-medium uppercase tracking-[1.5px]"
@@ -245,6 +246,27 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
   const { data: meetings = [] } = useProjectMeetings(projectId)
   const { data: members = [] } = useProjectMembersWithRoles(projectId)
 
+  // Dynamic capacity hooks — slice each list to fit. `min: 1` ensures every
+  // section keeps at least one row visible even at the smallest viewport.
+  const [kanbanColRef, kanbanFit] = useFitCount<HTMLDivElement>({
+    itemHeight: 78,
+    gap: 8,
+    min: 1,
+    max: 6,
+  })
+  const [meetingsListRef, meetingsFit] = useFitCount<HTMLDivElement>({
+    itemHeight: 62,
+    gap: 5,
+    min: 1,
+    max: 4,
+  })
+  const [membersListRef, membersFit] = useFitCount<HTMLDivElement>({
+    itemHeight: 52,
+    gap: 5,
+    min: 1,
+    max: 4,
+  })
+
   const stats = useMemo(() => {
     const byStatus = new Map<TaskStatusDb, number>()
     for (const t of tasks) {
@@ -321,9 +343,9 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="p-[15px] flex flex-col gap-[15px]">
+    <div className="flex-1 min-h-0 flex flex-col p-[15px] gap-[15px]">
       {/* Title row */}
-      <div className="flex items-end justify-between gap-4">
+      <div className="shrink-0 flex items-end justify-between gap-4">
         <div className="flex flex-col gap-[5px]">
           <p
             className="text-[10px] font-medium uppercase tracking-[1.5px]"
@@ -355,13 +377,15 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      {/* Two-column main grid — items-stretch keeps both columns the same
-          total height so the trailing cards (Meetings / Members) bottom-align. */}
-      <div className="flex gap-[10px] items-stretch">
+      {/* Two-column main grid — fills remaining viewport, items-stretch
+          keeps both columns the same total height so the trailing cards
+          (Meetings / Members) bottom-align. */}
+      <div className="flex-1 min-h-0 flex gap-[10px] items-stretch">
         {/* LEFT — Kanban snapshot + Meetings */}
-        <div className="flex-1 min-w-0 flex flex-col gap-[10px]">
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-[10px]">
           {/* Kanban snapshot */}
           <CardSection
+            className="flex-[5] min-h-0"
             eyebrow="Work in flight"
             eyebrowColor={EYEBROW.blue}
             title="Kanban snapshot"
@@ -379,56 +403,70 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
               </div>
             }
           >
-            <div className="grid grid-cols-4 gap-[10px] min-h-[500px]">
-              {kanbanByCol.map((c) => (
-                <div
-                  key={c.key}
-                  className="flex flex-col gap-[10px] min-w-0 bg-white-main rounded-[5px] p-[10px]"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-[8px]">
-                      <span
-                        className="w-[9px] h-[9px] rounded-full shrink-0"
-                        style={{ backgroundColor: c.dot }}
-                      />
-                      <span className="text-[12px] font-medium text-black">
-                        {c.label}
+            <div className="grid grid-cols-4 gap-[10px] flex-1 min-h-0">
+              {kanbanByCol.map((c, colIdx) => {
+                // Swap one card for the "+N more" line when overflow exists,
+                // so the indicator always has room without clipping the last card.
+                const hasOverflow = c.items.length > kanbanFit
+                const visible = hasOverflow
+                  ? Math.max(1, kanbanFit - 1)
+                  : kanbanFit
+                const hidden = c.items.length - visible
+                return (
+                  <div
+                    key={c.key}
+                    className="flex flex-col gap-[10px] min-w-0 min-h-0 bg-white-main rounded-[5px] p-[10px] overflow-hidden"
+                  >
+                    <div className="shrink-0 flex items-center justify-between">
+                      <span className="inline-flex items-center gap-[8px]">
+                        <span
+                          className="w-[9px] h-[9px] rounded-full shrink-0"
+                          style={{ backgroundColor: c.dot }}
+                        />
+                        <span className="text-[12px] font-medium text-black">
+                          {c.label}
+                        </span>
                       </span>
-                    </span>
-                    <span
-                      className="text-gray-secondary text-[12px] font-medium"
-                      style={{
-                        fontFamily: 'Geist Mono, ui-monospace, monospace',
-                      }}
-                    >
-                      {c.items.length}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-[8px]">
-                    {c.items.slice(0, 6).map((t) => (
-                      <MiniTaskCard
-                        key={t.id}
-                        task={t}
-                        status={c.status}
-                      />
-                    ))}
-                    {c.items.length > 6 && (
                       <span
-                        className="text-gray-secondary text-[10px] text-center tracking-[1px]"
-                        style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+                        className="text-gray-secondary text-[12px] font-medium"
+                        style={{
+                          fontFamily: 'Geist Mono, ui-monospace, monospace',
+                        }}
                       >
-                        +{c.items.length - 6} more
+                        {c.items.length}
                       </span>
-                    )}
+                    </div>
+                    <div
+                      ref={colIdx === 0 ? kanbanColRef : undefined}
+                      className="flex-1 min-h-0 flex flex-col gap-[8px] overflow-hidden"
+                    >
+                      {c.items.slice(0, visible).map((t) => (
+                        <MiniTaskCard
+                          key={t.id}
+                          task={t}
+                          status={c.status}
+                        />
+                      ))}
+                      {hidden > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/p/${projectId}/kanban`)}
+                          className="shrink-0 text-gray-secondary hover:text-black text-[10px] text-center tracking-[1px]"
+                          style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+                        >
+                          +{hidden} more
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </CardSection>
 
           {/* Meetings */}
           <CardSection
-            className="flex-1"
+            className="flex-[3] min-h-0"
             eyebrow={`Meetings · ${meetings.length} indexed`}
             eyebrowColor={EYEBROW.blue}
             title="Ongoing & upcoming"
@@ -448,32 +486,54 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
                 No upcoming meetings.
               </p>
             ) : (
-              <div className="flex flex-col gap-[5px]">
-                {upcomingMeetings.map((m) => {
-                  const live = isMeetingLive(m.scheduled_at, m.duration_min)
-                  const extra = Math.max(0, members.length - 4)
-                  return (
-                    <Schedule
-                      key={m.id}
-                      size="full"
-                      title={m.name}
-                      time={fmtTimeRange(m.scheduled_at, m.duration_min)}
-                      isCurrent={live}
-                      type="planning"
-                      attendees={members.slice(0, 4).map(userToMember)}
-                      attendeesLabel={extra > 0 ? `+${extra}` : undefined}
-                      onJoin={() => router.push(`/p/${projectId}/meetings`)}
-                    />
-                  )
-                })}
-              </div>
+              (() => {
+                const hasOverflow = upcomingMeetings.length > meetingsFit
+                const visible = hasOverflow
+                  ? Math.max(1, meetingsFit - 1)
+                  : meetingsFit
+                const hidden = upcomingMeetings.length - visible
+                return (
+                  <div
+                    ref={meetingsListRef}
+                    className="flex-1 min-h-0 flex flex-col gap-[5px] overflow-hidden"
+                  >
+                    {upcomingMeetings.slice(0, visible).map((m) => {
+                      const live = isMeetingLive(m.scheduled_at, m.duration_min)
+                      const extra = Math.max(0, members.length - 4)
+                      return (
+                        <Schedule
+                          key={m.id}
+                          size="full"
+                          title={m.name}
+                          time={fmtTimeRange(m.scheduled_at, m.duration_min)}
+                          isCurrent={live}
+                          type="planning"
+                          attendees={members.slice(0, 4).map(userToMember)}
+                          attendeesLabel={extra > 0 ? `+${extra}` : undefined}
+                          onJoin={() => router.push(`/p/${projectId}/meetings`)}
+                        />
+                      )
+                    })}
+                    {hidden > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/p/${projectId}/meetings`)}
+                        className="shrink-0 text-left text-gray-secondary hover:text-black text-[10px] font-medium uppercase tracking-[1.5px] py-[2px]"
+                      >
+                        +{hidden} more
+                      </button>
+                    )}
+                  </div>
+                )
+              })()
             )}
           </CardSection>
         </div>
 
         {/* RIGHT — Apollo health + Members */}
-        <aside className="w-[420px] shrink-0 flex flex-col gap-[10px]">
+        <aside className="w-[420px] max-w-[42%] shrink min-h-0 flex flex-col gap-[10px]">
           <CardSection
+            className="flex-[5] min-h-0"
             eyebrow="Overall progress"
             eyebrowColor={EYEBROW.purple}
             title={`${project?.name ?? 'Project'} health`}
@@ -495,7 +555,9 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
                 doneLabel={`${stats.done} of ${stats.total} tasks`}
               />
             </div>
-            <div className="grid grid-cols-2 gap-[10px] border-t border-gray-border-light pt-[15px] mt-[10px]">
+            {/* Velocity / Days-left tiles — hidden on short viewports where
+                the card would otherwise clip the health breakdown bars. */}
+            <div className="hidden [@media(min-height:900px)]:grid grid-cols-2 gap-[10px] border-t border-gray-border-light pt-[15px] mt-[10px]">
               <div
                 className="flex flex-col gap-[2px] p-[12px] rounded-[10px]"
                 style={{ backgroundColor: '#F8FAFB' }}
@@ -547,7 +609,7 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
                 </p>
               </div>
             </div>
-            <div className="flex flex-col gap-[6px] mt-[15px]">
+            <div className="hidden [@media(min-height:900px)]:flex flex-col gap-[6px] mt-[15px]">
               {HEALTH_BREAKDOWN.map((b) => {
                 const count = stats.byStatus.get(b.key) ?? 0
                 const pct =
@@ -584,7 +646,7 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
 
           {/* Members */}
           <CardSection
-            className="flex-1"
+            className="flex-[3] min-h-0"
             eyebrow={`Members · ${members.length} active`}
             eyebrowColor={EYEBROW.green}
             title="Who is shipping what"
@@ -603,9 +665,18 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
               <p className="text-gray-secondary text-[12px]">
                 No members yet.
               </p>
-            ) : (
-              <div className="flex flex-col gap-[5px]">
-                {members.slice(0, 4).map((m: ProjectMember) => {
+            ) : (() => {
+              const hasOverflow = members.length > membersFit
+              const visible = hasOverflow
+                ? Math.max(1, membersFit - 1)
+                : membersFit
+              const hidden = members.length - visible
+              return (
+              <div
+                ref={membersListRef}
+                className="flex-1 min-h-0 flex flex-col gap-[5px] overflow-hidden"
+              >
+                {members.slice(0, visible).map((m: ProjectMember) => {
                   const n = tasksByMember.get(m.id) ?? 0
                   const barPct = Math.round((n / maxMemberTasks) * 100)
                   return (
@@ -644,8 +715,18 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
                     </div>
                   )
                 })}
+                {hidden > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/p/${projectId}/members`)}
+                    className="shrink-0 text-left text-gray-secondary hover:text-black text-[10px] font-medium uppercase tracking-[1.5px] py-[2px]"
+                  >
+                    +{hidden} more
+                  </button>
+                )}
               </div>
-            )}
+              )
+            })()}
           </CardSection>
         </aside>
       </div>

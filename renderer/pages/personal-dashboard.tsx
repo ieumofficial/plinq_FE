@@ -15,6 +15,7 @@ import {
   useUserProjects,
   useUserUpcomingMeetings,
 } from '../lib/hooks'
+import { useFitCount } from '../lib/useFitCount'
 import {
   dbPriorityToUi,
   dbStatusToUi,
@@ -72,6 +73,30 @@ export default function PersonalDashboardPage() {
   const [calMonth] = useState(startOfMonth(new Date()))
   const today = useMemo(() => new Date(), [])
 
+  // Dynamic capacity so each section shows what fits and never collapses to
+  // just its header. `min: 1` keeps at least one row visible. `itemHeight`
+  // is only a fallback — the hook switches to the first child's measured
+  // height after mount.
+  const [tasksListRef, tasksFit, tasksFree] = useFitCount<HTMLDivElement>({
+    itemHeight: 70,
+    gap: 5,
+    min: 1,
+    max: ACTION_ITEMS_LIMIT,
+  })
+  const [scheduleListRef, scheduleFit, scheduleFree] = useFitCount<HTMLDivElement>({
+    itemHeight: 84,
+    gap: 10,
+    min: 1,
+    max: TODAY_SCHEDULE_LIMIT,
+  })
+
+  // Reserve approximately one line + leading gap for the trailing "+N more"
+  // chip. If the leftover space after the visible items already fits this,
+  // we keep every fitted item and just append the chip; otherwise we drop
+  // one item to make room. Keeps the chip from clipping AND from wasting
+  // space when there's already room for it.
+  const TRAILING_PX = 22
+
   const { data: projects = [], isLoading: projectsLoading } = useUserProjects(userId, {
     statuses: ['planned', 'in_progress', 'review'],
     limit: ACTIVE_PROJECTS_LIMIT,
@@ -123,10 +148,10 @@ export default function PersonalDashboardPage() {
         <title>plinq · Dashboard</title>
       </Head>
       <PersonalAppShell active="dashboard">
-        <div className="p-6 flex gap-[10px] min-h-full">
+        <div className="flex-1 min-h-0 flex p-6 gap-[10px]">
           {/* LEFT COLUMN — Projects + Action Items */}
-          <div className="flex-1 flex flex-col gap-[10px] min-w-0">
-            <section className="bg-white-white rounded-[10px] border border-gray-border-light p-[20px] min-h-[306px]">
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-[10px]">
+            <section className="shrink-0 bg-white-white rounded-[10px] border border-gray-border-light p-[20px] flex flex-col overflow-hidden">
               <SectionHeader
                 eyebrow={`Projects · ${projects.length} active`}
                 eyebrowColorClass="text-blue-main"
@@ -147,10 +172,16 @@ export default function PersonalDashboardPage() {
               ) : projects.length === 0 ? (
                 <p className="text-gray-secondary text-[12px]">No active projects yet.</p>
               ) : (
-                <div className="flex gap-[10px] overflow-x-auto">
+                <div
+                  className="grid gap-[10px] min-h-[225px]"
+                  style={{
+                    gridTemplateColumns: `repeat(${projects.length}, minmax(0, 1fr))`,
+                  }}
+                >
                   {projects.map((p) => (
                     <ProjectCard
                       key={p.id}
+                      fluid
                       name={p.name}
                       description={p.description ?? ''}
                       status={dbStatusToUi(p.status)}
@@ -163,7 +194,7 @@ export default function PersonalDashboardPage() {
               )}
             </section>
 
-            <section className="bg-white-white rounded-[10px] border border-gray-border-light p-[20px] flex-1">
+            <section className="flex-1 min-h-0 bg-white-white rounded-[10px] border border-gray-border-light p-[20px] flex flex-col overflow-hidden">
               <SectionHeader
                 eyebrow={`Tasks · ${tasks.length} pending`}
                 eyebrowColorClass="text-red-main"
@@ -184,35 +215,65 @@ export default function PersonalDashboardPage() {
               ) : tasks.length === 0 ? (
                 <p className="text-gray-secondary text-[12px]">All caught up.</p>
               ) : (
-                <div className="flex flex-col gap-[5px]">
-                  {tasks.map((t) => (
-                    <ActionItem
-                      key={t.id}
-                      title={t.title}
-                      date={formatDueDate(t.due_date)}
-                      priority={dbPriorityToUi(t.priority)}
-                      projectTag={
-                        t.project_name
-                          ? { label: t.project_name, color: 'purple' }
-                          : undefined
-                      }
-                      checked={t.status === 'done'}
-                      onCheckedChange={(next) =>
-                        updateTaskStatus({
-                          taskId: t.id,
-                          status: next ? 'done' : 'in_progress',
-                        })
-                      }
-                    />
-                  ))}
-                </div>
+                (() => {
+                  const hasOverflow = tasks.length > tasksFit
+                  // If the unused space below already holds the +N chip, keep
+                  // every fitted item; otherwise drop one to make room.
+                  const visible = hasOverflow
+                    ? tasksFree >= TRAILING_PX
+                      ? tasksFit
+                      : Math.max(1, tasksFit - 1)
+                    : tasksFit
+                  const hidden = tasks.length - visible
+                  return (
+                    <div
+                      ref={tasksListRef}
+                      className="flex-1 min-h-0 flex flex-col gap-[5px] overflow-hidden"
+                    >
+                      {tasks.slice(0, visible).map((t) => (
+                        <ActionItem
+                          key={t.id}
+                          title={t.title}
+                          date={formatDueDate(t.due_date)}
+                          priority={dbPriorityToUi(t.priority)}
+                          projectTag={
+                            t.project_name
+                              ? { label: t.project_name, color: 'purple' }
+                              : undefined
+                          }
+                          checked={t.status === 'done'}
+                          onCheckedChange={(next) =>
+                            updateTaskStatus({
+                              taskId: t.id,
+                              status: next ? 'done' : 'in_progress',
+                            })
+                          }
+                        />
+                      ))}
+                      {hidden > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => router.push('/action-items')}
+                          className="shrink-0 text-left text-gray-secondary hover:text-black text-[10px] font-medium uppercase tracking-[1.5px] pl-[14px] py-[2px]"
+                        >
+                          +{hidden} more
+                        </button>
+                      )}
+                    </div>
+                  )
+                })()
               )}
             </section>
           </div>
 
-          {/* RIGHT COLUMN — Calendar + Today */}
-          <div className="w-[594px] flex flex-col gap-[10px]">
-            <section className="bg-white-white rounded-[10px] border border-gray-border-light p-[20px]">
+          {/* RIGHT COLUMN — Calendar + Today.
+              flex-1 (not a fixed 594px cap) so the calendar grid scales with
+              viewport width — container queries inside Day/Event then enlarge
+              the date number and event chips.
+              Calendar section gets a heavier vertical share so the cells
+              grow tall on large viewports instead of staying squat. */}
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-[10px]">
+            <section className="flex-[3] [@media(min-height:900px)]:flex-[4] [@media(min-height:1100px)]:flex-[5] min-h-0 bg-white-white rounded-[10px] border border-gray-border-light p-[20px] flex flex-col overflow-hidden">
               <Calendar
                 view="dashboard"
                 month={calMonth}
@@ -221,7 +282,7 @@ export default function PersonalDashboardPage() {
               />
             </section>
 
-            <section className="bg-white-white rounded-[10px] border border-gray-border-light p-[20px] flex-1">
+            <section className="flex-[1] min-h-0 bg-white-white rounded-[10px] border border-gray-border-light p-[20px] flex flex-col overflow-hidden">
               <SectionHeader
                 eyebrow="Upcoming · Today"
                 eyebrowColorClass="text-green-main"
@@ -232,17 +293,40 @@ export default function PersonalDashboardPage() {
               ) : meetings.length === 0 ? (
                 <p className="text-gray-secondary text-[12px]">No meetings scheduled today.</p>
               ) : (
-                <div className="flex flex-col gap-[10px]">
-                  {meetings.map((m) => (
-                    <Schedule
-                      key={m.id}
-                      title={m.name}
-                      time={formatTimeRange(m.scheduled_at, m.duration_min)}
-                      location={m.location_or_url ?? undefined}
-                      attendees={m.attendees.map(userToMember)}
-                    />
-                  ))}
-                </div>
+                (() => {
+                  const hasOverflow = meetings.length > scheduleFit
+                  const visible = hasOverflow
+                    ? scheduleFree >= TRAILING_PX
+                      ? scheduleFit
+                      : Math.max(1, scheduleFit - 1)
+                    : scheduleFit
+                  const hidden = meetings.length - visible
+                  return (
+                    <div
+                      ref={scheduleListRef}
+                      className="flex-1 min-h-0 flex flex-col gap-[10px] overflow-hidden"
+                    >
+                      {meetings.slice(0, visible).map((m) => (
+                        <Schedule
+                          key={m.id}
+                          title={m.name}
+                          time={formatTimeRange(m.scheduled_at, m.duration_min)}
+                          location={m.location_or_url ?? undefined}
+                          attendees={m.attendees.map(userToMember)}
+                        />
+                      ))}
+                      {hidden > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => router.push('/calendar')}
+                          className="shrink-0 text-left text-gray-secondary hover:text-black text-[10px] font-medium uppercase tracking-[1.5px] py-[2px]"
+                        >
+                          +{hidden} more
+                        </button>
+                      )}
+                    </div>
+                  )
+                })()
               )}
             </section>
           </div>

@@ -23,6 +23,9 @@ type CommonProps = {
 
 type SmallProps = CommonProps & {
   size: 'small'
+  /** When true, the cell uses `w-full h-full` instead of the default 76×76 so
+   *  it can shrink/grow with the parent grid track. */
+  fluid?: boolean
 }
 
 type BigProps = CommonProps & {
@@ -45,18 +48,28 @@ export default function Day(props: Props) {
     const visible = events.slice(0, SMALL_MAX)
     const overflow = events.length - visible.length
     const compactHeader = events.length >= 2
+    const fluid = props.fluid ?? false
 
+    // When fluid, the cell scales to fill its grid track. Use container
+    // queries on the parent calgrid so the date number and event chips grow
+    // as the calendar gets larger.
     return (
       <button
         type="button"
         onClick={onClick}
-        className={`flex flex-col px-[5px] py-[3px] rounded-[5px] w-[76px] h-[76px] text-left transition-colors ${
+        className={`flex flex-col rounded-[5px] text-left transition-colors overflow-hidden ${
+          fluid
+            ? 'w-full h-full min-w-0 min-h-0 px-[5px] py-[3px] @[420px]/calgrid:px-[7px] @[420px]/calgrid:py-[5px] @[560px]/calgrid:px-[10px] @[560px]/calgrid:py-[8px] @[700px]/calgrid:px-[12px] @[700px]/calgrid:py-[12px] @[900px]/calgrid:px-[14px] @[900px]/calgrid:py-[16px]'
+            : 'w-[76px] h-[76px] px-[5px] py-[3px]'
+        } ${
           isToday ? 'bg-primary-dark' : 'bg-white-item'
         } ${isSelected ? 'ring-2 ring-[#6e8c9c] ring-inset' : ''} ${outOfBound ? 'opacity-30' : ''} ${compactHeader ? 'gap-[3px] items-start' : 'items-start'}`}
       >
         <span
-          className={`tracking-[0.3px] font-medium ${
-            compactHeader ? 'text-[14px]' : 'text-[14px]'
+          className={`tracking-[0.3px] font-medium leading-none ${
+            fluid
+              ? 'text-[14px] @[420px]/calgrid:text-[16px] @[560px]/calgrid:text-[19px] @[700px]/calgrid:text-[23px] @[900px]/calgrid:text-[28px]'
+              : 'text-[14px]'
           } ${isToday ? 'text-white' : 'text-primary-dark'}`}
           style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
         >
@@ -64,13 +77,21 @@ export default function Day(props: Props) {
         </span>
         <div className="flex flex-col gap-[2px] w-full">
           {visible.map((e) => (
-            <Event key={e.id} title={e.title} type={e.type} color={e.color} size="small" />
+            <Event
+              key={e.id}
+              title={e.title}
+              type={e.type}
+              color={e.color}
+              size={fluid ? 'fluid' : 'small'}
+            />
           ))}
           {overflow > 0 && (
             <span
-              className={`text-[7px] font-medium tracking-[0.3px] leading-none ${
-                isToday ? 'text-white/70' : 'text-gray-secondary'
-              }`}
+              className={`font-medium tracking-[0.3px] leading-none ${
+                fluid
+                  ? 'text-[7px] @[420px]/calgrid:text-[9px] @[560px]/calgrid:text-[11px] @[700px]/calgrid:text-[13px] @[900px]/calgrid:text-[15px]'
+                  : 'text-[7px]'
+              } ${isToday ? 'text-white/70' : 'text-gray-secondary'}`}
               style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
             >
               +{overflow}

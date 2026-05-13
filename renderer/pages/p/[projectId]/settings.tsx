@@ -180,9 +180,9 @@ function SettingsBody({ projectId }: { projectId: string }) {
   }, [members, memberSearch])
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="flex-1 min-h-0 flex flex-col p-6 gap-6">
       {/* Toolbar */}
-      <div className="flex flex-col gap-[5px]">
+      <div className="shrink-0 flex flex-col gap-[5px]">
         <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
           {(project?.name ?? '').toUpperCase()} · SETTINGS
         </p>
@@ -198,7 +198,7 @@ function SettingsBody({ projectId }: { projectId: string }) {
       </div>
 
       {!canEdit && project && (
-        <div className="bg-brown-light border border-solid border-brown-med/30 rounded-[8px] px-[15px] py-[10px] flex items-center gap-[10px]">
+        <div className="shrink-0 bg-brown-light border border-solid border-brown-med/30 rounded-[8px] px-[15px] py-[10px] flex items-center gap-[10px]">
           <Icon name="Pin" size={13} className="text-brown-med" />
           <p className="text-brown-med text-[12px]">
             You're viewing in read-only mode. Only the project lead or an admin
@@ -207,8 +207,8 @@ function SettingsBody({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {/* Form card */}
-      <div className="bg-white-white border border-gray-border-light rounded-[10px] p-[25px] flex flex-col gap-[20px]">
+      {/* Form card — internally scrolls so Save card below stays visible */}
+      <div className="flex-1 min-h-0 bg-white-white border border-gray-border-light rounded-[10px] p-[25px] flex flex-col gap-[20px] overflow-y-auto">
         {/* Project header */}
         <div className="flex items-center gap-[15px] pb-[10px]">
           <span
@@ -518,8 +518,8 @@ function SettingsBody({ projectId }: { projectId: string }) {
         {error && <p className="text-red-main text-[12px]">{error}</p>}
       </div>
 
-      {/* Save card */}
-      <div className="bg-white-white border border-gray-border-light rounded-[10px] px-[25px] py-[15px] flex items-center justify-end gap-[15px]">
+      {/* Save card — always visible at the bottom */}
+      <div className="shrink-0 bg-white-white border border-gray-border-light rounded-[10px] px-[25px] py-[15px] flex items-center justify-end gap-[15px]">
         <span
           className="text-gray-secondary text-[12px] tracking-[0.5px]"
           style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}

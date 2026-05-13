@@ -285,9 +285,9 @@ function BacklogBody({ projectId }: { projectId: string }) {
   const filterLabel = activeFilterCount > 0 ? `Filter · ${activeFilterCount}` : 'Filter'
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="flex-1 min-h-0 flex flex-col p-6 gap-6">
       {/* Toolbar */}
-      <div className="flex items-end justify-between gap-4">
+      <div className="shrink-0 flex items-end justify-between gap-4">
         <div className="flex flex-col gap-[5px]">
           <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
             {(project?.name ?? '').toUpperCase()} · BACKLOG
@@ -427,7 +427,7 @@ function BacklogBody({ projectId }: { projectId: string }) {
       </div>
 
       {/* Progress filter pills — multi-select */}
-      <div className="flex items-center gap-[10px] flex-wrap">
+      <div className="shrink-0 flex items-center gap-[10px] flex-wrap">
         <button
           type="button"
           onClick={toggleAllStatus}
@@ -456,9 +456,10 @@ function BacklogBody({ projectId }: { projectId: string }) {
         })}
       </div>
 
-      {/* Table */}
-      <Table>
-        <TableHeader columns={COLS} />
+      {/* Table — shrinks to content when rows are few, scrolls internally when overflowing */}
+      <div className="min-h-0 bg-white-white rounded-[10px] border border-gray-border-light flex flex-col overflow-hidden">
+        <TableHeader columns={COLS} className="shrink-0" />
+        <div className="min-h-0 overflow-y-auto">
         {sorted.length === 0 ? (
           <div className="px-4 py-8 text-center text-gray-secondary text-[12px]">
             No tasks match.
@@ -523,7 +524,8 @@ function BacklogBody({ projectId }: { projectId: string }) {
             )
           })
         )}
-      </Table>
+        </div>
+      </div>
     </div>
   )
 }

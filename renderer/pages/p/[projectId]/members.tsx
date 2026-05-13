@@ -196,9 +196,9 @@ function MembersBody({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="flex-1 min-h-0 flex flex-col p-6 gap-6">
       {/* Toolbar */}
-      <div className="flex items-end justify-between gap-4">
+      <div className="shrink-0 flex items-end justify-between gap-4">
         <div className="flex flex-col gap-[5px]">
           <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
             {(project?.name ?? '').toUpperCase()} · MEMBERS · {stats.total} ACTIVE
@@ -270,7 +270,7 @@ function MembersBody({ projectId }: { projectId: string }) {
       </div>
 
       {/* Stats — eyebrow colors per Figma 976:4138 */}
-      <div className="flex gap-[10px]">
+      <div className="shrink-0 flex gap-[10px]">
         <StatCard
           eyebrow="Total Members"
           eyebrowColor="#2D5A9E"
@@ -301,9 +301,10 @@ function MembersBody({ projectId }: { projectId: string }) {
         />
       </div>
 
-      {/* Table */}
-      <Table>
-        <TableHeader columns={COLS} />
+      {/* Table — shrinks to content when rows are few, scrolls internally when overflowing */}
+      <div className="min-h-0 bg-white-white rounded-[10px] border border-gray-border-light flex flex-col overflow-hidden">
+        <TableHeader columns={COLS} className="shrink-0" />
+        <div className="min-h-0 overflow-y-auto">
         {filtered.length === 0 ? (
           <div className="px-4 py-8 text-center text-gray-secondary text-[12px]">
             No members match.
@@ -386,7 +387,8 @@ function MembersBody({ projectId }: { projectId: string }) {
             )
           })
         )}
-      </Table>
+        </div>
+      </div>
 
       {/* Detail side panel */}
       {detailMember && (

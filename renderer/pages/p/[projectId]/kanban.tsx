@@ -250,7 +250,7 @@ function KanbanBody({ projectId }: { projectId: string }) {
       </div>
 
       {/* Columns */}
-      <div className="flex gap-[10px] flex-1 min-h-0 overflow-x-auto">
+      <div className="flex gap-[10px] flex-1 min-h-0">
         {columns.length === 0 ? (
           <p className="text-gray-secondary text-[12px] py-[40px] text-center w-full">
             No columns match the current filter.
@@ -259,7 +259,7 @@ function KanbanBody({ projectId }: { projectId: string }) {
           columns.map((c) => (
             <div
               key={c.key}
-              className="flex-1 min-w-[260px] flex flex-col gap-[10px] bg-white-main rounded-[10px] p-[10px]"
+              className="flex-1 min-w-0 flex flex-col gap-[10px] bg-white-main rounded-[10px] p-[10px]"
             >
               {/* Column header */}
               <div className="flex items-center justify-between px-[3px] h-[28px]">

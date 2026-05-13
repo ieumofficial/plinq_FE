@@ -79,8 +79,11 @@ app.on('open-url', (event, url) => {
   mainWindow = createWindow('main', {
     width: 1440,
     height: 900,
-    minWidth: 960,
-    minHeight: 600,
+    // Below ~1280×720 the project dashboard 2-column grid + sidebars start
+    // breaking. Clamp the window so users can't drag it below a layout-safe
+    // floor.
+    minWidth: 1280,
+    minHeight: 720,
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     frame: isMac, // Windows/Linux: frameless
     // Center traffic lights vertically in the 64px header (lights are ~14px tall).

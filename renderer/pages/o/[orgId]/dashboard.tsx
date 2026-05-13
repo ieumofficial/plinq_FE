@@ -79,15 +79,15 @@ function MetricCard({
   hint: string
 }) {
   return (
-    <div className="flex-1 min-w-0 bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[5px]">
+    <div className="flex-1 min-w-0 bg-white-white border border-gray-border-light rounded-[10px] px-[15px] py-[10px] flex flex-col gap-[3px]">
       <p
         className="text-[10px] font-medium uppercase tracking-[1.5px]"
         style={{ color: eyebrowColor }}
       >
         {eyebrow}
       </p>
-      <p className="text-black text-[35px] font-semibold leading-none">{value}</p>
-      <p className="text-gray-main text-[10px] leading-[1.5]">{hint}</p>
+      <p className="text-black text-[26px] font-semibold leading-none">{value}</p>
+      <p className="text-gray-main text-[10px] leading-[1.3]">{hint}</p>
     </div>
   )
 }
@@ -107,7 +107,7 @@ function FeatureCallout({
 }) {
   return (
     <div
-      className="flex-1 min-w-0 border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[9px] items-start"
+      className="flex-1 min-w-0 border border-gray-border-light rounded-[10px] px-[15px] py-[10px] flex flex-col gap-[5px] items-start"
       style={{
         backgroundImage:
           'linear-gradient(167deg, rgb(46, 67, 78) 0%, rgb(31, 47, 56) 100%)',
@@ -116,12 +116,12 @@ function FeatureCallout({
       <p className="text-[10px] font-medium uppercase tracking-[1.5px] text-[#b8c5cf] w-full">
         {eyebrow}
       </p>
-      <p className="text-white text-[20px] font-semibold leading-tight w-full">{title}</p>
-      <p className="text-[#b5c2cc] text-[10px] leading-[1.5] w-full">{body}</p>
+      <p className="text-white text-[14px] font-semibold leading-tight w-full line-clamp-2">{title}</p>
+      <p className="text-[#b5c2cc] text-[10px] leading-[1.3] w-full line-clamp-2">{body}</p>
       <button
         type="button"
         onClick={onCta}
-        className="bg-white border border-gray-border-light rounded-[5px] px-[25px] py-[10px] text-black text-[12px]"
+        className="mt-auto bg-white border border-gray-border-light rounded-[5px] px-[15px] py-[5px] text-black text-[11px]"
       >
         {ctaLabel}
       </button>
@@ -277,7 +277,7 @@ const STAGES: Stage[] = [
 function WorkByStage({ counts }: { counts: Record<Stage['key'], number> }) {
   const total = Object.values(counts).reduce((a, b) => a + b, 0)
   return (
-    <div className="bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[10px] w-[509px] shrink-0">
+    <div className="bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[10px] w-[509px] max-w-[45%] shrink min-w-0 overflow-hidden">
       <SectionEyebrow
         eyebrow="Pipeline · total tasks"
         title="Work by stage"
@@ -424,9 +424,9 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
   )
 
   return (
-    <div className="p-6 flex flex-col gap-[10px] min-h-full">
+    <div className="flex-1 min-h-0 p-6 flex flex-col gap-[10px] overflow-hidden">
       {/* TITLE ROW */}
-      <div className="flex items-end justify-between gap-[10px]">
+      <div className="shrink-0 flex items-end justify-between gap-[10px]">
         <div className="flex flex-col gap-[5px]">
           <p className="text-red-main text-[10px] font-medium uppercase tracking-[1.5px]">
             {orgName} · Q2 {new Date().getFullYear()}
@@ -452,7 +452,7 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
       </div>
 
       {/* STATS ROW */}
-      <div className="flex gap-[10px]">
+      <div className="shrink-0 flex gap-[10px]">
         <MetricCard
           eyebrow="Total projects"
           eyebrowColor="#2d5a9e"
@@ -494,9 +494,11 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
         />
       </div>
 
-      {/* ACTIVE PROJECTS */}
-      <section className="bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[10px]">
-        <div className="flex items-center justify-between">
+      {/* ACTIVE PROJECTS — flex-1 shared with the bottom row so we always
+          fit the viewport. Internal grid clips overflowing cards rather than
+          pushing the bottom row off-screen. */}
+      <section className="flex-1 min-h-0 bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[10px] overflow-hidden">
+        <div className="shrink-0 flex items-center justify-between">
           <SectionEyebrow eyebrow="Portfolio" title="Active projects" />
           <div className="flex items-center gap-[10px]">
             <Tag color="gray" size="md" icon="Pin">
@@ -518,7 +520,7 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
         {activeProjects.length === 0 ? (
           <p className="text-gray-secondary text-[12px]">No active projects yet.</p>
         ) : (
-          <div className="grid grid-cols-2 gap-[10px]">
+          <div className="flex-1 min-h-0 grid grid-cols-2 gap-[10px] overflow-hidden auto-rows-[minmax(115px,1fr)]">
             {activeProjects.map((p) => (
               <ProjectMiniCard
                 key={p.id}
@@ -534,9 +536,11 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
         )}
       </section>
 
-      {/* BOTTOM ROW */}
-      <div className="flex gap-[10px] flex-1 min-h-0">
-        <section className="flex-1 bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[10px] min-w-0">
+      {/* BOTTOM ROW — shares remaining vertical space with the Portfolio
+          card above so neither one absorbs all the shrinkage on small
+          viewports. Internal sections clip overflow rather than scroll. */}
+      <div className="flex-1 min-h-0 flex gap-[10px]">
+        <section className="flex-1 min-w-0 bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[10px] overflow-hidden">
           <div className="flex items-center justify-between">
             <SectionEyebrow
               eyebrow="Members"

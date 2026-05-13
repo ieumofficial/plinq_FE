@@ -18,7 +18,9 @@ type TableProps = {
 
 export default function Table({ children, className }: TableProps) {
   return (
-    <div className={`bg-white-white rounded-[10px] border border-gray-border-light overflow-x-auto ${className ?? ''}`}>
+    <div
+      className={`bg-white-white rounded-[10px] border border-gray-border-light ${className ?? ''}`}
+    >
       {children}
     </div>
   )
@@ -35,22 +37,26 @@ const alignClass = {
   right: 'text-right justify-end',
 }
 
+// Default gap between cells. Pages can override with `!gap-[...]` via className.
+// Was 80px which forced horizontal scroll on most laptop widths — 24px lets
+// the table fit ~13"–15" laptops comfortably while still feeling airy.
+const DEFAULT_GAP = 'gap-[24px]'
+
 export function TableHeader({ columns, className }: HeaderProps) {
   return (
-    <div className={`flex items-center gap-[80px] bg-white-item border-b-2 border-solid border-gray-border-light px-[25px] py-[10px] ${className ?? ''}`}>
-      {columns.map((c) => {
-        const isFlex = c.width === 'flex-1'
-        return (
-          <div
-            key={c.key}
-            className={`flex items-center ${alignClass[c.align ?? 'left']} ${c.width ?? 'flex-1'} ${isFlex ? 'min-w-0' : 'shrink-0'} ${c.className ?? ''}`}
-          >
-            <span className="text-gray-main text-[12px] font-medium uppercase tracking-[1.5px] truncate">
-              {c.label}
-            </span>
-          </div>
-        )
-      })}
+    <div
+      className={`flex items-center ${DEFAULT_GAP} bg-white-item border-b-2 border-solid border-gray-border-light px-[25px] py-[10px] ${className ?? ''}`}
+    >
+      {columns.map((c) => (
+        <div
+          key={c.key}
+          className={`flex items-center min-w-0 ${alignClass[c.align ?? 'left']} ${c.width ?? 'flex-1'} ${c.className ?? ''}`}
+        >
+          <span className="text-gray-main text-[12px] font-medium uppercase tracking-[1.5px] truncate">
+            {c.label}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -67,7 +73,7 @@ export function TableRow({ children, isLast = false, onClick, className }: RowPr
   return (
     <div
       onClick={onClick}
-      className={`flex items-center gap-[80px] px-[25px] py-[10px] ${
+      className={`flex items-center ${DEFAULT_GAP} px-[25px] py-[10px] ${
         isLast ? '' : 'border-b border-solid border-gray-border-light'
       } ${onClick ? 'cursor-pointer hover:bg-white-item' : ''} ${className ?? ''}`}
     >
@@ -85,10 +91,9 @@ type CellProps = {
 }
 
 export function TableCell({ children, width, align = 'left', className }: CellProps) {
-  const isFlex = width === 'flex-1'
   return (
     <div
-      className={`flex items-center gap-[10px] ${alignClass[align]} ${width ?? 'flex-1'} ${isFlex ? 'min-w-0' : 'shrink-0'} ${className ?? ''}`}
+      className={`flex items-center gap-[10px] min-w-0 ${alignClass[align]} ${width ?? 'flex-1'} ${className ?? ''}`}
     >
       {children}
     </div>

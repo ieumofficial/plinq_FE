@@ -196,9 +196,9 @@ function KnowledgeBody({ projectId }: { projectId: string }) {
   const tagFilterLabel = allTagsOn ? 'Tag' : `Tag · ${tagFilter.size}`
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="flex-1 min-h-0 flex flex-col p-6 gap-6">
       {/* Toolbar */}
-      <div className="flex items-end justify-between gap-4">
+      <div className="shrink-0 flex items-end justify-between gap-4">
         <div className="flex flex-col gap-[5px]">
           <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
             {(project?.name ?? '').toUpperCase()} · KNOWLEDGE BASE · {docs.length} DOCS
@@ -265,7 +265,7 @@ function KnowledgeBody({ projectId }: { projectId: string }) {
 
       {/* Pinned */}
       {pinned.length > 0 && (
-        <div className="flex flex-col gap-[10px]">
+        <div className="shrink-0 flex flex-col gap-[10px]">
           <div className="flex items-center gap-[10px]">
             <Icon name="Pin" size={15} className="text-black" />
             <h2 className="text-black text-[14px] font-semibold">Pinned</h2>
@@ -284,9 +284,9 @@ function KnowledgeBody({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {/* All docs */}
-      <div className="flex flex-col gap-[10px]">
-        <div className="flex items-center gap-[10px]">
+      {/* All docs — shrinks to content when rows are few, scrolls internally when overflowing */}
+      <div className="min-h-0 flex flex-col gap-[10px]">
+        <div className="shrink-0 flex items-center gap-[10px]">
           <h2 className="text-black text-[14px] font-semibold">All docs</h2>
           <span
             className="text-gray-secondary text-[12px] font-medium"
@@ -295,8 +295,9 @@ function KnowledgeBody({ projectId }: { projectId: string }) {
             {filtered.length}
           </span>
         </div>
-        <Table>
-          <TableHeader columns={COLS} className="!gap-[20px]" />
+        <div className="min-h-0 bg-white-white rounded-[10px] border border-gray-border-light flex flex-col overflow-hidden">
+          <TableHeader columns={COLS} className="!gap-[20px] shrink-0" />
+          <div className="min-h-0 overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="px-4 py-8 text-center text-gray-secondary text-[12px]">
               {docs.length === 0 ? 'No documents yet.' : 'No docs match the filter.'}
@@ -414,7 +415,8 @@ function KnowledgeBody({ projectId }: { projectId: string }) {
               )
             })
           )}
-        </Table>
+          </div>
+        </div>
       </div>
 
       {/* New doc modal */}

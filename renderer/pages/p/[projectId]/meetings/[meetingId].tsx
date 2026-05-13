@@ -18,6 +18,7 @@ import {
   parseSummary,
   acceptActionItems,
   analyzeAudio,
+  analyzeMeeting,
   meetingMinutesQueryKey,
   transcriptSegmentsQueryKey,
   meetingAgendasQueryKey,
@@ -143,6 +144,30 @@ function MeetingDetailBody({
       })
       const file = new File([blob], result.filename, { type: result.mime })
       await runAnalyze(file)
+    } catch (e) {
+      setAnalyze({ running: false, error: (e as Error).message })
+    }
+  }
+
+  async function runRegenerate(): Promise<void> {
+    setAnalyze({ running: true, error: null })
+    try {
+      await analyzeMeeting(meetingId)
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.project.meetings(projectId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: meetingMinutesQueryKey(meetingId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: transcriptSegmentsQueryKey(meetingId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: meetingAgendasQueryKey(meetingId),
+        }),
+      ])
+      setAnalyze({ running: false, error: null })
     } catch (e) {
       setAnalyze({ running: false, error: (e as Error).message })
     }
@@ -380,11 +405,12 @@ function MeetingDetailBody({
                 </button>
                 <button
                   type="button"
-                  disabled
-                  className="bg-white/10 text-white text-[12px] font-semibold px-[14px] py-[8px] rounded-[5px] inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Re-run analysis (not yet wired)"
+                  onClick={() => void runRegenerate()}
+                  disabled={analyze.running}
+                  className="bg-white/10 hover:bg-white/20 text-white text-[12px] font-semibold px-[14px] py-[8px] rounded-[5px] inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Re-run analysis against the Zoom cloud recording"
                 >
-                  ↻ Regenerate
+                  ↻ {analyze.running ? 'Regenerating…' : 'Regenerate'}
                 </button>
                 {accept.errors.length > 0 && (
                   <span className="text-[11px] text-red-light">

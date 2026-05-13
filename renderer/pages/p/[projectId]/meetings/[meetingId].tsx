@@ -18,7 +18,6 @@ import {
   parseSummary,
   acceptActionItems,
   analyzeAudio,
-  analyzeMeeting,
   meetingMinutesQueryKey,
   transcriptSegmentsQueryKey,
   meetingAgendasQueryKey,
@@ -149,28 +148,15 @@ function MeetingDetailBody({
     }
   }
 
+  // Re-run analysis against the local Zoom recording (Free-tier path).
+  // Reuses handleAutoImport which finds the latest local m4a and pipes
+  // it through analyze-audio — that's the only function wired up for
+  // Free-tier meetings.
   async function runRegenerate(): Promise<void> {
-    setAnalyze({ running: true, error: null })
-    try {
-      await analyzeMeeting(meetingId)
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.project.meetings(projectId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: meetingMinutesQueryKey(meetingId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: transcriptSegmentsQueryKey(meetingId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: meetingAgendasQueryKey(meetingId),
-        }),
-      ])
-      setAnalyze({ running: false, error: null })
-    } catch (e) {
-      setAnalyze({ running: false, error: (e as Error).message })
-    }
+    await handleAutoImport()
+    await queryClient.invalidateQueries({
+      queryKey: meetingAgendasQueryKey(meetingId),
+    })
   }
 
   async function handleAcceptAll(

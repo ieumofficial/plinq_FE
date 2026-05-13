@@ -70,6 +70,22 @@ function memberLabel(u: UserRow) {
   return u.nickname || `${u.first_name} ${u.last_name}`.trim() || u.email
 }
 
+/** Strip everything but digits + colon and cap at 5 chars ("HH:MM"). */
+function filterTimeInput(s: string): string {
+  return s.replace(/[^0-9:]/g, '').slice(0, 5)
+}
+
+/** Normalize "9", "9:5", "14", "14:00" → "HH:MM" 24-hour. Used on blur
+ *  so the field renders identically to the Figma reference (no AM/PM
+ *  marker injected by the Korean locale native time picker). */
+function normalizeTime(s: string): string {
+  if (!s) return ''
+  const [rawH = '0', rawM = '0'] = s.split(':')
+  const h = Math.min(23, Math.max(0, parseInt(rawH, 10) || 0))
+  const m = Math.min(59, Math.max(0, parseInt(rawM, 10) || 0))
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
 function combineDateTime(date: string, time: string): string {
   if (!date || !time) return ''
   return new Date(`${date}T${time}`).toISOString()
@@ -560,15 +576,22 @@ export default function CreateMeetingModal({
                 )}
               </div>
             </div>
-            {/* Start */}
+            {/* Start — text input so we render "14:00" verbatim regardless
+                of OS locale. Native <input type="time"> on Korean Chrome
+                injects "오전/오후" markers that overflow the column. */}
             <div className="flex flex-col gap-1">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
                 Start *
               </label>
               <input
-                type="time"
+                type="text"
+                inputMode="numeric"
+                placeholder="14:00"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={(e) =>
+                  setStartTime(filterTimeInput(e.target.value))
+                }
+                onBlur={() => setStartTime(normalizeTime(startTime))}
                 className="bg-white-white border border-gray-border rounded-lg px-3 py-2 text-[12px] text-black outline-none focus:border-primary-main h-[39px]"
               />
             </div>
@@ -578,9 +601,14 @@ export default function CreateMeetingModal({
                 End *
               </label>
               <input
-                type="time"
+                type="text"
+                inputMode="numeric"
+                placeholder="14:40"
                 value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
+                onChange={(e) =>
+                  setEndTime(filterTimeInput(e.target.value))
+                }
+                onBlur={() => setEndTime(normalizeTime(endTime))}
                 className="bg-white-white border border-gray-border rounded-lg px-3 py-2 text-[12px] text-black outline-none focus:border-primary-main h-[39px]"
               />
             </div>

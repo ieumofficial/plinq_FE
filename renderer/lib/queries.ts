@@ -709,9 +709,8 @@ export type ProjectMember = UserRow & {
 export async function getProjectMembersWithRoles(
   projectId: string
 ): Promise<ProjectMember[]> {
-  // NOTE: project_members has no joined_at / created_at column (see
-  // 20260412000006_create_project.sql) — don't add one here without first
-  // adding it in a migration.
+  // NOTE: project_members has no joined_at / created_at column. Don't select
+  // one here without first adding a migration.
   const { data, error } = await supabase
     .from('project_members')
     .select('role, users(id, email, first_name, last_name, nickname, job_title)')

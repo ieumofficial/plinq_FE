@@ -422,9 +422,10 @@ function MeetingDetailBody({
         const otherSummary = insights?.other.summary?.trim() ?? ''
         const otherTranscript = insights?.other.transcript?.trim() ?? ''
         const hasOther = !!(otherSummary || otherTranscript)
-        if (agendas.length === 0 || (!hasAgendaSummary && !hasOther)) {
-          return null
-        }
+        // Render when there's anything agenda-grouped to show. When the
+        // meeting had no agendas at analysis time, all content ends up
+        // in `other` — we still surface it as a single "기타" card.
+        if (!hasAgendaSummary && !hasOther) return null
         return (
           <section className="flex flex-col gap-[12px]">
             <h2 className="text-black text-[16px] font-semibold">

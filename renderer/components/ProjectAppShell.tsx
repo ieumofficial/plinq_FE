@@ -4,12 +4,19 @@ import AppLayout from './ui/AppLayout'
 import SideMenu, { type NavItem } from './ui/SideMenu'
 import StackedSideMenu, { type StackedNavItem } from './ui/StackedSideMenu'
 import Header from './ui/Header'
+import ProjectLabel from './ui/ProjectLabel'
 import CreateNewMenu, { type CreateType } from './CreateNewMenu'
 import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
-import { useCurrentUser, useMyOrg, useProject, useProjectCounts } from '../lib/hooks'
-import { useSidebarPref } from '../lib/sidebarPref'
+import {
+  useCurrentUser,
+  useMyOrg,
+  useProject,
+  useProjectCounts,
+  useUserProjects,
+} from '../lib/hooks'
+import { useSidebarPref, useSpaceTransition } from '../lib/sidebarPref'
 import { dbStatusToUi } from '../lib/types'
 
 // ─── Create New context ─────────────────────────────────────────────────────
@@ -79,7 +86,12 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
   const { data: org } = useMyOrg(user?.id)
   const { data: project } = useProject(projectId)
   const { data: counts } = useProjectCounts(projectId)
+  const { data: userProjects = [] } = useUserProjects(user?.id)
   const { collapsed: stackedSidebar, toggle: toggleSidebar } = useSidebarPref()
+  useSpaceTransition(`project:${projectId}`)
+  const [switcherOpen, setSwitcherOpen] = useState(false)
+  // Close the switcher whenever we navigate to a new project.
+  useEffect(() => setSwitcherOpen(false), [projectId])
 
   useEffect(() => {
     if (userFetched && !user) router.push('/')
@@ -166,6 +178,8 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
         }
         panel={
           <StackedSideMenu
+            key={`project:${projectId}`}
+            spaceId={`project:${projectId}`}
             header={{
               kind: 'project',
               initial: projectInitial,
@@ -173,11 +187,65 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
               name: projectName,
               subtitle: project?.description ?? undefined,
               status: project ? dbStatusToUi(project.status) : undefined,
+              onSwitch: () => setSwitcherOpen((v) => !v),
+              switchOpen: switcherOpen,
             }}
             items={items}
             activeKey={active}
             onItemClick={(k) => goPage(k as ProjectActiveKey)}
             onBack={() => router.push('/projects')}
+            overlay={
+              switcherOpen && (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Close project switcher"
+                    onClick={() => setSwitcherOpen(false)}
+                    className="absolute inset-0 z-30 cursor-default"
+                  />
+                  <div className="absolute z-40 top-[95px] left-[10px] right-[10px] bg-white-white border border-solid border-gray-border-light rounded-[8px] shadow-md py-[5px] max-h-[280px] overflow-y-auto">
+                    {userProjects.length === 0 ? (
+                      <p className="px-[10px] py-[7px] text-gray-secondary text-[11px]">
+                        No other projects.
+                      </p>
+                    ) : (
+                      userProjects.map((p) => {
+                        const isCurrent = p.id === projectId
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => {
+                              if (isCurrent) {
+                                setSwitcherOpen(false)
+                                return
+                              }
+                              router.push(`/p/${p.id}/dashboard`)
+                            }}
+                            className={`w-full flex items-center gap-[8px] px-[10px] py-[6px] text-left hover:bg-white-item ${
+                              isCurrent ? 'bg-blue-light/30' : ''
+                            }`}
+                          >
+                            <ProjectLabel
+                              name={p.name}
+                              color={p.color ?? 'blue'}
+                              size="sm"
+                            />
+                            <span
+                              className={`text-[12px] text-black truncate flex-1 ${
+                                isCurrent ? 'font-semibold' : ''
+                              }`}
+                            >
+                              {p.name}
+                            </span>
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                </>
+              )
+            }
           />
         }
       >

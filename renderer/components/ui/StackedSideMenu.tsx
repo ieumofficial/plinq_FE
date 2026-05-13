@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import Icon, { type IconName } from './Icon'
 import ProjectLabel from './ProjectLabel'
 import StatusLabelBig, { type Status } from './StatusLabelBig'
+import { getLastSpaceId, type SpaceId } from '../../lib/sidebarPref'
 
 export type StackedNavItem = {
   key: string
@@ -23,6 +24,8 @@ type ProjectHeader = {
   status?: Status
   /** Click handler for the dropdown chevron / name area (project switcher). */
   onSwitch?: () => void
+  /** True while the project switcher dropdown is open — used to flip the chevron. */
+  switchOpen?: boolean
   /** Click handler for the status pill (status switcher). */
   onStatusClick?: () => void
 }
@@ -35,6 +38,7 @@ type OrgHeader = {
   /** e.g. "108 members total" */
   subtitle?: string
   onSwitch?: () => void
+  switchOpen?: boolean
 }
 
 type Props = {
@@ -46,6 +50,10 @@ type Props = {
   onBack?: () => void
   /** Optional extra content rendered absolutely positioned (e.g. status switcher popover). */
   overlay?: ReactNode
+  /** Identifier for the current space. When the panel remounts within the
+   *  same space (page-to-page navigation), it renders fully open; when the
+   *  space changes (e.g. switching projects), it replays the slide-in. */
+  spaceId?: SpaceId
 }
 
 /**
@@ -61,17 +69,24 @@ export default function StackedSideMenu({
   onItemClick,
   onBack,
   overlay,
+  spaceId,
 }: Props) {
   const isProject = header.kind === 'project'
   const sectionLabel = isProject ? 'Project' : 'Organization'
 
-  // Slide-in: start at 0 width, expand to 210px on the next paint so the panel
-  // animates open whenever the parent route mounts it.
-  const [open, setOpen] = useState(false)
+  // Slide-in plays on first paint AND whenever the space id changes
+  // (Personal → project, project A → project B, project → org, etc.).
+  // Page-to-page navigation *within* the same space — where `useSpaceTransition`
+  // has already marked lastSpaceId as the same value — skips the animation
+  // and renders fully open immediately.
+  const [open, setOpen] = useState(
+    () => spaceId !== undefined && getLastSpaceId() === spaceId
+  )
   useEffect(() => {
+    if (open) return
     const id = requestAnimationFrame(() => setOpen(true))
     return () => cancelAnimationFrame(id)
-  }, [])
+  }, [open])
 
   return (
     <aside
@@ -108,7 +123,13 @@ export default function StackedSideMenu({
             <span className="text-black text-[14px] font-semibold">
               {header.name}
             </span>
-            <Icon name="ArrowRight" size={11} className="rotate-90" />
+            <Icon
+              name="ArrowRight"
+              size={11}
+              className={`text-black transition-transform ${
+                header.switchOpen ? '-rotate-90' : 'rotate-90'
+              }`}
+            />
           </button>
           {header.subtitle && (
             <p className="text-gray-secondary text-[10px] leading-[1.5]">

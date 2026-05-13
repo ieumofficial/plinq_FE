@@ -8,7 +8,7 @@ import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
 import { useCurrentUser, useMyOrg } from '../lib/hooks'
-import { useSidebarPref } from '../lib/sidebarPref'
+import { useSidebarPref, useSpaceTransition } from '../lib/sidebarPref'
 
 // ─── Create New context ─────────────────────────────────────────────────────
 
@@ -103,6 +103,7 @@ export default function PersonalAppShell({
   const orgId = org?.id ?? null
   const orgName = org?.name ?? null
   const { collapsed: stackedSidebar, toggle: toggleSidebar } = useSidebarPref()
+  useSpaceTransition('personal')
 
   // Redirect to login if no user (only after the first fetch resolves)
   useEffect(() => {

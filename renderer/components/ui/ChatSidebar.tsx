@@ -365,6 +365,10 @@ function Divider() {
 
 // ─── Main ───────────────────────────────────────────────────────────────────
 
+// Module-level flag so the slide-in animation only plays the first time the
+// sidebar mounts in a session, not on every route change back to Messages.
+let hasSlidIn = false
+
 export default function ChatSidebar({
   activeFilter = 'all',
   onFilterChange,
@@ -380,13 +384,17 @@ export default function ChatSidebar({
   currentUserId,
   onDeleteSession,
 }: Props) {
-  // Slide-in: start at 0 width, expand to 250px on the next paint so the
-  // sidebar animates open whenever the Messages route mounts it.
-  const [open, setOpen] = useState(false)
+  // Slide-in plays once per session. Subsequent mounts (route changes that
+  // remount this component) skip the animation and render fully open.
+  const [open, setOpen] = useState(hasSlidIn)
   useEffect(() => {
-    const id = requestAnimationFrame(() => setOpen(true))
+    if (open) return
+    const id = requestAnimationFrame(() => {
+      setOpen(true)
+      hasSlidIn = true
+    })
     return () => cancelAnimationFrame(id)
-  }, [])
+  }, [open])
 
   // Right-click context menu — appears at the cursor for sessions the current
   // user created. `targetId` is the session id under the menu.

@@ -190,50 +190,56 @@ function KanbanBody({ projectId }: { projectId: string }) {
               {filterLabel}
             </Button>
             {filterOpen && (
-              <div className="absolute top-[40px] right-0 z-20 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md p-[10px] flex flex-col gap-[2px] min-w-[260px] max-h-[420px] overflow-y-auto">
-                <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px] px-[2px] mb-[5px]">
-                  Progress
-                </p>
-                <FilterChecklist
-                  label="All"
-                  count={tasks.length}
-                  color="#455E6A"
-                  checked={allStatusOn}
-                  onChange={toggleAllStatus}
-                />
-                <div className="h-px bg-gray-border-light my-[5px]" />
-                {COLUMNS.map((c) => (
+              <div className="absolute top-[40px] right-0 z-20 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md p-[15px] flex items-start gap-[20px]">
+                {/* PROGRESS */}
+                <div className="flex flex-col gap-[2px] w-[230px]">
+                  <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px] px-[2px] mb-[5px]">
+                    Progress
+                  </p>
                   <FilterChecklist
-                    key={c.key}
-                    label={c.label}
-                    count={statusCounts.get(c.key) ?? 0}
-                    color={c.dot}
-                    checked={statusFilter.has(c.key)}
-                    onChange={() => toggleStatus(c.key)}
+                    label="All"
+                    count={tasks.length}
+                    color="#455E6A"
+                    checked={allStatusOn}
+                    onChange={toggleAllStatus}
                   />
-                ))}
+                  <div className="h-px bg-gray-border-light my-[5px]" />
+                  {COLUMNS.map((c) => (
+                    <FilterChecklist
+                      key={c.key}
+                      label={c.label}
+                      count={statusCounts.get(c.key) ?? 0}
+                      color={c.dot}
+                      checked={statusFilter.has(c.key)}
+                      onChange={() => toggleStatus(c.key)}
+                    />
+                  ))}
+                </div>
 
-                <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px] px-[2px] mt-[15px] mb-[5px]">
-                  Priority
-                </p>
-                <FilterChecklist
-                  label="All"
-                  count={tasks.length}
-                  color="#455E6A"
-                  checked={allPriorityOn}
-                  onChange={toggleAllPriority}
-                />
-                <div className="h-px bg-gray-border-light my-[5px]" />
-                {PRIORITY_OPTIONS.map((p) => (
+                {/* PRIORITY */}
+                <div className="flex flex-col gap-[2px] w-[230px]">
+                  <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px] px-[2px] mb-[5px]">
+                    Priority
+                  </p>
                   <FilterChecklist
-                    key={p.key}
-                    label={p.label}
-                    count={priorityCounts.get(p.key) ?? 0}
-                    color={p.color}
-                    checked={priorityFilter.has(p.key)}
-                    onChange={() => togglePriority(p.key)}
+                    label="All"
+                    count={tasks.length}
+                    color="#455E6A"
+                    checked={allPriorityOn}
+                    onChange={toggleAllPriority}
                   />
-                ))}
+                  <div className="h-px bg-gray-border-light my-[5px]" />
+                  {PRIORITY_OPTIONS.map((p) => (
+                    <FilterChecklist
+                      key={p.key}
+                      label={p.label}
+                      count={priorityCounts.get(p.key) ?? 0}
+                      color={p.color}
+                      checked={priorityFilter.has(p.key)}
+                      onChange={() => togglePriority(p.key)}
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </div>

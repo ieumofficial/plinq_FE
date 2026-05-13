@@ -9,7 +9,7 @@
   "scripts": {
     "clean:icons": "rimraf --glob \"renderer/.next/**/Icon?\"",
     "predev": "npm run clean:icons",
-    "dev": "nextron --startup-delay 30000",
+    "dev": "nextron --startup-delay 5000",
     "build": "nextron build",
     "postinstall": "electron-builder install-app-deps"
   },

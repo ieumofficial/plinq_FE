@@ -15,7 +15,7 @@ type TableProps = {
 
 export default function Table({ children, className }: TableProps) {
   return (
-    <div className={`bg-white-white rounded-[5px] border border-gray-border-light overflow-hidden ${className ?? ''}`}>
+    <div className={`bg-white-white rounded-[10px] border border-gray-border-light overflow-x-auto ${className ?? ''}`}>
       {children}
     </div>
   )
@@ -23,6 +23,7 @@ export default function Table({ children, className }: TableProps) {
 
 type HeaderProps = {
   columns: Column[]
+  className?: string
 }
 
 const alignClass = {
@@ -31,19 +32,22 @@ const alignClass = {
   right: 'text-right justify-end',
 }
 
-export function TableHeader({ columns }: HeaderProps) {
+export function TableHeader({ columns, className }: HeaderProps) {
   return (
-    <div className="flex items-center bg-white-item border-b-2 border-solid border-gray-border-light px-[25px] py-[10px]">
-      {columns.map((c) => (
-        <div
-          key={c.key}
-          className={`flex items-center ${alignClass[c.align ?? 'left']} ${c.width ?? 'flex-1'}`}
-        >
-          <span className="text-gray-main text-[12px] font-medium uppercase tracking-[1.5px]">
-            {c.label}
-          </span>
-        </div>
-      ))}
+    <div className={`flex items-center gap-[80px] bg-white-item border-b-2 border-solid border-gray-border-light px-[25px] py-[10px] ${className ?? ''}`}>
+      {columns.map((c) => {
+        const isFlex = c.width === 'flex-1'
+        return (
+          <div
+            key={c.key}
+            className={`flex items-center ${alignClass[c.align ?? 'left']} ${c.width ?? 'flex-1'} ${isFlex ? 'min-w-0' : 'shrink-0'}`}
+          >
+            <span className="text-gray-main text-[12px] font-medium uppercase tracking-[1.5px] truncate">
+              {c.label}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -60,7 +64,7 @@ export function TableRow({ children, isLast = false, onClick, className }: RowPr
   return (
     <div
       onClick={onClick}
-      className={`flex items-center px-[25px] py-[10px] ${
+      className={`flex items-center gap-[80px] px-[25px] py-[10px] ${
         isLast ? '' : 'border-b border-solid border-gray-border-light'
       } ${onClick ? 'cursor-pointer hover:bg-white-item' : ''} ${className ?? ''}`}
     >
@@ -78,9 +82,10 @@ type CellProps = {
 }
 
 export function TableCell({ children, width, align = 'left', className }: CellProps) {
+  const isFlex = width === 'flex-1'
   return (
     <div
-      className={`flex items-center gap-[10px] ${alignClass[align]} ${width ?? 'flex-1'} ${className ?? ''}`}
+      className={`flex items-center gap-[10px] ${alignClass[align]} ${width ?? 'flex-1'} ${isFlex ? 'min-w-0' : 'shrink-0'} ${className ?? ''}`}
     >
       {children}
     </div>

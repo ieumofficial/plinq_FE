@@ -27,9 +27,14 @@ export default function ProjectCard({
       <div className="flex flex-col gap-[10px] w-full">
         <div className="flex items-center justify-between w-full">
           {status ? <StatusLabelBig status={status} size="md" /> : <span />}
-          <span className="font-sans text-[14px] font-semibold text-black">{pct}%</span>
+          <span
+            className="text-[14px] font-semibold text-black"
+            style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+          >
+            {pct}%
+          </span>
         </div>
-        <h3 className="font-sans text-[20px] font-semibold text-black leading-tight">{name}</h3>
+        <h3 className="font-sans text-[16px] font-semibold text-black leading-tight">{name}</h3>
         <p
           className="text-[10px] text-gray-main leading-[1.2] line-clamp-3"
           style={{ fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' }}

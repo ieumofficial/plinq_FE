@@ -8,7 +8,7 @@
  */
 
 import type { ReactNode } from 'react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 type Props = {
   value: string
@@ -228,23 +228,229 @@ export default function ChatComposer({
       e.preventDefault()
       if (canSend) onSend()
     }
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey) {
+      const k = e.key.toLowerCase()
+      if (k === 'b') {
+        e.preventDefault()
+        wrapSelection('**', '**')
+      } else if (k === 'i') {
+        e.preventDefault()
+        wrapSelection('*', '*')
+      } else if (k === 'e') {
+        e.preventDefault()
+        wrapSelection('`', '`')
+      }
+    }
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'x') {
+      e.preventDefault()
+      wrapSelection('~~', '~~')
+    }
+  }
+
+  /** Wrap the textarea's current selection (or cursor) with markdown markers. */
+  function wrapSelection(prefix: string, suffix: string) {
+    const el = ref.current
+    if (!el) return
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    const before = value.slice(0, start)
+    const selected = value.slice(start, end)
+    const after = value.slice(end)
+    const next = `${before}${prefix}${selected}${suffix}${after}`
+    onChange(next)
+    // Restore selection in the next tick so React re-renders the value first.
+    requestAnimationFrame(() => {
+      const node = ref.current
+      if (!node) return
+      node.focus()
+      if (selected.length === 0) {
+        // No selection: place cursor between the markers.
+        const pos = start + prefix.length
+        node.setSelectionRange(pos, pos)
+      } else {
+        // Select the wrapped text so further actions stack predictably.
+        node.setSelectionRange(start + prefix.length, end + prefix.length)
+      }
+    })
+  }
+
+  /** Prefix the current line with "- " (toggle on/off if already a list item). */
+  function insertList() {
+    const el = ref.current
+    if (!el) return
+    const pos = el.selectionStart
+    // Find the start of the current line.
+    const lineStart = value.lastIndexOf('\n', pos - 1) + 1
+    const lineEnd = (() => {
+      const i = value.indexOf('\n', pos)
+      return i === -1 ? value.length : i
+    })()
+    const line = value.slice(lineStart, lineEnd)
+    let nextLine: string
+    let deltaCursor = 0
+    if (/^- /.test(line)) {
+      // Toggle off — strip "- "
+      nextLine = line.replace(/^- /, '')
+      deltaCursor = -2
+    } else {
+      // Toggle on — add "- "
+      nextLine = `- ${line}`
+      deltaCursor = 2
+    }
+    const next = value.slice(0, lineStart) + nextLine + value.slice(lineEnd)
+    onChange(next)
+    requestAnimationFrame(() => {
+      const node = ref.current
+      if (!node) return
+      node.focus()
+      const newPos = pos + deltaCursor
+      node.setSelectionRange(newPos, newPos)
+    })
+  }
+
+  /** Inline link-insertion popover state. Remembers the textarea selection so
+   * that focus changes (clicking the URL input) don't lose the insertion point. */
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [linkUrl, setLinkUrl] = useState('')
+  const linkAnchor = useRef<{ start: number; end: number; selected: string }>({
+    start: 0,
+    end: 0,
+    selected: '',
+  })
+
+  function openLinkPopover() {
+    const el = ref.current
+    if (!el) return
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    linkAnchor.current = { start, end, selected: value.slice(start, end) }
+    setLinkUrl('https://')
+    setLinkOpen(true)
+  }
+
+  function applyLink() {
+    const url = linkUrl.trim()
+    if (!url || url === 'https://') {
+      setLinkOpen(false)
+      return
+    }
+    const { start, end, selected } = linkAnchor.current
+    const text = selected || 'link'
+    const insert = `[${text}](${url})`
+    const next = value.slice(0, start) + insert + value.slice(end)
+    onChange(next)
+    setLinkOpen(false)
+    requestAnimationFrame(() => {
+      const node = ref.current
+      if (!node) return
+      node.focus()
+      const pos = start + insert.length
+      node.setSelectionRange(pos, pos)
+    })
+  }
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  /** Open the OS file picker and insert "📎 filename (XX KB)" at the cursor. */
+  function pickFile() {
+    fileInputRef.current?.click()
+  }
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file
+    if (!file) return
+    const sizeKb = Math.max(1, Math.round(file.size / 1024))
+    const tag = `📎 ${file.name} (${sizeKb} KB)`
+    const el = ref.current
+    if (!el) {
+      onChange(value + tag)
+      return
+    }
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    const next = value.slice(0, start) + tag + value.slice(end)
+    onChange(next)
+    requestAnimationFrame(() => {
+      const node = ref.current
+      if (!node) return
+      node.focus()
+      const pos = start + tag.length
+      node.setSelectionRange(pos, pos)
+    })
   }
 
   return (
     <div className="bg-white-white border border-solid border-gray-border-light rounded-[10px] overflow-hidden flex flex-col">
       {/* Format toolbar */}
       <div className="flex items-center gap-[20px] px-[15px] py-[5px]">
-        <ToolButton ariaLabel="Bold"><IconBold /></ToolButton>
-        <ToolButton ariaLabel="Italic"><IconItalic /></ToolButton>
-        <ToolButton ariaLabel="Strikethrough"><IconStrike /></ToolButton>
-        <ToolButton ariaLabel="Code"><IconCode /></ToolButton>
+        <ToolButton ariaLabel="Bold (Ctrl+B)" onClick={() => wrapSelection('**', '**')}>
+          <IconBold />
+        </ToolButton>
+        <ToolButton ariaLabel="Italic (Ctrl+I)" onClick={() => wrapSelection('*', '*')}>
+          <IconItalic />
+        </ToolButton>
+        <ToolButton ariaLabel="Strikethrough (Ctrl+Shift+X)" onClick={() => wrapSelection('~~', '~~')}>
+          <IconStrike />
+        </ToolButton>
+        <ToolButton ariaLabel="Code (Ctrl+E)" onClick={() => wrapSelection('`', '`')}>
+          <IconCode />
+        </ToolButton>
         <span className="self-stretch w-px bg-gray-border-light" />
         <div className="flex items-center gap-[10px]">
-          <ToolButton ariaLabel="Checklist"><IconChecklist /></ToolButton>
-          <ToolButton ariaLabel="Link"><IconLink /></ToolButton>
-          <ToolButton ariaLabel="Attach"><IconAttach /></ToolButton>
+          <ToolButton ariaLabel="List" onClick={insertList}>
+            <IconChecklist />
+          </ToolButton>
+          <ToolButton ariaLabel="Link" onClick={openLinkPopover}>
+            <IconLink />
+          </ToolButton>
+          <ToolButton ariaLabel="Attach" onClick={pickFile}>
+            <IconAttach />
+          </ToolButton>
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={handleFile}
+            className="hidden"
+            aria-hidden
+          />
         </div>
       </div>
+
+      {linkOpen && (
+        <div className="flex items-center gap-[5px] px-[15px] py-[5px] border-t border-solid border-gray-border-light bg-white-item">
+          <input
+            type="url"
+            value={linkUrl}
+            autoFocus
+            onChange={(e) => setLinkUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                applyLink()
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setLinkOpen(false)
+              }
+            }}
+            placeholder="https://"
+            className="flex-1 bg-white-white border border-solid border-gray-border-light rounded-[5px] px-[10px] py-[4px] text-[12px] outline-none focus:border-primary-main"
+          />
+          <button
+            type="button"
+            onClick={applyLink}
+            className="bg-primary-dark text-white text-[10px] rounded-[5px] px-[10px] py-[5px] hover:opacity-90"
+          >
+            Insert
+          </button>
+          <button
+            type="button"
+            onClick={() => setLinkOpen(false)}
+            className="text-gray-main text-[10px] px-[8px] py-[5px] hover:bg-white-white rounded-[5px]"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       <div className="h-px bg-gray-border-light w-full" />
 

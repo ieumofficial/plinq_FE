@@ -31,6 +31,9 @@ type Props = {
   onCreateNew?: () => void
   /** Replace the section label with arbitrary content (e.g. project switcher). */
   sectionExtra?: ReactNode
+  /** Click handler for the "Toggle sidebar" footer item. When provided, the
+   * row is rendered above the user block / divider. */
+  onToggleSidebar?: () => void
 }
 
 export default function SideMenu({
@@ -44,6 +47,7 @@ export default function SideMenu({
   onItemClick,
   onCreateNew,
   sectionExtra,
+  onToggleSidebar,
 }: Props) {
   const widthClass = stacked ? 'w-[59px]' : 'w-[200px]'
   // Less top padding now that the org block lives in the header above.
@@ -51,7 +55,7 @@ export default function SideMenu({
 
   return (
     <aside
-      className={`bg-[#F8F9FA] border-r border-solid border-gray-border h-full flex flex-col ${stacked ? 'items-center' : 'items-start'} justify-between ${padding} ${widthClass} shrink-0`}
+      className={`bg-[#F8F9FA] border-r border-solid border-gray-border h-full flex flex-col ${stacked ? 'items-center' : 'items-start'} justify-between ${padding} ${widthClass} shrink-0 transition-[width] duration-200 ease-in-out overflow-hidden`}
     >
       {/* Top: Section + Nav */}
       <div className={`flex flex-col gap-[10px] w-full ${stacked ? 'items-center' : 'items-start'}`}>
@@ -93,6 +97,14 @@ export default function SideMenu({
 
       {/* Footer */}
       <div className={`flex flex-col gap-[5px] w-full ${stacked ? 'items-center' : 'items-start'}`}>
+        {onToggleSidebar && (
+          <MenuItem
+            icon="Sidebar"
+            label="Toggle sidebar"
+            stacked={stacked}
+            onClick={onToggleSidebar}
+          />
+        )}
         {footerItems?.map((it) => (
           <MenuItem
             key={it.key}

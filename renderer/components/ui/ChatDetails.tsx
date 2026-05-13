@@ -17,7 +17,7 @@ import FileLabel, { type FileCategory } from './FileLabel'
 // ─── Shared helpers ─────────────────────────────────────────────────────────
 
 const Eyebrow = ({ children }: { children: ReactNode }) => (
-  <p className="text-purple-main text-[10px] font-medium uppercase tracking-[1.5px]">
+  <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
     {children}
   </p>
 )

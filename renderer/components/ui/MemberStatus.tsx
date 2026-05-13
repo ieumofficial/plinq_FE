@@ -68,7 +68,7 @@ export default function MemberStatus(props: Props) {
   const p = PERMISSION[props.status]
   return (
     <span
-      className={`inline-flex items-center justify-center px-[7px] py-[3px] rounded-[2px] text-[12px] font-semibold leading-none whitespace-nowrap text-white ${p.bg} ${props.className ?? ''}`}
+      className={`inline-flex items-center justify-center w-[110px] h-[22px] rounded-[2px] text-[12px] font-semibold leading-none whitespace-nowrap text-white text-center ${p.bg} ${props.className ?? ''}`}
     >
       {p.label}
     </span>

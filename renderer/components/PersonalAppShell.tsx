@@ -8,6 +8,7 @@ import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
 import { useCurrentUser, useMyOrg } from '../lib/hooks'
+import { useSidebarPref, useSpaceTransition } from '../lib/sidebarPref'
 
 // ─── Create New context ─────────────────────────────────────────────────────
 
@@ -34,7 +35,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'projects', icon: 'Folder', label: 'Projects' },
   { key: 'messages', icon: 'Chat', label: 'Messages' },
   { key: 'calendar', icon: 'Calendar', label: 'Calendar' },
-  { key: 'tasks', icon: 'Task', label: 'Action Items' },
+  { key: 'tasks', icon: 'Task', label: 'Tasks' },
   { key: 'organization', icon: 'Organization', label: 'Organization' },
 ]
 
@@ -65,11 +66,6 @@ type Props = {
   headerEyebrow?: string
   /** Big header title. Format: "Good morning, Yujin". */
   headerTitle?: string
-  /**
-   * When true, the left rail collapses to the 59px icon-only sidebar (used on
-   * the Messages page where ChatSidebar replaces the wider personal nav).
-   */
-  stackedSidebar?: boolean
   children: ReactNode
 }
 
@@ -99,7 +95,6 @@ export default function PersonalAppShell({
   active,
   headerEyebrow,
   headerTitle,
-  stackedSidebar = false,
   children,
 }: Props) {
   const router = useRouter()
@@ -107,6 +102,8 @@ export default function PersonalAppShell({
   const { data: org } = useMyOrg(user?.id)
   const orgId = org?.id ?? null
   const orgName = org?.name ?? null
+  const { collapsed: stackedSidebar, toggle: toggleSidebar } = useSidebarPref()
+  useSpaceTransition('personal')
 
   // Redirect to login if no user (only after the first fetch resolves)
   useEffect(() => {
@@ -177,6 +174,7 @@ export default function PersonalAppShell({
               if (route && route !== router.pathname) router.push(route)
             }}
             onCreateNew={openMenu}
+            onToggleSidebar={toggleSidebar}
           />
         }
       >

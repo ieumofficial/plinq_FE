@@ -13,10 +13,103 @@
  * On hover, an action toolbar floats on the right (react / reply / pin / more).
  */
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import Icon from './Icon'
 import UserGroup, { type Member } from './UserGroup'
 import ReactionButton from './ReactionButton'
+
+/**
+ * Minimal markdown parser for chat messages. Supports:
+ *   **bold**   *italic*   ~~strike~~   `code`
+ *   [text](url)   - [ ] todo / - [x] done   📎 filename (XX KB)
+ *
+ * Bold is matched before italic so the double-star isn't consumed by the
+ * single-star alternative. Links and inline-code are matched first so brackets
+ * and backticks inside them don't trigger other tokens.
+ */
+const MD_TOKEN =
+  /(\[[^\]\n]+\]\([^)\n]+\)|`[^`\n]+`|\*\*[^*\n]+\*\*|~~[^~\n]+~~|\*[^*\n]+\*)/g
+
+function renderInline(line: string, keyBase: string): ReactNode[] {
+  const parts: ReactNode[] = []
+  let last = 0
+  for (const m of line.matchAll(MD_TOKEN)) {
+    const idx = m.index!
+    if (idx > last) parts.push(line.slice(last, idx))
+    const t = m[0]
+    const key = `${keyBase}-${idx}`
+    if (t.startsWith('[')) {
+      const linkMatch = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(t)
+      if (linkMatch) {
+        parts.push(
+          <a
+            key={key}
+            href={linkMatch[2]}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-main underline decoration-blue-main/40 hover:decoration-blue-main"
+          >
+            {linkMatch[1]}
+          </a>
+        )
+      } else {
+        parts.push(t)
+      }
+    } else if (t.startsWith('**')) {
+      parts.push(
+        <strong key={key} className="font-semibold">
+          {t.slice(2, -2)}
+        </strong>
+      )
+    } else if (t.startsWith('~~')) {
+      parts.push(<s key={key}>{t.slice(2, -2)}</s>)
+    } else if (t.startsWith('`')) {
+      parts.push(
+        <code
+          key={key}
+          className="bg-gray-extra-light text-red-main px-[4px] py-[1px] rounded-[3px] text-[11px]"
+          style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+        >
+          {t.slice(1, -1)}
+        </code>
+      )
+    } else if (t.startsWith('*')) {
+      parts.push(<em key={key}>{t.slice(1, -1)}</em>)
+    }
+    last = idx + t.length
+  }
+  if (last < line.length) parts.push(line.slice(last))
+  return parts
+}
+
+const LIST_RE = /^- (.*)$/
+
+function renderMarkdown(body: string): ReactNode[] {
+  // Split by lines so we can render list items per-line while keeping
+  // inline formatting inside each line.
+  const lines = body.split('\n')
+  return lines.map((line, i) => {
+    const li = LIST_RE.exec(line)
+    if (li) {
+      return (
+        <span key={`l-${i}`} className="flex items-start gap-[8px]">
+          <span
+            aria-hidden
+            className="mt-[6px] w-[4px] h-[4px] rounded-full bg-gray-main shrink-0"
+          />
+          <span>{renderInline(li[1], `i-${i}`)}</span>
+          {i < lines.length - 1 && '\n'}
+        </span>
+      )
+    }
+    return (
+      <span key={`l-${i}`}>
+        {renderInline(line, `i-${i}`)}
+        {i < lines.length - 1 && '\n'}
+      </span>
+    )
+  })
+}
 
 export type Reaction = {
   /** Emoji glyph or short code. */
@@ -150,7 +243,7 @@ export default function ChatMessage({
         </div>
         {/* Body */}
         <p className="text-black text-[12px] leading-[1.5] whitespace-pre-wrap break-words">
-          {body}
+          {renderMarkdown(body)}
         </p>
         {/* Reactions */}
         {reactions && reactions.length > 0 && (

@@ -5,9 +5,11 @@
  *   - background refetches keep data fresh after staleTime
  *   - mutations can target precise keys for invalidation
  */
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  deleteChatSession,
   getChatMessages,
+  getChatSessionMembers,
   getChatSessions,
   getCurrentUser,
   getOrgMembers,
@@ -26,7 +28,7 @@ import {
 } from './queries'
 import { supabase } from './supabase'
 import { queryKeys } from './queryKeys'
-import type { ProjectRow } from './types'
+import type { ProjectRow, TaskStatusDb } from './types'
 
 // ─── User / org ─────────────────────────────────────────────────────────────
 
@@ -73,6 +75,21 @@ export function useUserProjects(
   })
 }
 
+/** Delete a project. Invalidates project caches on success. */
+export function useDeleteProject() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (projectId: string) => {
+      const { error } = await supabase.from('projects').delete().eq('id', projectId)
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projects.all })
+      qc.invalidateQueries({ queryKey: ['project'] })
+    },
+  })
+}
+
 // ─── Action items / tasks ───────────────────────────────────────────────────
 
 export function useUserActionItems(
@@ -83,6 +100,26 @@ export function useUserActionItems(
     queryKey: queryKeys.tasks.actionItems(userId ?? '', opts),
     queryFn: () => getUserActionItems(userId!, opts),
     enabled: !!userId,
+  })
+}
+
+/** Update a task's status. Invalidates task/calendar/project caches on success. */
+export function useUpdateTaskStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ taskId, status }: { taskId: string; status: TaskStatusDb }) => {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status })
+        .eq('id', taskId)
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.tasks.all })
+      qc.invalidateQueries({ queryKey: queryKeys.calendar.all })
+      qc.invalidateQueries({ queryKey: queryKeys.projects.all })
+      qc.invalidateQueries({ queryKey: ['project'] })
+    },
   })
 }
 
@@ -209,11 +246,34 @@ export function useChatSessions(
   })
 }
 
+export function useChatSessionMembers(sessionId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.chat.members(sessionId ?? ''),
+    queryFn: () => getChatSessionMembers(sessionId!),
+    enabled: !!sessionId,
+    staleTime: 60 * 1000,
+  })
+}
+
 export function useChatMessages(sessionId: string | null | undefined) {
   return useQuery({
     queryKey: queryKeys.chat.messages(sessionId ?? ''),
     queryFn: () => getChatMessages(sessionId!),
     enabled: !!sessionId,
     staleTime: 10 * 1000,
+  })
+}
+
+/** Delete a chat session. Invalidates chat caches on success. */
+export function useDeleteChatSession() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (sessionId: string) => {
+      const result = await deleteChatSession(sessionId)
+      if ('error' in result) throw new Error(result.error)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.chat.all })
+    },
   })
 }

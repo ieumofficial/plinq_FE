@@ -6,9 +6,10 @@ import ProjectCard from '../components/ui/ProjectCard'
 import ActionItem from '../components/ui/ActionItem'
 import Calendar, { type CalendarEvent } from '../components/ui/Calendar'
 import Schedule from '../components/ui/Schedule'
-import Button from '../components/ui/Button'
+import Icon from '../components/ui/Icon'
 import {
   useCurrentUser,
+  useUpdateTaskStatus,
   useUserActionItems,
   useUserCalendarEvents,
   useUserProjects,
@@ -28,17 +29,19 @@ const TODAY_SCHEDULE_LIMIT = 3
 
 function SectionHeader({
   eyebrow,
+  eyebrowColorClass = 'text-gray-main',
   title,
   action,
 }: {
   eyebrow: string
+  eyebrowColorClass?: string
   title: string
   action?: ReactNode
 }) {
   return (
     <div className="flex items-start justify-between mb-4">
       <div className="flex flex-col gap-[5px]">
-        <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
+        <p className={`${eyebrowColorClass} text-[10px] font-medium uppercase tracking-[1.5px]`}>
           {eyebrow}
         </p>
         <h2 className="text-black text-[20px] font-semibold leading-tight">{title}</h2>
@@ -77,6 +80,7 @@ export default function PersonalDashboardPage() {
   const { data: tasks = [], isLoading: tasksLoading } = useUserActionItems(userId, {
     limit: ACTION_ITEMS_LIMIT,
   })
+  const { mutate: updateTaskStatus } = useUpdateTaskStatus()
 
   const { data: meetings = [], isLoading: meetingsLoading } = useUserUpcomingMeetings(
     userId,
@@ -125,16 +129,17 @@ export default function PersonalDashboardPage() {
             <section className="bg-white-white rounded-[10px] border border-gray-border-light p-[20px] min-h-[306px]">
               <SectionHeader
                 eyebrow={`Projects · ${projects.length} active`}
+                eyebrowColorClass="text-blue-main"
                 title="Active Projects"
                 action={
-                  <Button
-                    size="mini"
-                    variant="secondary"
-                    iconRight="ArrowRight"
+                  <button
+                    type="button"
                     onClick={() => router.push('/projects')}
+                    className="flex items-center gap-[5px] pl-[10px] pr-[5px] py-[5px] rounded-[5px] text-black hover:bg-white-item"
                   >
-                    View all
-                  </Button>
+                    <span className="text-black text-[10px] uppercase leading-none">view all</span>
+                    <Icon name="ArrowRight" size={15} />
+                  </button>
                 }
               />
               {projectsLoading && projects.length === 0 ? (
@@ -161,16 +166,17 @@ export default function PersonalDashboardPage() {
             <section className="bg-white-white rounded-[10px] border border-gray-border-light p-[20px] flex-1">
               <SectionHeader
                 eyebrow={`Tasks · ${tasks.length} pending`}
+                eyebrowColorClass="text-red-main"
                 title="What you have to do"
                 action={
-                  <Button
-                    size="mini"
-                    variant="secondary"
-                    iconRight="ArrowRight"
+                  <button
+                    type="button"
                     onClick={() => router.push('/action-items')}
+                    className="flex items-center gap-[5px] pl-[10px] pr-[5px] py-[5px] rounded-[5px] text-black hover:bg-white-item"
                   >
-                    View all
-                  </Button>
+                    <span className="text-black text-[10px] uppercase leading-none">view all</span>
+                    <Icon name="ArrowRight" size={15} />
+                  </button>
                 }
               />
               {tasksLoading && tasks.length === 0 ? (
@@ -189,6 +195,13 @@ export default function PersonalDashboardPage() {
                         t.project_name
                           ? { label: t.project_name, color: 'purple' }
                           : undefined
+                      }
+                      checked={t.status === 'done'}
+                      onCheckedChange={(next) =>
+                        updateTaskStatus({
+                          taskId: t.id,
+                          status: next ? 'done' : 'in_progress',
+                        })
                       }
                     />
                   ))}
@@ -209,7 +222,11 @@ export default function PersonalDashboardPage() {
             </section>
 
             <section className="bg-white-white rounded-[10px] border border-gray-border-light p-[20px] flex-1">
-              <SectionHeader eyebrow="Upcoming · Today" title="What's Next" />
+              <SectionHeader
+                eyebrow="Upcoming · Today"
+                eyebrowColorClass="text-green-main"
+                title="What's Next"
+              />
               {meetingsLoading && meetings.length === 0 ? (
                 <p className="text-gray-secondary text-[12px]">Loading…</p>
               ) : meetings.length === 0 ? (

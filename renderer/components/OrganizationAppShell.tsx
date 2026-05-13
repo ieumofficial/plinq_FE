@@ -9,6 +9,7 @@ import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
 import { useCurrentUser, useMyOrg, useOrgMembers } from '../lib/hooks'
+import { useSidebarPref, useSpaceTransition } from '../lib/sidebarPref'
 
 // ─── Create New context ─────────────────────────────────────────────────────
 
@@ -74,6 +75,8 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
   const { data: user, isFetched: userFetched } = useCurrentUser()
   const { data: org } = useMyOrg(user?.id)
   const { data: members = [] } = useOrgMembers(orgId)
+  const { collapsed: stackedSidebar, toggle: toggleSidebar } = useSidebarPref()
+  useSpaceTransition(`org:${orgId}`)
 
   useEffect(() => {
     if (userFetched && !user) router.push('/')
@@ -140,20 +143,24 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
         }
         sidebar={
           <SideMenu
+            sectionLabel={stackedSidebar ? undefined : 'Personal Space'}
             items={PERSONAL_RAIL_ITEMS}
             footerItems={PERSONAL_FOOTER}
             userInitials={initials}
             userName={userName}
-            stacked
+            stacked={stackedSidebar}
             onCreateNew={openMenu}
             onItemClick={(k) => {
               const route = personalRoute(k, org?.id ?? null)
               if (route) router.push(route)
             }}
+            onToggleSidebar={toggleSidebar}
           />
         }
         panel={
           <StackedSideMenu
+            key={`org:${orgId}`}
+            spaceId={`org:${orgId}`}
             header={{
               kind: 'org',
               initial: orgInitial,

@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import Icon, { type IconName } from './Icon'
 import ProjectLabel from './ProjectLabel'
 import StatusLabelBig, { type Status } from './StatusLabelBig'
+import { getLastSpaceId, type SpaceId } from '../../lib/sidebarPref'
 
 export type StackedNavItem = {
   key: string
@@ -23,6 +24,8 @@ type ProjectHeader = {
   status?: Status
   /** Click handler for the dropdown chevron / name area (project switcher). */
   onSwitch?: () => void
+  /** True while the project switcher dropdown is open — used to flip the chevron. */
+  switchOpen?: boolean
   /** Click handler for the status pill (status switcher). */
   onStatusClick?: () => void
 }
@@ -35,6 +38,7 @@ type OrgHeader = {
   /** e.g. "108 members total" */
   subtitle?: string
   onSwitch?: () => void
+  switchOpen?: boolean
 }
 
 type Props = {
@@ -46,6 +50,10 @@ type Props = {
   onBack?: () => void
   /** Optional extra content rendered absolutely positioned (e.g. status switcher popover). */
   overlay?: ReactNode
+  /** Identifier for the current space. When the panel remounts within the
+   *  same space (page-to-page navigation), it renders fully open; when the
+   *  space changes (e.g. switching projects), it replays the slide-in. */
+  spaceId?: SpaceId
 }
 
 /**
@@ -61,25 +69,40 @@ export default function StackedSideMenu({
   onItemClick,
   onBack,
   overlay,
+  spaceId,
 }: Props) {
   const isProject = header.kind === 'project'
   const sectionLabel = isProject ? 'Project' : 'Organization'
 
+  // Slide-in plays on first paint AND whenever the space id changes
+  // (Personal → project, project A → project B, project → org, etc.).
+  // Page-to-page navigation *within* the same space — where `useSpaceTransition`
+  // has already marked lastSpaceId as the same value — skips the animation
+  // and renders fully open immediately.
+  const [open, setOpen] = useState(
+    () => spaceId !== undefined && getLastSpaceId() === spaceId
+  )
+  useEffect(() => {
+    if (open) return
+    const id = requestAnimationFrame(() => setOpen(true))
+    return () => cancelAnimationFrame(id)
+  }, [open])
+
   return (
-    <aside className="bg-[#F8F9FA] border-t border-r border-[#E6EAEE] w-[210px] shrink-0 h-full flex flex-col relative">
+    <aside
+      className={`bg-[#F4F6F8] border-t border-r border-[#E6EAEE] shrink-0 h-full flex flex-col relative overflow-hidden transition-[width] duration-200 ease-in-out ${
+        open ? 'w-[210px]' : 'w-0'
+      }`}
+    >
       {/* BACK */}
       <div className="flex flex-col items-start py-[5px]">
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-[5px] pl-[10px] pr-[5px] py-[5px] rounded-[5px] hover:bg-white-white/60"
+          className="flex items-center gap-[5px] pl-[10px] pr-[5px] py-[5px] rounded-[5px] text-black hover:bg-white-white/60"
         >
           <Icon name="ArrowLeft" size={15} />
-          <span
-            className="text-black text-[10px] uppercase leading-none"
-          >
-            back
-          </span>
+          <span className="text-[10px] uppercase leading-none">back</span>
         </button>
       </div>
 
@@ -100,7 +123,13 @@ export default function StackedSideMenu({
             <span className="text-black text-[14px] font-semibold">
               {header.name}
             </span>
-            <Icon name="ArrowRight" size={11} className="rotate-90" />
+            <Icon
+              name="ArrowRight"
+              size={11}
+              className={`text-black transition-transform ${
+                header.switchOpen ? '-rotate-90' : 'rotate-90'
+              }`}
+            />
           </button>
           {header.subtitle && (
             <p className="text-gray-secondary text-[10px] leading-[1.5]">

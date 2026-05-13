@@ -1,4 +1,4 @@
-import { type InputHTMLAttributes, useState } from 'react'
+import { type ChangeEvent, type InputHTMLAttributes, useState } from 'react'
 import Icon from './Icon'
 
 type Variant = 'default' | 'translucent' | 'search' | 'error' | 'disabled'
@@ -75,6 +75,15 @@ export default function Input({
             type="button"
             onClick={() => {
               if (!isControlled) setInternal('')
+              // Always notify the parent's onChange with an empty value so
+              // controlled inputs reset even if `onClear` isn't provided.
+              if (rest.onChange) {
+                const synthetic = {
+                  target: { value: '' },
+                  currentTarget: { value: '' },
+                } as unknown as ChangeEvent<HTMLInputElement>
+                rest.onChange(synthetic)
+              }
               onClear?.()
             }}
             className="ml-1 inline-flex items-center justify-center bg-gray-border rounded-full text-white hover:bg-gray-main transition-colors"

@@ -5,7 +5,7 @@
  * Figma "Stacked Side Menu / Page=Chat" frame (id 1140:9173). 250px wide.
  */
 
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import Icon from './Icon'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -24,6 +24,8 @@ export type ChatSessionItem = {
   unreadCount?: number
   /** Whether unread items include @mentions (renders @ icon in the badge). */
   hasMention?: boolean
+  /** User id of the session creator — used to gate the right-click delete menu. */
+  createdBy?: string | null
 }
 
 export type ChatSessionGroup = {
@@ -64,15 +66,20 @@ type Props = {
   /** id of the currently selected session/dm row. */
   activeId?: string
   onItemClick?: (id: string, kind: 'session' | 'dm') => void
+
+  /** Current user id — used to decide which sessions show the Delete action. */
+  currentUserId?: string
+  /** Called when the user picks "Delete" from a session row's context menu. */
+  onDeleteSession?: (id: string) => void
 }
 
 // ─── Sub-pieces ─────────────────────────────────────────────────────────────
 
 const FILTERS: { key: ChatFilterKey; label: string; bg: string; text: string }[] = [
-  { key: 'all', label: 'All', bg: 'bg-blue-light', text: 'text-blue-main' },
-  { key: 'unread', label: 'Unread', bg: 'bg-red-light', text: 'text-red-main' },
-  { key: 'mentions', label: 'Mentions', bg: 'bg-brown-light', text: 'text-brown-main' },
-  { key: 'sessions', label: 'Sessions', bg: 'bg-purple-light', text: 'text-purple-main' },
+  { key: 'all', label: 'ALL', bg: 'bg-blue-light', text: 'text-blue-main' },
+  { key: 'unread', label: 'UNREAD', bg: 'bg-red-light', text: 'text-red-main' },
+  { key: 'mentions', label: 'MENTIONS', bg: 'bg-brown-light', text: 'text-brown-main' },
+  { key: 'sessions', label: 'SESSIONS', bg: 'bg-purple-light', text: 'text-purple-main' },
   { key: 'dms', label: 'DMs', bg: 'bg-green-light', text: 'text-green-main' },
 ]
 
@@ -93,7 +100,7 @@ function FilterChip({
     <button
       type="button"
       onClick={onClick}
-      className={`px-[7px] py-[3px] rounded-[2px] text-[10px] font-semibold uppercase tracking-[1px] whitespace-nowrap transition-opacity ${bg} ${text} ${
+      className={`px-[7px] py-[3px] rounded-[2px] text-[10px] font-semibold tracking-[1px] whitespace-nowrap transition-opacity ${bg} ${text} ${
         active ? 'opacity-100' : 'opacity-30 hover:opacity-60'
       }`}
     >
@@ -150,15 +157,18 @@ function SessionRow({
   item,
   active,
   onClick,
+  onContextMenu,
 }: {
   item: ChatSessionItem
   active: boolean
   onClick?: () => void
+  onContextMenu?: (e: React.MouseEvent) => void
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={onContextMenu}
       aria-current={active ? 'page' : undefined}
       className={`flex items-center justify-between gap-[10px] px-[10px] py-[8px] rounded-[8px] w-full transition-colors ${
         active
@@ -187,6 +197,57 @@ function SessionRow({
         <NotificationBadge count={item.unreadCount} hasMention={item.hasMention} />
       )}
     </button>
+  )
+}
+
+function ContextMenu({
+  x,
+  y,
+  canDelete,
+  onDelete,
+  onClose,
+}: {
+  x: number
+  y: number
+  canDelete: boolean
+  onDelete: () => void
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose() }} />
+      <div
+        className="fixed z-50 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md py-[5px] flex flex-col min-w-[160px]"
+        style={{ left: x, top: y }}
+      >
+        <button
+          type="button"
+          disabled={!canDelete}
+          title={canDelete ? undefined : 'Only the session creator can delete this session'}
+          onClick={() => {
+            if (!canDelete) return
+            onClose()
+            onDelete()
+          }}
+          className={`flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left transition-colors ${
+            canDelete
+              ? 'text-red-main hover:bg-white-item cursor-pointer'
+              : 'text-gray-secondary cursor-not-allowed'
+          }`}
+        >
+          <Icon name="Cross" size={15} />
+          <span>Delete session</span>
+        </button>
+      </div>
+    </>
   )
 }
 
@@ -304,6 +365,10 @@ function Divider() {
 
 // ─── Main ───────────────────────────────────────────────────────────────────
 
+// Module-level flag so the slide-in animation only plays the first time the
+// sidebar mounts in a session, not on every route change back to Messages.
+let hasSlidIn = false
+
 export default function ChatSidebar({
   activeFilter = 'all',
   onFilterChange,
@@ -316,9 +381,36 @@ export default function ChatSidebar({
   dms = [],
   activeId,
   onItemClick,
+  currentUserId,
+  onDeleteSession,
 }: Props) {
+  // Slide-in plays once per session. Subsequent mounts (route changes that
+  // remount this component) skip the animation and render fully open.
+  const [open, setOpen] = useState(hasSlidIn)
+  useEffect(() => {
+    if (open) return
+    const id = requestAnimationFrame(() => {
+      setOpen(true)
+      hasSlidIn = true
+    })
+    return () => cancelAnimationFrame(id)
+  }, [open])
+
+  // Right-click context menu — appears at the cursor for sessions the current
+  // user created. `targetId` is the session id under the menu.
+  const [menu, setMenu] = useState<{
+    x: number
+    y: number
+    targetId: string
+    canDelete: boolean
+  } | null>(null)
+
   return (
-    <aside className="bg-[#F8F9FA] border-t border-r border-solid border-gray-border-light w-[250px] shrink-0 h-full flex flex-col overflow-hidden">
+    <aside
+      className={`bg-[#F4F6F8] border-t border-r border-solid border-gray-border-light shrink-0 h-full flex flex-col overflow-hidden transition-[width] duration-200 ease-in-out ${
+        open ? 'w-[250px]' : 'w-0'
+      }`}
+    >
       {/* Title block */}
       <div className="flex flex-col gap-[5px] p-[10px]">
         <p className="text-primary-main text-[10px] font-medium uppercase tracking-[1.5px]">
@@ -386,14 +478,27 @@ export default function ChatSidebar({
           {sessionGroups.map((g, i) => (
             <div key={`${g.label}-${i}`} className="flex flex-col gap-[3px]">
               <GroupSubHeader>{g.label}</GroupSubHeader>
-              {g.items.map((it) => (
-                <SessionRow
-                  key={it.id}
-                  item={it}
-                  active={it.id === activeId}
-                  onClick={() => onItemClick?.(it.id, 'session')}
-                />
-              ))}
+              {g.items.map((it) => {
+                const canDelete =
+                  !!currentUserId && !!it.createdBy && it.createdBy === currentUserId
+                return (
+                  <SessionRow
+                    key={it.id}
+                    item={it}
+                    active={it.id === activeId}
+                    onClick={() => onItemClick?.(it.id, 'session')}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      setMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        targetId: it.id,
+                        canDelete,
+                      })
+                    }}
+                  />
+                )
+              })}
             </div>
           ))}
         </div>
@@ -413,6 +518,16 @@ export default function ChatSidebar({
           </div>
         </div>
       </div>
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          canDelete={menu.canDelete}
+          onClose={() => setMenu(null)}
+          onDelete={() => onDeleteSession?.(menu.targetId)}
+        />
+      )}
     </aside>
   )
 }

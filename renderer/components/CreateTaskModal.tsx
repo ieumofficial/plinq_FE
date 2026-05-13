@@ -3,11 +3,12 @@ import Input from './ui/Input'
 import Button from './ui/Button'
 import Icon from './ui/Icon'
 import ProjectLabel from './ui/ProjectLabel'
+import UserGroup from './ui/UserGroup'
 import { useQueryClient } from '@tanstack/react-query'
 import { createTask } from '../lib/queries'
 import { useCurrentUser, useProjectMembers, useUserProjects } from '../lib/hooks'
 import { queryKeys } from '../lib/queryKeys'
-import type { TaskStatusDb, UserRow } from '../lib/types'
+import { userToMember, type TaskStatusDb, type UserRow } from '../lib/types'
 
 type Props = {
   open: boolean
@@ -81,7 +82,7 @@ export default function CreateTaskModal({
   const [projectId, setProjectId] = useState<string | null>(defaultProjectId ?? null)
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
   const [description, setDescription] = useState('')
-  const [assigneeId, setAssigneeId] = useState<string | null>(null)
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false)
   const [status, setStatus] = useState<TaskStatusDb>('planned')
   const [dueDate, setDueDate] = useState('')
@@ -96,7 +97,7 @@ export default function CreateTaskModal({
     setTitle('')
     setProjectId(defaultProjectId ?? null)
     setDescription('')
-    setAssigneeId(null)
+    setAssigneeIds([])
     setStatus('planned')
     setDueDate('')
     setPriority('medium')
@@ -141,7 +142,7 @@ export default function CreateTaskModal({
     title,
     projectId,
     description,
-    assigneeId,
+    assigneeIds,
     status,
     dueDate,
     priority,
@@ -176,7 +177,7 @@ export default function CreateTaskModal({
       status,
       priority: uiPriorityToDb(priority),
       due_date: dueDate,
-      assigneeIds: assigneeId ? [assigneeId] : [],
+      assigneeIds,
     })
     setSubmitting(false)
     if ('error' in result) {
@@ -306,7 +307,7 @@ export default function CreateTaskModal({
           <div className="grid grid-cols-[1fr_355px] gap-[15px]">
             <div className="flex flex-col gap-1 relative">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                Assignee
+                Assignees
               </label>
               <button
                 type="button"
@@ -315,8 +316,8 @@ export default function CreateTaskModal({
                 disabled={!projectId}
               >
                 {(() => {
-                  const a = members.find((m) => m.id === assigneeId)
-                  if (!a) {
+                  const selected = members.filter((m) => assigneeIds.includes(m.id))
+                  if (selected.length === 0) {
                     return (
                       <>
                         <span className="w-[25px] h-[25px] rounded-full bg-gray-extra-light inline-flex items-center justify-center text-gray-secondary shrink-0">
@@ -329,12 +330,18 @@ export default function CreateTaskModal({
                       </>
                     )
                   }
+                  const label =
+                    selected.length === 1
+                      ? memberLabel(selected[0])
+                      : `${selected.length} assignees`
                   return (
                     <>
-                      <span className="w-[25px] h-[25px] rounded-full bg-gray-extra-light inline-flex items-center justify-center text-[10px] font-semibold text-gray-main shrink-0">
-                        {memberLabel(a).charAt(0).toUpperCase()}
-                      </span>
-                      <span className="text-[12px] text-black truncate">{memberLabel(a)}</span>
+                      <UserGroup
+                        members={selected.map(userToMember)}
+                        size={22}
+                        max={3}
+                      />
+                      <span className="text-[12px] text-black truncate">{label}</span>
                       <span className="ml-auto text-gray-secondary">
                         <Icon name="ArrowRight" size={12} />
                       </span>
@@ -343,35 +350,65 @@ export default function CreateTaskModal({
                 })()}
               </button>
               {assigneePickerOpen && (
-                <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white-white border border-gray-border rounded-lg shadow-lg z-10 max-h-[200px] overflow-y-auto">
+                <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white-white border border-gray-border rounded-lg shadow-lg z-10 max-h-[240px] overflow-y-auto">
                   <button
                     type="button"
-                    onClick={() => {
-                      setAssigneeId(null)
-                      setAssigneePickerOpen(false)
-                    }}
-                    className="w-full px-3 py-2 hover:bg-white-item text-left text-[12px] text-gray-main"
+                    onClick={() => setAssigneeIds([])}
+                    disabled={assigneeIds.length === 0}
+                    className="w-full px-3 py-2 hover:bg-white-item text-left text-[12px] text-gray-main disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    — Unassigned —
+                    Clear all
                   </button>
-                  {members.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        setAssigneeId(m.id)
-                        setAssigneePickerOpen(false)
-                      }}
-                      className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-white-item text-left ${
-                        assigneeId === m.id ? 'bg-blue-light/30' : ''
-                      }`}
-                    >
-                      <span className="w-[25px] h-[25px] rounded-full bg-gray-extra-light inline-flex items-center justify-center text-[10px] font-semibold text-gray-main shrink-0">
-                        {memberLabel(m).charAt(0).toUpperCase()}
-                      </span>
-                      <span className="text-[12px] text-black truncate">{memberLabel(m)}</span>
-                    </button>
-                  ))}
+                  <div className="h-px bg-gray-border-light" />
+                  {members.length === 0 ? (
+                    <p className="px-3 py-2 text-gray-secondary text-[11px]">
+                      No project members.
+                    </p>
+                  ) : (
+                    members.map((m) => {
+                      const checked = assigneeIds.includes(m.id)
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() =>
+                            setAssigneeIds((prev) =>
+                              prev.includes(m.id)
+                                ? prev.filter((x) => x !== m.id)
+                                : [...prev, m.id]
+                            )
+                          }
+                          className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-white-item text-left ${
+                            checked ? 'bg-blue-light/30' : ''
+                          }`}
+                        >
+                          <span
+                            aria-hidden
+                            className="w-[15px] h-[15px] rounded-[2px] inline-flex items-center justify-center shrink-0"
+                            style={{
+                              backgroundColor: checked ? '#2D5A9E' : '#EEF1F4',
+                            }}
+                          >
+                            {checked && (
+                              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                                <path
+                                  d="M2 6.5L4.8 9L10 3.5"
+                                  stroke="#FFFFFF"
+                                  strokeWidth="1.6"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            )}
+                          </span>
+                          <span className="w-[25px] h-[25px] rounded-full bg-gray-extra-light inline-flex items-center justify-center text-[10px] font-semibold text-gray-main shrink-0">
+                            {memberLabel(m).charAt(0).toUpperCase()}
+                          </span>
+                          <span className="text-[12px] text-black truncate">{memberLabel(m)}</span>
+                        </button>
+                      )
+                    })
+                  )}
                 </div>
               )}
             </div>

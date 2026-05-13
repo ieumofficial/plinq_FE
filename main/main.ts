@@ -228,6 +228,14 @@ app.on('open-url', (event, url) => {
     },
   })
 
+  // Broadcast maximize/unmaximize so the custom caption can swap its icon.
+  const broadcastMaximized = () => {
+    if (!mainWindow) return
+    mainWindow.webContents.send('window-maximized-changed', mainWindow.isMaximized())
+  }
+  mainWindow.on('maximize', broadcastMaximized)
+  mainWindow.on('unmaximize', broadcastMaximized)
+
   if (isProd) {
     await mainWindow.loadURL('app://./')
   } else {
@@ -297,6 +305,11 @@ ipcMain.on('window-maximize', () => {
 })
 ipcMain.on('window-close', () => {
   mainWindow?.close()
+})
+// Renderer requests the current maximized state (used on mount to sync the icon).
+ipcMain.on('window-get-maximized', (event) => {
+  if (!mainWindow) return
+  event.sender.send('window-maximized-changed', mainWindow.isMaximized())
 })
 
 // IPC: open login in a separate BrowserWindow (fallback for deep link issues)

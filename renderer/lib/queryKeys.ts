@@ -41,6 +41,7 @@ export const queryKeys = {
   },
 
   members: {
+    all: ['members'] as const,
     org: (orgId: string) => ['members', 'org', orgId] as const,
     project: (projectId: string) => ['members', 'project', projectId] as const,
     projectWithRoles: (projectId: string) =>
@@ -60,5 +61,6 @@ export const queryKeys = {
     sessions: (userId: string, orgId: string) =>
       ['chat', 'sessions', userId, orgId] as const,
     messages: (sessionId: string) => ['chat', 'messages', sessionId] as const,
+    members: (sessionId: string) => ['chat', 'members', sessionId] as const,
   },
 }

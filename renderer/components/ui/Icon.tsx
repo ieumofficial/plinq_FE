@@ -28,6 +28,7 @@ const ICON_NAMES = [
   'Pin',
   'Search',
   'Settings',
+  'Sidebar',
   'Sparkle',
   'Task',
 ] as const

@@ -522,6 +522,10 @@ export async function getProjectMembers(projectId: string): Promise<UserRow[]> {
 
 export type TaskWithProject = TaskRow & {
   project_name: string | null
+  project_color: string | null
+  source_meeting_name: string | null
+  source_meeting_scheduled_at: string | null
+  creator_name: string | null
 }
 
 /**
@@ -546,7 +550,7 @@ export async function getUserActionItems(
   let q = supabase
     .from('tasks')
     .select(
-      'id, project_id, team_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, created_by, created_at, updated_at, projects(name)'
+      'id, project_id, team_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, source_meeting_id, created_by, created_at, updated_at, projects(name, color), meetings:source_meeting_id(name, scheduled_at), users:created_by(first_name, last_name, nickname, email)'
     )
     .in('id', taskIds)
     .order('due_date', { ascending: true, nullsFirst: false })
@@ -561,12 +565,23 @@ export async function getUserActionItems(
   }
   return (data ?? []).map((row) => {
     const r = row as unknown as TaskRow & {
-      projects: { name: string } | { name: string }[] | null
+      projects: { name: string; color: string | null } | { name: string; color: string | null }[] | null
+      meetings: { name: string; scheduled_at: string } | { name: string; scheduled_at: string }[] | null
+      users: { first_name: string; last_name: string; nickname: string | null; email: string } | { first_name: string; last_name: string; nickname: string | null; email: string }[] | null
     }
     const proj = Array.isArray(r.projects) ? r.projects[0] : r.projects
+    const mtg = Array.isArray(r.meetings) ? r.meetings[0] : r.meetings
+    const usr = Array.isArray(r.users) ? r.users[0] : r.users
+    const creatorName = usr
+      ? usr.nickname || `${usr.first_name} ${usr.last_name}`.trim() || usr.email
+      : null
     return {
       ...(r as TaskRow),
       project_name: proj?.name ?? null,
+      project_color: proj?.color ?? null,
+      source_meeting_name: mtg?.name ?? null,
+      source_meeting_scheduled_at: mtg?.scheduled_at ?? null,
+      creator_name: creatorName,
     }
   })
 }
@@ -703,9 +718,13 @@ export async function getProjectTasks(projectId: string): Promise<ProjectTask[]>
   if (tasks.length === 0) return []
 
   const taskIds = tasks.map((t) => t.id)
+  // task_assignees has TWO FKs to users (user_id, assigned_by) — use the
+  // `users:user_id` alias so PostgREST follows the correct relationship.
   const { data: assignRows, error: aErr } = await supabase
     .from('task_assignees')
-    .select('task_id, users(id, email, first_name, last_name, nickname, job_title)')
+    .select(
+      'task_id, users:user_id(id, email, first_name, last_name, nickname, job_title)'
+    )
     .in('task_id', taskIds)
   if (aErr) console.error('[queries] task assignees', aErr)
 
@@ -723,19 +742,17 @@ export async function getProjectTasks(projectId: string): Promise<ProjectTask[]>
 
 export type ProjectMember = UserRow & {
   role: import('./types').ProjectRoleDb
-  joined_at: string
 }
 
 export async function getProjectMembersWithRoles(
   projectId: string
 ): Promise<ProjectMember[]> {
+  // NOTE: project_members has no joined_at / created_at column. Don't select
+  // one here without first adding a migration.
   const { data, error } = await supabase
     .from('project_members')
-    .select(
-      'role, joined_at, users(id, email, first_name, last_name, nickname, job_title)'
-    )
+    .select('role, users(id, email, first_name, last_name, nickname, job_title)')
     .eq('project_id', projectId)
-    .order('joined_at', { ascending: true })
   if (error) {
     console.error('[queries] getProjectMembersWithRoles', error)
     return []
@@ -744,12 +761,11 @@ export async function getProjectMembersWithRoles(
   for (const row of data ?? []) {
     const r = row as unknown as {
       role: import('./types').ProjectRoleDb
-      joined_at: string
       users: UserRow | UserRow[] | null
     }
     if (!r.users) continue
     const us = Array.isArray(r.users) ? r.users : [r.users]
-    for (const u of us) out.push({ ...u, role: r.role, joined_at: r.joined_at })
+    for (const u of us) out.push({ ...u, role: r.role })
   }
   return out
 }
@@ -1167,6 +1183,22 @@ export async function createChatSession(
 }
 
 /**
+ * Delete a chat session. RLS policy enforces creator-only access on the DB
+ * side; this just issues the DELETE. Related rows (messages, members) are
+ * removed via FK ON DELETE CASCADE.
+ */
+export async function deleteChatSession(
+  sessionId: string
+): Promise<{ ok: true } | { error: string }> {
+  const { error } = await supabase.from('chat_sessions').delete().eq('id', sessionId)
+  if (error) {
+    console.error('[queries] deleteChatSession', error)
+    return { error: error.message }
+  }
+  return { ok: true }
+}
+
+/**
  * Open (or create) a 1-1 DM session between the current user and `otherUserId`
  * in the given org. Returns the session id.
  */
@@ -1213,6 +1245,28 @@ export async function getOrCreateDm(
     { session_id: sessionId, user_id: b },
   ])
   return { id: sessionId }
+}
+
+/** Members of a chat session (channel or DM). */
+export async function getChatSessionMembers(
+  sessionId: string
+): Promise<UserRow[]> {
+  const { data, error } = await supabase
+    .from('chat_session_members')
+    .select('users(id, email, first_name, last_name, nickname, job_title)')
+    .eq('session_id', sessionId)
+  if (error) {
+    console.error('[queries] getChatSessionMembers', error)
+    return []
+  }
+  const out: UserRow[] = []
+  for (const row of data ?? []) {
+    const u = (row as unknown as { users: UserRow | UserRow[] | null }).users
+    if (!u) continue
+    if (Array.isArray(u)) out.push(...u)
+    else out.push(u)
+  }
+  return out
 }
 
 export async function sendChatMessage(input: {

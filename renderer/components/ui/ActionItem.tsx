@@ -25,7 +25,7 @@ export default function ActionItem({
         <Checkbox checked={checked} onChange={onCheckedChange} />
         <div className="flex flex-col gap-[5px] min-w-0">
           <p
-            className={`font-sans text-[12px] font-semibold truncate ${
+            className={`font-sans text-[14px] font-semibold truncate ${
               checked ? 'text-gray-secondary line-through' : 'text-black'
             }`}
           >
@@ -47,7 +47,7 @@ export default function ActionItem({
         </div>
       </div>
       {projectTag && (
-        <Tag color={projectTag.color ?? 'purple'} size="sm">
+        <Tag color={projectTag.color ?? 'purple'} size="md">
           {projectTag.label}
         </Tag>
       )}

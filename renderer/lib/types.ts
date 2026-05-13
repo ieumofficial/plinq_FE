@@ -90,6 +90,7 @@ export type TaskRow = {
   start_date: string | null
   due_date: string | null
   kanban_column_id: string | null
+  source_meeting_id: string | null
   created_by: string
   created_at: string
   updated_at: string

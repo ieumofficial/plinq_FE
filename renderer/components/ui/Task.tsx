@@ -29,7 +29,7 @@ export default function Task({
 }: Props) {
   return (
     <div
-      className="bg-white-white rounded-[5px] flex flex-col gap-[10px] pt-[10px] pb-[8px] pl-[20px] pr-[10px] w-[300px] border-l-[8px] border-solid"
+      className="bg-white-white rounded-[5px] flex flex-col gap-[10px] pt-[10px] pb-[8px] pl-[20px] pr-[10px] w-full border-l-[8px] border-solid"
       style={{ borderLeftColor: STATUS_BORDER[status] }}
     >
       <p

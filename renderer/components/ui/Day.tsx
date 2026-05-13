@@ -14,6 +14,8 @@ type CommonProps = {
   events?: DayEvent[]
   /** Today highlight (dark background). */
   isToday?: boolean
+  /** Selected day — blue ring border. Independent from isToday. */
+  isSelected?: boolean
   /** Day belongs to previous/next month (faded). */
   outOfBound?: boolean
   onClick?: () => void
@@ -37,7 +39,7 @@ const SMALL_MAX = 3
 const BIG_MAX_DEFAULT = 4
 
 export default function Day(props: Props) {
-  const { date, events = [], isToday = false, outOfBound = false, onClick } = props
+  const { date, events = [], isToday = false, isSelected = false, outOfBound = false, onClick } = props
 
   if (props.size === 'small') {
     const visible = events.slice(0, SMALL_MAX)
@@ -50,7 +52,7 @@ export default function Day(props: Props) {
         onClick={onClick}
         className={`flex flex-col px-[5px] py-[3px] rounded-[5px] w-[76px] h-[76px] text-left transition-colors ${
           isToday ? 'bg-primary-dark' : 'bg-white-item'
-        } ${outOfBound ? 'opacity-30' : ''} ${compactHeader ? 'gap-[3px] items-start' : 'items-start'}`}
+        } ${isSelected ? 'ring-2 ring-[#6e8c9c] ring-inset' : ''} ${outOfBound ? 'opacity-30' : ''} ${compactHeader ? 'gap-[3px] items-start' : 'items-start'}`}
       >
         <span
           className={`tracking-[0.3px] font-medium ${
@@ -128,7 +130,7 @@ export default function Day(props: Props) {
       onClick={onClick}
       className={`flex flex-col items-start gap-[5px] p-[9px] ${sizeClass} border-b border-r border-solid border-[#EDEEF0] text-left transition-colors overflow-hidden ${
         isToday ? 'bg-primary-dark' : ''
-      }`}
+      } ${isSelected ? 'ring-2 ring-[#6e8c9c] ring-inset' : ''}`}
     >
       <div
         className={`flex flex-col items-start gap-[5px] w-full min-h-0 flex-1 ${

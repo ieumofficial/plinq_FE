@@ -363,7 +363,7 @@ function ActionItemsBody() {
                               }
                             />
                             <span
-                              className={`text-[14px] font-medium ${
+                              className={`text-[14px] font-medium truncate min-w-0 ${
                                 isDone
                                   ? 'text-gray-secondary line-through'
                                   : 'text-black'

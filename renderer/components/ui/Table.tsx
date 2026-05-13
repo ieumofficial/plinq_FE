@@ -15,7 +15,7 @@ type TableProps = {
 
 export default function Table({ children, className }: TableProps) {
   return (
-    <div className={`bg-white-white rounded-[10px] border border-gray-border-light overflow-hidden ${className ?? ''}`}>
+    <div className={`bg-white-white rounded-[10px] border border-gray-border-light overflow-x-auto ${className ?? ''}`}>
       {children}
     </div>
   )
@@ -35,16 +35,19 @@ const alignClass = {
 export function TableHeader({ columns, className }: HeaderProps) {
   return (
     <div className={`flex items-center gap-[80px] bg-white-item border-b-2 border-solid border-gray-border-light px-[25px] py-[10px] ${className ?? ''}`}>
-      {columns.map((c) => (
-        <div
-          key={c.key}
-          className={`flex items-center ${alignClass[c.align ?? 'left']} ${c.width ?? 'flex-1'}`}
-        >
-          <span className="text-gray-main text-[12px] font-medium uppercase tracking-[1.5px]">
-            {c.label}
-          </span>
-        </div>
-      ))}
+      {columns.map((c) => {
+        const isFlex = c.width === 'flex-1'
+        return (
+          <div
+            key={c.key}
+            className={`flex items-center ${alignClass[c.align ?? 'left']} ${c.width ?? 'flex-1'} ${isFlex ? 'min-w-0' : 'shrink-0'}`}
+          >
+            <span className="text-gray-main text-[12px] font-medium uppercase tracking-[1.5px] truncate">
+              {c.label}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -79,9 +82,10 @@ type CellProps = {
 }
 
 export function TableCell({ children, width, align = 'left', className }: CellProps) {
+  const isFlex = width === 'flex-1'
   return (
     <div
-      className={`flex items-center gap-[10px] ${alignClass[align]} ${width ?? 'flex-1'} ${className ?? ''}`}
+      className={`flex items-center gap-[10px] ${alignClass[align]} ${width ?? 'flex-1'} ${isFlex ? 'min-w-0' : 'shrink-0'} ${className ?? ''}`}
     >
       {children}
     </div>

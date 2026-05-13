@@ -7,7 +7,10 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  createKnowledgeDoc,
   deleteChatSession,
+  deleteKnowledgeDoc,
+  // toggleDocPin removed — pin state lives in localStorage for now (see lib/pinPref.ts)
   getChatMessages,
   getChatSessionMembers,
   getChatSessions,
@@ -24,6 +27,7 @@ import {
   getUserCalendarEvents,
   getUserProjects,
   getUserUpcomingMeetings,
+  type NewDocInput,
   type ProjectWithStats,
 } from './queries'
 import { supabase } from './supabase'
@@ -261,6 +265,35 @@ export function useChatMessages(sessionId: string | null | undefined) {
     queryFn: () => getChatMessages(sessionId!),
     enabled: !!sessionId,
     staleTime: 10 * 1000,
+  })
+}
+
+// ─── Knowledge docs ─────────────────────────────────────────────────────────
+
+export function useCreateKnowledgeDoc() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: NewDocInput) => {
+      const r = await createKnowledgeDoc(input)
+      if ('error' in r) throw new Error(r.error)
+      return r
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: queryKeys.project.docs(variables.project_id) })
+    },
+  })
+}
+
+export function useDeleteKnowledgeDoc() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { docId: string; projectId: string }) => {
+      const r = await deleteKnowledgeDoc(input.docId)
+      if ('error' in r) throw new Error(r.error)
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: queryKeys.project.docs(variables.projectId) })
+    },
   })
 }
 

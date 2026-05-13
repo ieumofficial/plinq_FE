@@ -22,33 +22,60 @@ const FALLBACK_MODELS = ['gemini-2.0-flash', 'gemini-2.5-flash-lite']
 const MAX_INLINE_BYTES = 19 * 1024 * 1024 // Gemini inline-data cap
 
 const EXTRACT_SYSTEM = `You are an expert meeting analyst.
-Read a meeting transcript (Korean and/or English) and extract structured
-insight. BE GENEROUS — when there is ANY signal at all, surface it. Prefer
-extracting too much over too little.
+Read a meeting transcript and extract structured insight. BE GENEROUS —
+when there is ANY signal at all, surface it. Prefer extracting too much
+over too little.
 
 Return STRICT JSON with this exact shape — no markdown fences, no commentary:
 {
-  "summary": "1-3 sentence summary in the transcript's primary language",
+  "summary": "concrete recap — see Summary style below",
   "keyDecisions": ["..."],
   "actionItems": [{"task": "...", "owner": "person if named, else null", "dueDate": "ISO or natural-language phrase if mentioned, else null"}],
   "followUps": ["topics raised that need follow-up but were not decided"],
   "unresolved": ["items that came up repeatedly and remain unresolved"]
 }
 
+Language: ALL output strings (summary, decisions, action items, follow-ups,
+unresolved) MUST be in English, regardless of the language spoken in the
+transcript. Translate the substance to English. Keep proper nouns
+(people, products, project names) as they appear — do not romanise or
+re-translate them. Dates can stay in the format the speaker used
+("5/18", "May 18", etc.).
+
+Summary style (the highest-bar rule):
+- 1-3 sentences, max ~50 words. English only.
+- Lead with NAMED PEOPLE doing SPECIFIC THINGS, plus NUMBERS / COUNTS / DATES
+  the transcript actually mentions. Concrete > narrative.
+- Wrap the 2-4 most informative spans in **markdown bold** — exact
+  decision artifacts (e.g. "**v3 disclosure paragraph**"), counts +
+  unit ("**5 were assigned automatically**"), key dates / windows
+  ("**May 18 send window**"), unowned items ("**has no clear owner**").
+- GOOD: "Daniel walked through cutover blockers, Mira surfaced **2 SAML
+  edge cases**. **4 action items** extracted, **1 unowned**."
+- GOOD (Korean transcript → English summary): "민지 shared **3 design
+  drafts**; 영천 flagged a **320ms API response** issue. **4 action
+  items** captured, next meeting **5/18**."
+- BAD (avoid): "This meeting was about X and we decided to do Y." —
+  passive narrative, no names, no numbers, no bold.
+- If no names appear, lead with concrete nouns + counts instead of vague
+  topic-summary.
+- Do NOT start with phrases like "This meeting was about", "We discussed",
+  "The team talked about". Open with the most informative concrete sentence.
+
 Mapping cheat sheet (apply liberally):
-- "다음 회의는 5/18", "Let's meet next Tuesday" → keyDecisions PLUS an
-  actionItem like { task: "다음 회의 예약", dueDate: "5/18" }.
+- "다음 회의는 5/18", "Let's meet next Tuesday" → keyDecisions like
+  "Next meeting set for 5/18", PLUS an actionItem like
+  { task: "Schedule next meeting", dueDate: "5/18" }.
 - Anyone saying they will do something ("내가 ~ 할게요", "I'll handle X")
-  → actionItem with that person as owner.
-- Any mentioned deadline / number / dollar figure → include it verbatim
+  → actionItem with that person as owner, task phrased in English.
+- Any mentioned deadline / number / currency amount → include it verbatim
   in the relevant bullet so the reader sees it.
 - A topic raised but not closed → followUps.
 - Same point coming back without resolution → unresolved.
-- Even a very short transcript usually has at least one extractable
-  decision or action — re-read carefully before returning empty arrays.
 
 Hard rules:
-- Preserve the transcript's primary language. Korean transcript → Korean strings.
+- Output strings are ALL in English. Translate everything except proper
+  nouns. Korean names like "민지" stay as "민지" (not "Minji" or "Minjee").
 - Owners and dates that are EXPLICITLY in the transcript only —
   never invent a name or date that wasn't said.
 - Only return empty arrays for a category when the transcript truly says
@@ -79,6 +106,15 @@ function mimeFromContentType(ct: string | null): string {
   const t = (ct || '').toLowerCase()
   if (t.startsWith('audio/') || t.startsWith('video/')) return t
   return 'audio/mp4'
+}
+
+function extForMime(mime: string): string {
+  const m = mime.toLowerCase()
+  if (m.includes('webm')) return 'webm'
+  if (m.includes('m4a') || m.includes('mp4')) return 'm4a'
+  if (m.includes('mp3') || m.includes('mpeg')) return 'mp3'
+  if (m.includes('wav')) return 'wav'
+  return 'audio'
 }
 
 async function geminiGenerate(args: {
@@ -131,6 +167,50 @@ async function callWithRetry(
   throw lastErr
 }
 
+type ParsedSegment = {
+  speaker: string | null
+  startSec: number
+  endSec: number
+  text: string
+}
+
+/**
+ * Split Gemini's timestamped transcript into discrete segments.
+ * Format we expect (per the prompt):
+ *   `[MM:SS] 화자 1: 첫 문장.`
+ *   `[MM:SS] Speaker 2: text…`
+ * end_time = the next segment's start_time, or start + 30s for the last.
+ */
+function parseTimestampedSegments(raw: string): ParsedSegment[] {
+  const out: ParsedSegment[] = []
+  const SPEAKER_PREFIX = /^([\p{L}][\p{L}\p{N}\s.]{0,40}?):\s*(.*)$/u
+  for (const lineRaw of raw.split(/\r?\n/)) {
+    const line = lineRaw.trim()
+    if (!line) continue
+    const ts = line.match(/^\[(\d{1,3}):(\d{2})\]\s*(.*)$/)
+    if (!ts) continue
+    const startSec = parseInt(ts[1], 10) * 60 + parseInt(ts[2], 10)
+    const rest = ts[3].trim()
+    let speaker: string | null = null
+    let text = rest
+    const sp = rest.match(SPEAKER_PREFIX)
+    if (sp && sp[1].length < 30) {
+      speaker = sp[1].trim()
+      text = sp[2].trim()
+    }
+    if (!text) continue
+    out.push({ speaker, startSec, endSec: 0, text })
+  }
+  for (let i = 0; i < out.length; i++) {
+    const next = out[i + 1]?.startSec
+    out[i].endSec =
+      typeof next === 'number' && next > out[i].startSec
+        ? next
+        : out[i].startSec + 30
+  }
+  return out
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -176,6 +256,36 @@ Deno.serve(async (req) => {
     const audioBase64 = uint8ArrayToBase64(audioBytes)
     const audioMime = mimeFromContentType(req.headers.get('content-type'))
 
+    // Persist the raw audio to Supabase Storage so the meeting detail
+    // page can play it back. We do this BEFORE Gemini so a Gemini
+    // failure doesn't lose the recording. Bucket is created on first
+    // use; subsequent calls are no-ops (already-exists is swallowed).
+    let audioUrl: string | null = null
+    try {
+      await supabase.storage
+        .createBucket('meeting-audio', { public: true })
+        .catch(() => {
+          /* bucket exists — fine */
+        })
+      const ext = extForMime(audioMime)
+      const objectPath = `${meetingId}/audio.${ext}`
+      const upRes = await supabase.storage
+        .from('meeting-audio')
+        .upload(objectPath, audioBytes, {
+          contentType: audioMime,
+          upsert: true,
+        })
+      if (!upRes.error) {
+        audioUrl = supabase.storage
+          .from('meeting-audio')
+          .getPublicUrl(objectPath).data.publicUrl
+      } else {
+        console.error('[analyze-audio] storage upload', upRes.error)
+      }
+    } catch (e) {
+      console.error('[analyze-audio] storage error', (e as Error).message)
+    }
+
     const transcript = (
       await callWithRetry((model) =>
         geminiGenerate({
@@ -186,10 +296,23 @@ Deno.serve(async (req) => {
               parts: [
                 { inlineData: { mimeType: audioMime, data: audioBase64 } },
                 {
-                  text: `Transcribe this meeting audio verbatim.
-- Preserve the speakers' original language (Korean, English, or mixed).
-- Keep speaker turns on separate lines if multiple voices are present.
-- Output ONLY the transcript text. No headings, no commentary, no markdown.`,
+                  text: `Transcribe this meeting audio and translate the
+content to English. Regardless of the spoken language (Korean, English,
+or mixed), every line you output must be in English.
+- Keep proper nouns (people, products, place names) as the speakers say
+  them. Korean names stay in Hangul, not romanised.
+- Begin EVERY line with a [MM:SS] timestamp counted from the start of
+  the audio (e.g. [00:00], [00:14], [02:31]). Use 00 padding.
+- When multiple distinct voices are present, label EVERY turn with
+  "Speaker 1:", "Speaker 2:", … . Use the SAME label every time the
+  SAME voice speaks. Merge consecutive turns from one speaker into a
+  single labelled paragraph.
+- If only one voice is present, still include the [MM:SS] timestamp on
+  each new line but omit the speaker label.
+- Output format (one turn per line):
+  [MM:SS] Speaker 1: First sentence in English.
+  [MM:SS] Speaker 2: Next utterance in English.
+- Output ONLY the transcript lines. No headings, no commentary, no markdown.`,
                 },
               ],
             },
@@ -247,12 +370,39 @@ Deno.serve(async (req) => {
         meeting_id: meetingId,
         full_text: transcript,
         summary: JSON.stringify(extracted),
+        raw_audio_url: audioUrl,
         processed_at: new Date().toISOString(),
       },
       { onConflict: 'meeting_id' },
     )
     if (saveErr) {
       return json({ error: `Save failed: ${saveErr.message}` }, 500)
+    }
+
+    // Persist per-turn segments so the UI can render timestamps and so
+    // future per-speaker analytics have structured rows to query.
+    // Clear + reinsert keeps the operation idempotent if the user
+    // regenerates the analysis.
+    const segments = parseTimestampedSegments(transcript)
+    if (segments.length > 0) {
+      await supabase
+        .from('transcript_segments')
+        .delete()
+        .eq('meeting_id', meetingId)
+      const { error: segErr } = await supabase
+        .from('transcript_segments')
+        .insert(
+          segments.map((s) => ({
+            meeting_id: meetingId,
+            speaker_id: null, // speaker → user mapping is future work
+            start_time: s.startSec,
+            end_time: s.endSec,
+            text: s.speaker ? `${s.speaker}: ${s.text}` : s.text,
+          })),
+        )
+      if (segErr) {
+        console.error('[analyze-audio] transcript_segments insert', segErr)
+      }
     }
 
     // Once analyzed, flip the meeting to `processed` so the card retires

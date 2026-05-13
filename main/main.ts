@@ -15,6 +15,7 @@ type FindZoomResult =
     }
   | {
       found: false
+      /** Comma-joined list of all base paths we actually scanned. */
       scannedPath: string
       reason:
         | 'no-zoom-folder'
@@ -26,28 +27,32 @@ type FindZoomResult =
     }
 
 /**
- * Locate the audio (or video) file from the most recent Zoom recording
- * the user has on disk. Zoom saves under `<Documents>/Zoom/<timestamp>
- * <topic>/audio_only.m4a` — Electron's `app.getPath('documents')`
- * resolves the OS-, locale-, and OneDrive-redirection-correct Documents
- * folder. Returns a structured result that tells the renderer which
- * directory was actually scanned so the user can sanity-check.
+ * Candidate base paths for Zoom recordings. `app.getPath('documents')`
+ * is the right answer when OneDrive's Known Folder redirect is honoured,
+ * but the user reported their actual Zoom path is
+ * `<home>/OneDrive/Documents/Zoom` and our initial scan missed it — so
+ * we also try that location directly. No further candidates are added
+ * speculatively; if both miss we surface them in the error so we know
+ * what to add next.
  */
-async function findLatestZoomRecording(): Promise<FindZoomResult> {
-  const baseDir = path.join(app.getPath('documents'), 'Zoom')
-  try {
-    const s = await stat(baseDir)
-    if (!s.isDirectory()) {
-      return { found: false, scannedPath: baseDir, reason: 'no-zoom-folder', checkedFolders: [] }
-    }
-  } catch {
-    return { found: false, scannedPath: baseDir, reason: 'no-zoom-folder', checkedFolders: [] }
-  }
+function zoomBaseCandidates(): string[] {
+  const out = new Set<string>()
+  out.add(path.join(app.getPath('documents'), 'Zoom'))
+  out.add(path.join(app.getPath('home'), 'OneDrive', 'Documents', 'Zoom'))
+  return Array.from(out)
+}
 
+/** Scan a single Zoom base path for the most recent recording. */
+async function searchZoomBase(
+  baseDir: string,
+): Promise<
+  | { found: true; filename: string; bytes: Buffer; mime: string; folder: string }
+  | { found: false; reason: 'no-subfolders' | 'no-audio-files' | 'all-too-small'; checkedFolders: { folder: string; files: string[] }[] }
+> {
   const entries = await readdir(baseDir, { withFileTypes: true })
   const folders = entries.filter((e) => e.isDirectory()).map((e) => e.name)
   if (folders.length === 0) {
-    return { found: false, scannedPath: baseDir, reason: 'no-subfolders', checkedFolders: [] }
+    return { found: false, reason: 'no-subfolders', checkedFolders: [] }
   }
   const folderStats = await Promise.all(
     folders.map(async (name) => {
@@ -61,8 +66,6 @@ async function findLatestZoomRecording(): Promise<FindZoomResult> {
   const checked: { folder: string; files: string[] }[] = []
   let sawAudioButTooSmall = false
 
-  // Check up to 10 most-recent subfolders so we cover Zoom restarting
-  // numbering, in-progress folders, and folders without audio.
   for (const folder of folderStats.slice(0, 10)) {
     let files: string[] = []
     try {
@@ -71,7 +74,6 @@ async function findLatestZoomRecording(): Promise<FindZoomResult> {
       continue
     }
     checked.push({ folder: folder.name, files })
-    // Prefer audio-only m4a (cheap to transcribe). Fall back to mp4.
     const m4a = files.find((f) => f.toLowerCase().endsWith('.m4a'))
     const mp4 =
       files.find((f) => /audio.*\.mp4$/i.test(f)) ??
@@ -80,9 +82,6 @@ async function findLatestZoomRecording(): Promise<FindZoomResult> {
     if (!target) continue
     const filePath = path.join(folder.path, target)
     const s = await stat(filePath)
-    // Skip files Zoom is still writing — but the old 100KB threshold
-    // ruled out very short test recordings. 10KB still excludes a
-    // half-finished header while letting <30 sec audio through.
     if (s.size < 10 * 1024) {
       sawAudioButTooSmall = true
       continue
@@ -90,20 +89,55 @@ async function findLatestZoomRecording(): Promise<FindZoomResult> {
     const bytes = await readFile(filePath)
     const ext = path.extname(target).toLowerCase()
     const mime = ext === '.m4a' || ext === '.mp4' ? 'audio/mp4' : 'audio/mpeg'
-    return {
-      found: true,
-      filename: target,
-      bytes,
-      mime,
-      folder: folder.path,
-      scannedPath: baseDir,
-    }
+    return { found: true, filename: target, bytes, mime, folder: folder.path }
   }
   return {
     found: false,
-    scannedPath: baseDir,
     reason: sawAudioButTooSmall ? 'all-too-small' : 'no-audio-files',
     checkedFolders: checked.slice(0, 5),
+  }
+}
+
+/**
+ * Walk the candidate Zoom base paths and return the first recording we
+ * can find. Surfaces the exact paths we tried so the renderer can show
+ * the user where to look — important when OneDrive redirects the
+ * Documents folder somewhere unexpected.
+ */
+async function findLatestZoomRecording(): Promise<FindZoomResult> {
+  const candidates = zoomBaseCandidates()
+  const existing: string[] = []
+  let lastResult: Awaited<ReturnType<typeof searchZoomBase>> | null = null
+  for (const baseDir of candidates) {
+    try {
+      const s = await stat(baseDir)
+      if (!s.isDirectory()) continue
+    } catch {
+      continue
+    }
+    existing.push(baseDir)
+    const r = await searchZoomBase(baseDir)
+    if (r.found) {
+      return { ...r, scannedPath: baseDir }
+    }
+    lastResult = r
+  }
+  if (existing.length === 0) {
+    return {
+      found: false,
+      scannedPath: candidates.join(' | '),
+      reason: 'no-zoom-folder',
+      checkedFolders: [],
+    }
+  }
+  // Some Zoom base existed but had nothing usable. Report against the
+  // last one we scanned so the user sees real folder/file context.
+  return {
+    found: false,
+    scannedPath: existing.join(' | '),
+    reason: lastResult?.found === false ? lastResult.reason : 'no-audio-files',
+    checkedFolders:
+      lastResult?.found === false ? lastResult.checkedFolders : [],
   }
 }
 

@@ -21,7 +21,7 @@ export default function MeetingInsights({ data }: Props) {
   if (empty) {
     return (
       <p className="text-gray-secondary text-[12px] italic">
-        분석 결과가 비어 있습니다 — 트랜스크립트가 너무 짧을 수 있어요.
+        Analysis came back empty — the transcript may have been too short.
       </p>
     )
   }
@@ -38,12 +38,12 @@ export default function MeetingInsights({ data }: Props) {
         </div>
       )}
       <Section
-        title="핵심 결정사항"
+        title="Key Decisions"
         accent="#2F6B45"
         items={data.keyDecisions.map((t) => ({ text: t }))}
       />
       <Section
-        title="액션 아이템"
+        title="Action Items"
         accent="#2D5A9E"
         items={data.actionItems.map((a) => ({
           text: a.task,
@@ -51,12 +51,12 @@ export default function MeetingInsights({ data }: Props) {
         }))}
       />
       <Section
-        title="후속 조치"
+        title="Follow-ups"
         accent="#8A5A1E"
         items={data.followUps.map((t) => ({ text: t }))}
       />
       <Section
-        title="미해결 안건"
+        title="Unresolved"
         accent="#9B3838"
         items={data.unresolved.map((t) => ({ text: t }))}
       />
@@ -82,7 +82,7 @@ function Section({
         {title}
       </p>
       {items.length === 0 ? (
-        <p className="text-gray-secondary text-[12px] italic">없음</p>
+        <p className="text-gray-secondary text-[12px] italic">None</p>
       ) : (
         <ul className="flex flex-col gap-[6px]">
           {items.map((it, i) => (

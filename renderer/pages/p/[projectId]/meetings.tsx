@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import Head from 'next/head'
+import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useQueryClient } from '@tanstack/react-query'
 import ProjectAppShell, { useCreateNew } from '../../../components/ProjectAppShell'
@@ -14,9 +15,7 @@ import { supabase } from '../../../lib/supabase'
 import { deleteMeeting as deleteMeetingRow } from '../../../lib/queries'
 import { userToMember, type MeetingType } from '../../../lib/types'
 import MeetingTypeLabel from '../../../components/ui/MeetingTypeLabel'
-import MeetingInsights from '../../../components/MeetingInsights'
 import InPersonRecorder from '../../../components/InPersonRecorder'
-import MeetingMinutesModal from '../../../components/MeetingMinutesModal'
 import { analyzeAudio, parseSummary } from '../../../lib/aiAnalyze'
 
 function dateBlock(iso: string): { top: string; bottom: string } {
@@ -49,11 +48,14 @@ function metaLabel(iso: string, durationMin: number): string {
   return `${dayLabel} · ${time} · ${durationMin} min`
 }
 
+// Date block bg + label colour by meeting type. Mirrors the tag colour
+// each `MeetingTypeLabel` uses so a quick glance at the date block
+// already conveys the meeting kind. Figma 976:3975 varies per card.
 const DATE_BLOCK_STYLES: Record<MeetingType, { bg: string; text: string }> = {
-  planning: { bg: 'bg-[#E6ECEF]', text: 'text-[#6B7B86]' },
-  check_in: { bg: 'bg-[#E6ECEF]', text: 'text-[#6B7B86]' },
-  review: { bg: 'bg-[#E6ECEF]', text: 'text-[#6B7B86]' },
-  retrospective: { bg: 'bg-[#E5DEEF]', text: 'text-[#5B3D8A]' },
+  planning: { bg: 'bg-[#E6ECEF]', text: 'text-[#6B7B86]' }, // gray-blue
+  check_in: { bg: 'bg-[#DCEBE0]', text: 'text-[#2F6B45]' }, // pale green
+  review: { bg: 'bg-[#F2EAD5]', text: 'text-[#8A5A1E]' }, // pale sand
+  retrospective: { bg: 'bg-[#E5DEEF]', text: 'text-[#5B3D8A]' }, // pale purple
 }
 
 export default function MeetingsPage() {
@@ -84,34 +86,14 @@ function MeetingsBody({ projectId }: { projectId: string }) {
   const [analyzeState, setAnalyzeState] = useState<
     Record<string, { analyzing: boolean; error: string | null }>
   >({})
-  // Which meeting's full minutes modal is open (null when closed).
-  const [openMinutes, setOpenMinutes] = useState<{
-    id: string
-    name: string
-  } | null>(null)
-  // Meeting IDs whose inline Insights card is collapsed. Default expanded
-  // for everyone so a fresh analysis is visible without an extra click.
-  const [collapsedInsights, setCollapsedInsights] = useState<Set<string>>(
-    new Set(),
-  )
-
-  function toggleInsights(meetingId: string) {
-    setCollapsedInsights((prev) => {
-      const next = new Set(prev)
-      if (next.has(meetingId)) next.delete(meetingId)
-      else next.add(meetingId)
-      return next
-    })
-  }
-
   async function handleDelete(meetingId: string, meetingName: string) {
     const ok = window.confirm(
-      `"${meetingName}" 미팅과 모든 회의록을 삭제할까요? 되돌릴 수 없습니다.`,
+      `Delete "${meetingName}" and all its minutes? This can't be undone.`,
     )
     if (!ok) return
     const result = await deleteMeetingRow(meetingId)
     if ('error' in result) {
-      window.alert(`삭제 실패: ${result.error}`)
+      window.alert(`Delete failed: ${result.error}`)
       return
     }
     await queryClient.invalidateQueries({
@@ -125,78 +107,6 @@ function MeetingsBody({ projectId }: { projectId: string }) {
       [meetingId]: { analyzing: true, error: null },
     }))
     try {
-      await analyzeAudio(meetingId, file)
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.project.meetings(projectId),
-      })
-      setAnalyzeState((prev) => ({
-        ...prev,
-        [meetingId]: { analyzing: false, error: null },
-      }))
-    } catch (e) {
-      setAnalyzeState((prev) => ({
-        ...prev,
-        [meetingId]: { analyzing: false, error: (e as Error).message },
-      }))
-    }
-  }
-
-  // One-click "use the recording I just made" — the Electron main process
-  // walks Documents/Zoom, reads the latest m4a, hands the bytes back via
-  // IPC, then we run the same upload-and-analyze pipeline. The manual
-  // file picker stays as a secondary path for the cases the auto-finder
-  // can't cover (browser preview, non-default Zoom folder, etc.).
-  async function handleAutoImport(meetingId: string) {
-    setAnalyzeState((prev) => ({
-      ...prev,
-      [meetingId]: { analyzing: true, error: null },
-    }))
-    try {
-      if (typeof window === 'undefined' || !window.ipc?.invoke) {
-        throw new Error(
-          '브라우저 프리뷰에서는 자동 가져오기를 지원하지 않습니다 — Electron 앱에서 사용하거나 "파일 선택"으로 업로드하세요.',
-        )
-      }
-      type FindResult =
-        | {
-            found: true
-            filename: string
-            mime: string
-            bytes: Uint8Array
-            folder: string
-            scannedPath: string
-          }
-        | {
-            found: false
-            scannedPath: string
-            reason:
-              | 'no-zoom-folder'
-              | 'no-subfolders'
-              | 'no-audio-files'
-              | 'all-too-small'
-            checkedFolders: { folder: string; files: string[] }[]
-            error?: string
-          }
-      const result = await window.ipc.invoke<FindResult>(
-        'import-latest-zoom-recording',
-      )
-      if (!result.found) {
-        if (result.error) {
-          throw new Error(`Zoom 폴더 읽기 실패: ${result.error}`)
-        }
-        const path = result.scannedPath || '(unknown)'
-        const reasonMsg = {
-          'no-zoom-folder': `Zoom 폴더가 없어요 — ${path}`,
-          'no-subfolders': `${path} 폴더는 있는데 회의 녹화 하위 폴더가 없어요. Zoom에서 회의 녹화가 정말 시작됐는지 확인해주세요.`,
-          'no-audio-files': `최근 폴더에 audio/video 파일이 없어요. Zoom이 아직 저장 중일 수 있습니다 (보통 종료 후 30초~5분). 잠시 후 재시도하거나 '파일 직접 선택'을 사용하세요.\n검색 경로: ${path}`,
-          'all-too-small': `오디오 파일이 너무 작아요 (10KB 미만 — Zoom이 저장 중). 1분 뒤 다시 시도하세요.\n검색 경로: ${path}`,
-        }[result.reason]
-        throw new Error(reasonMsg)
-      }
-      const blob = new Blob([new Uint8Array(result.bytes)], {
-        type: result.mime,
-      })
-      const file = new File([blob], result.filename, { type: result.mime })
       await analyzeAudio(meetingId, file)
       await queryClient.invalidateQueries({
         queryKey: queryKeys.project.meetings(projectId),
@@ -304,19 +214,23 @@ function MeetingsBody({ projectId }: { projectId: string }) {
             </div>
           </div>
 
-          {/* AI insights bar */}
+          {/* AI insights bar — dark navy to match Figma 976:3975 + Join
+              button colour. Hidden until the project has processed
+              meetings with at least one extracted action. */}
           {totalActions > 0 && (
-            <div className="bg-black text-white rounded-[10px] p-[20px] flex items-center justify-between gap-4">
+            <div className="bg-[#2E434E] text-white rounded-[10px] p-[20px] flex items-center justify-between gap-4">
               <div className="flex items-center gap-[15px]">
-                <span className="bg-primary-main/40 rounded p-[8px] inline-flex">
+                <span className="bg-white/15 rounded p-[8px] inline-flex">
                   <Icon name="Sparkle" size={15} />
                 </span>
                 <div className="flex flex-col gap-[4px]">
                   <p className="text-[14px] font-semibold">
-                    {totalActions} action items extracted from this week's meetings.
+                    {totalActions} action items extracted from this project&apos;s
+                    meetings.
                   </p>
                   <p className="text-[12px] text-white/60">
-                    AI processed {meetings.length} meetings.
+                    AI processed {meetings.length}{' '}
+                    {meetings.length === 1 ? 'meeting' : 'meetings'}.
                   </p>
                 </div>
               </div>
@@ -348,21 +262,6 @@ function MeetingsBody({ projectId }: { projectId: string }) {
                   analyzing: false,
                   error: null,
                 }
-                // Analysis is available when (a) the meeting has a real
-                // Zoom join URL, (b) it's not currently live, (c) its
-                // scheduled start time is in the past, and (d) we haven't
-                // analyzed it yet. This covers both the "user ran a Right
-                // Now meeting" and "user ended a scheduled meeting" paths.
-                const isPast =
-                  new Date(m.scheduled_at).getTime() <= Date.now()
-                const canAnalyze =
-                  !isLive &&
-                  isPast &&
-                  !insights &&
-                  !!m.location_or_url &&
-                  /^https?:\/\//i.test(m.location_or_url)
-                const showAnalysisCard =
-                  !!insights || canAnalyze || az.analyzing || !!az.error
                 return (
                   <div key={m.id} className="flex flex-col gap-[10px]">
                   <article
@@ -392,9 +291,12 @@ function MeetingsBody({ projectId }: { projectId: string }) {
                       <div className="flex items-start justify-between gap-[15px]">
                         <div className="flex flex-col gap-[10px] min-w-0 flex-1">
                           <div className="flex items-center gap-[15px] flex-wrap">
-                            <h3 className="text-black text-[20px] font-semibold leading-none">
+                            <Link
+                              href={`/p/${projectId}/meetings/${m.id}`}
+                              className="text-black text-[20px] font-semibold leading-none hover:text-blue-main"
+                            >
                               {m.name}
-                            </h3>
+                            </Link>
                             <span
                               className="text-[10px] tracking-[1px] text-[#6B7B86]"
                               style={{
@@ -477,7 +379,7 @@ function MeetingsBody({ projectId }: { projectId: string }) {
                                 isUrl
                                   ? `Open ${url}`
                                   : url
-                                    ? `"${url}" 는 유효한 링크가 아닙니다 — Zoom으로 다시 만들면 join URL이 자동 생성됩니다`
+                                    ? `"${url}" isn't a valid link — recreate the meeting with Zoom to get a join URL`
                                     : 'No meeting URL set'
                               }
                               className="bg-[#2E434E] text-[#F8F9FA] text-[12px] px-[10px] py-[10px] rounded-[5px] shrink-0 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -494,34 +396,45 @@ function MeetingsBody({ projectId }: { projectId: string }) {
                           <MeetingTypeLabel type={m.meeting_type} />
                         </div>
                         <div className="flex items-center gap-[15px]">
-                          {m.action_count > 0 && (
-                            <span className="bg-red-light flex items-center gap-[5px] px-[5px] py-[2px] rounded-[2px]">
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 14 14"
-                                fill="none"
-                                aria-hidden
-                              >
-                                <path
-                                  d="M3 7L6 10L11 4"
-                                  stroke="#9B3838"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                              <span
-                                className="text-[#9B3838] text-[10px] tracking-[1px] uppercase"
-                                style={{
-                                  fontFamily: 'Wanted Sans, ui-sans-serif, sans-serif',
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {m.action_count} ACTIONS
+                          {(() => {
+                            // When the AI has analysed this meeting, the
+                            // authoritative action-item list lives in the
+                            // insights JSON. Otherwise the card reflects
+                            // rows in `tasks` linked via `source_meeting_id`.
+                            const count = insights
+                              ? insights.actionItems.length
+                              : m.action_count
+                            if (count <= 0) return null
+                            return (
+                              <span className="bg-red-light flex items-center gap-[5px] px-[5px] py-[2px] rounded-[2px]">
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 14 14"
+                                  fill="none"
+                                  aria-hidden
+                                >
+                                  <path
+                                    d="M3 7L6 10L11 4"
+                                    stroke="#9B3838"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                                <span
+                                  className="text-[#9B3838] text-[10px] tracking-[1px] uppercase"
+                                  style={{
+                                    fontFamily:
+                                      'Wanted Sans, ui-sans-serif, sans-serif',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {count} ACTIONS
+                                </span>
                               </span>
-                            </span>
-                          )}
+                            )
+                          })()}
                           {m.attendees.length > 0 && (
                             <UserGroup
                               members={m.attendees.slice(0, 5).map(userToMember)}
@@ -534,107 +447,18 @@ function MeetingsBody({ projectId }: { projectId: string }) {
                     <button
                       type="button"
                       onClick={() => void handleDelete(m.id, m.name)}
-                      title="미팅 삭제"
+                      title="Delete meeting"
                       aria-label="Delete meeting"
                       className="self-start text-gray-secondary hover:text-red-main text-[18px] leading-none px-1 -mt-1"
                     >
                       ×
                     </button>
                   </article>
-                  {showAnalysisCard && (
-                    <div className="bg-white-white border border-gray-border-light rounded-[10px] p-[15px] ml-[75px]">
-                      {insights ? (
-                        <div className="flex flex-col gap-[10px]">
-                          <div className="flex items-center justify-between">
-                            <button
-                              type="button"
-                              onClick={() => toggleInsights(m.id)}
-                              className="inline-flex items-center gap-2 text-gray-main hover:text-black"
-                              aria-expanded={!collapsedInsights.has(m.id)}
-                            >
-                              <span className="text-[12px] w-3 inline-block">
-                                {collapsedInsights.has(m.id) ? '▶' : '▼'}
-                              </span>
-                              <span className="text-[10px] font-semibold uppercase tracking-[1.5px]">
-                                회의록
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setOpenMinutes({ id: m.id, name: m.name })
-                              }
-                              className="text-[12px] text-blue-main hover:underline"
-                            >
-                              회의록 전체 보기 →
-                            </button>
-                          </div>
-                          {!collapsedInsights.has(m.id) && (
-                            <MeetingInsights data={insights} />
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-black text-[13px] font-semibold">
-                              AI 회의록 — 방금 녹화한 회의 자동 분석
-                            </p>
-                            <p className="text-gray-main text-[11px] mt-1">
-                              Documents/Zoom 의 최신 녹화를 자동으로 가져와 전사 + 4섹션 추출합니다.
-                            </p>
-                            {az.error && (
-                              <p className="text-red-med text-[11px] mt-2 break-words">
-                                {az.error}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex flex-col items-end gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => void handleAutoImport(m.id)}
-                              disabled={az.analyzing}
-                              className="bg-blue-main text-white text-[12px] px-[15px] py-[8px] rounded-[5px] hover:opacity-90 disabled:opacity-50 disabled:cursor-wait"
-                            >
-                              {az.analyzing ? '분석 중…' : 'Auto import latest'}
-                            </button>
-                            <label
-                              className={`text-[11px] text-gray-main hover:text-black ${
-                                az.analyzing
-                                  ? 'opacity-50 cursor-wait'
-                                  : 'cursor-pointer'
-                              }`}
-                            >
-                              또는 파일 직접 선택…
-                              <input
-                                type="file"
-                                accept="audio/*,video/mp4,.m4a,.mp4,.mp3,.wav,.webm"
-                                className="hidden"
-                                disabled={az.analyzing}
-                                onChange={(e) => {
-                                  const f = e.target.files?.[0]
-                                  if (f) void handleAnalyzeFile(m.id, f)
-                                  e.target.value = ''
-                                }}
-                              />
-                            </label>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
                   </div>
                 )
               })
             )}
           </div>
-
-          {openMinutes && (
-            <MeetingMinutesModal
-              meetingId={openMinutes.id}
-              meetingName={openMinutes.name}
-              onClose={() => setOpenMinutes(null)}
-            />
-          )}
     </div>
   )
 }

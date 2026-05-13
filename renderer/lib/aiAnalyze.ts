@@ -29,6 +29,38 @@ export type MeetingMinutesRow = {
 export const meetingMinutesQueryKey = (meetingId: string) =>
   ['meeting_minutes', meetingId] as const
 
+export type TranscriptSegmentRow = {
+  id: string
+  meeting_id: string
+  speaker_id: string | null
+  start_time: number
+  end_time: number
+  text: string
+}
+
+export const transcriptSegmentsQueryKey = (meetingId: string) =>
+  ['transcript_segments', meetingId] as const
+
+/** Fetch ordered transcript segments saved by `analyze-audio`.
+ *  Empty array (not null) when none — keeps the consumer's render
+ *  branch simple. */
+export function useTranscriptSegments(meetingId: string | null | undefined) {
+  return useQuery({
+    queryKey: transcriptSegmentsQueryKey(meetingId ?? ''),
+    enabled: !!meetingId,
+    queryFn: async (): Promise<TranscriptSegmentRow[]> => {
+      if (!meetingId) return []
+      const { data, error } = await supabase
+        .from('transcript_segments')
+        .select('id, meeting_id, speaker_id, start_time, end_time, text')
+        .eq('meeting_id', meetingId)
+        .order('start_time', { ascending: true })
+      if (error) throw error
+      return (data as TranscriptSegmentRow[]) ?? []
+    },
+  })
+}
+
 /** React Query hook — returns the meeting_minutes row for a meeting, or
  *  null when analysis hasn't run yet. Treats "not found" as a non-error. */
 export function useMeetingMinutes(meetingId: string | null | undefined) {
@@ -76,6 +108,124 @@ export function parseSummary(raw: string | null | undefined): ExtractedMeeting |
     followUps: [],
     unresolved: [],
   }
+}
+
+/**
+ * Materialise the AI-extracted action items into real `tasks` rows so
+ * they show up in Kanban / Action Items / Tasks views and so the meeting
+ * card's `action_count` badge reflects them.
+ *
+ * For each item we:
+ *  1. Insert a row in `tasks` linked back to the meeting via
+ *     `source_meeting_id`. Owner / due date end up in `description` so
+ *     no signal is lost when we can't map them to structured fields.
+ *  2. Try to match the AI-supplied owner string to a row in `users`
+ *     (nickname > full name > first name). On a hit, insert into
+ *     `task_assignees`. On a miss, the description still carries the
+ *     name so the user can re-assign manually.
+ *  3. Try to parse the due date as ISO (YYYY-MM-DD) or M/D — anything
+ *     looser stays in description only.
+ */
+export async function acceptActionItems(args: {
+  meetingId: string
+  projectId: string
+  items: ExtractedMeeting['actionItems']
+}): Promise<{ inserted: number; errors: string[] }> {
+  const { data: userData, error: authErr } = await supabase.auth.getUser()
+  if (authErr || !userData.user) {
+    return { inserted: 0, errors: ['Not logged in'] }
+  }
+  const me = userData.user.id
+
+  const errors: string[] = []
+  let inserted = 0
+
+  for (const item of args.items) {
+    const parsedDate = parseDueDateLoose(item.dueDate)
+    const descriptionParts: string[] = []
+    if (item.owner) descriptionParts.push(`Owner (AI): ${item.owner}`)
+    if (item.dueDate && !parsedDate) {
+      descriptionParts.push(`Due (AI, unparsed): ${item.dueDate}`)
+    }
+    descriptionParts.push('From AI meeting analysis')
+
+    const { data: task, error: taskErr } = await supabase
+      .from('tasks')
+      .insert({
+        project_id: args.projectId,
+        title: item.task,
+        description: descriptionParts.join('\n'),
+        due_date: parsedDate,
+        source_meeting_id: args.meetingId,
+        status: 'planned',
+        priority: 'medium',
+        created_by: me,
+      })
+      .select('id')
+      .single()
+    if (taskErr || !task) {
+      errors.push(
+        `"${truncateForError(item.task)}": ${taskErr?.message ?? 'unknown error'}`,
+      )
+      continue
+    }
+    inserted++
+
+    if (item.owner) {
+      const ownerId = await findUserIdByName(item.owner)
+      if (ownerId) {
+        const { error: aErr } = await supabase
+          .from('task_assignees')
+          .insert({ task_id: task.id, user_id: ownerId })
+        if (aErr) errors.push(`Assign ${item.owner}: ${aErr.message}`)
+      }
+    }
+  }
+
+  return { inserted, errors }
+}
+
+function truncateForError(s: string): string {
+  return s.length > 40 ? s.slice(0, 37) + '…' : s
+}
+
+/** Loose ISO/M-D parser. Returns null when the input is too informal
+ *  to land safely in the `due_date` date column. */
+function parseDueDateLoose(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const s = raw.trim()
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+  const md = s.match(/^(\d{1,2})\/(\d{1,2})$/)
+  if (md) {
+    const year = new Date().getFullYear()
+    const mm = md[1].padStart(2, '0')
+    const dd = md[2].padStart(2, '0')
+    return `${year}-${mm}-${dd}`
+  }
+  // Korean "5월 18일"
+  const ko = s.match(/^\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*$/)
+  if (ko) {
+    const year = new Date().getFullYear()
+    const mm = ko[1].padStart(2, '0')
+    const dd = ko[2].padStart(2, '0')
+    return `${year}-${mm}-${dd}`
+  }
+  return null
+}
+
+async function findUserIdByName(name: string): Promise<string | null> {
+  const trimmed = name.trim()
+  if (!trimmed) return null
+  // Try nickname first (closest to "what someone said in a meeting"),
+  // then first/last name. .or() with ilike covers Korean + English.
+  const { data } = await supabase
+    .from('users')
+    .select('id')
+    .or(
+      `nickname.ilike.${trimmed},first_name.ilike.${trimmed},last_name.ilike.${trimmed}`,
+    )
+    .limit(1)
+  return data?.[0]?.id ?? null
 }
 
 /** Upload a local Zoom recording (m4a) to the `analyze-audio` Edge

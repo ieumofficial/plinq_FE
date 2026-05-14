@@ -6,6 +6,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import ProjectAppShell from '../../../../components/ProjectAppShell'
 import Icon from '../../../../components/ui/Icon'
 import MeetingTypeLabel from '../../../../components/ui/MeetingTypeLabel'
+import MeetingRoom from '../../../../components/MeetingRoom'
+import Button from '../../../../components/ui/Button'
 import {
   useProject,
   useProjectMeetings,
@@ -18,6 +20,7 @@ import {
   parseSummary,
   acceptActionItems,
   analyzeAudio,
+  reanalyzeAudio,
   meetingMinutesQueryKey,
   transcriptSegmentsQueryKey,
   meetingAgendasQueryKey,
@@ -69,6 +72,7 @@ function MeetingDetailBody({
     running: boolean
     error: string | null
   }>({ running: false, error: null })
+  const [voiceOpen, setVoiceOpen] = useState(false)
 
   async function runAnalyze(file: File): Promise<void> {
     setAnalyze({ running: true, error: null })
@@ -148,12 +152,31 @@ function MeetingDetailBody({
     }
   }
 
-  // Re-run analysis against the local Zoom recording (Free-tier path).
-  // Reuses handleAutoImport which finds the latest local m4a and pipes
-  // it through analyze-audio — that's the only function wired up for
-  // Free-tier meetings.
+  // Re-run analysis using the audio that's already in Storage from the
+  // first pass — `meeting_minutes.raw_audio_url`. No re-upload, no Zoom
+  // local-folder lookup. If the meeting was never analyzed (so there's
+  // no raw_audio_url yet), fall back to the local Zoom auto-import.
   async function runRegenerate(): Promise<void> {
-    await handleAutoImport()
+    const rawAudioUrl = minutes?.raw_audio_url ?? null
+    if (!rawAudioUrl) {
+      await handleAutoImport()
+    } else {
+      setAnalyze({ running: true, error: null })
+      try {
+        await reanalyzeAudio(meetingId, rawAudioUrl)
+        await queryClient.invalidateQueries({
+          queryKey: meetingMinutesQueryKey(meetingId),
+        })
+        await queryClient.invalidateQueries({
+          queryKey: transcriptSegmentsQueryKey(meetingId),
+        })
+        setAnalyze({ running: false, error: null })
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        setAnalyze({ running: false, error: msg })
+        return
+      }
+    }
     await queryClient.invalidateQueries({
       queryKey: meetingAgendasQueryKey(meetingId),
     })
@@ -230,7 +253,7 @@ function MeetingDetailBody({
   })()
 
   return (
-    <div className="p-6 flex gap-6 items-start">
+    <div className="p-6 flex gap-6 items-start h-full overflow-y-auto">
       <div className="flex-1 flex flex-col gap-6 min-w-0 max-w-[820px]">
       {/* Back link */}
       <Link
@@ -279,6 +302,27 @@ function MeetingDetailBody({
             : 'awaiting AI analysis'}
         </p>
       </div>
+
+      {/* In-app voice room (LiveKit) — toggle from a button so we don't
+          burn LiveKit minutes just by visiting the page. */}
+      {voiceOpen ? (
+        <MeetingRoom
+          meetingId={meetingId}
+          meetingName={meeting.name}
+          onLeave={() => setVoiceOpen(false)}
+        />
+      ) : (
+        <div>
+          <Button
+            variant="primary"
+            size="compact"
+            iconLeft="Meeting"
+            onClick={() => setVoiceOpen(true)}
+          >
+            Join voice room
+          </Button>
+        </div>
+      )}
 
       {/* AI Summary card */}
       {insights ? (
@@ -394,7 +438,7 @@ function MeetingDetailBody({
                   onClick={() => void runRegenerate()}
                   disabled={analyze.running}
                   className="bg-white/10 hover:bg-white/20 text-white text-[12px] font-semibold px-[14px] py-[8px] rounded-[5px] inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Re-run analysis against the Zoom cloud recording"
+                  title="Re-run AI analysis on the saved audio (no re-upload)"
                 >
                   ↻ {analyze.running ? 'Regenerating…' : 'Regenerate'}
                 </button>
@@ -423,120 +467,79 @@ function MeetingDetailBody({
         />
       )}
 
-      {/* By-agenda breakdown — per-agenda AI summary + transcript excerpt,
-          plus a "기타 (Other)" catch-all for anything that did not fit
-          any agenda. Rendered when there are agendas with summaries, OR
-          when the meeting has "other" content from analysis. */}
-      {(() => {
-        const hasAgendaSummary = agendas.some(
-          (a) => a.summary || a.transcript,
-        )
-        const otherSummary = insights?.other.summary?.trim() ?? ''
-        const otherTranscript = insights?.other.transcript?.trim() ?? ''
-        const hasOther = !!(otherSummary || otherTranscript)
-        // Render when there's anything agenda-grouped to show. When the
-        // meeting had no agendas at analysis time, all content ends up
-        // in `other` — we still surface it as a single "기타" card.
-        if (!hasAgendaSummary && !hasOther) return null
-        return (
-          <section className="flex flex-col gap-[12px]">
-            <h2 className="text-black text-[16px] font-semibold">
-              By agenda
-            </h2>
-            <div className="flex flex-col gap-[15px]">
-              {agendas.map((a, idx) => (
-                <article
-                  key={a.id}
-                  className="bg-white-white border border-gray-border-light rounded-[10px] p-[15px] flex flex-col gap-[10px]"
+      {/* AI-discovered topics — the analyzer reads the transcript and
+          decides the actual discussion topics (the pre-meeting agenda is
+          only a hint to it). The agenda itself is now rendered separately
+          as a "회의 전 안건" reference block, decoupled from analysis. */}
+      {insights && insights.topics.length > 0 && (
+        <section className="flex flex-col gap-[12px]">
+          <h2 className="text-black text-[16px] font-semibold">
+            Discussion topics
+          </h2>
+          <p className="text-[12px] text-gray-main -mt-[4px]">
+            AI grouped the transcript into the topics that were actually
+            discussed.
+          </p>
+          <div className="flex flex-col gap-[15px]">
+            {insights.topics.map((t, idx) => (
+              <article
+                key={idx}
+                className="bg-white-white border border-gray-border-light rounded-[10px] p-[15px] flex flex-col gap-[10px]"
+              >
+                <header className="flex items-baseline gap-[10px]">
+                  <span
+                    className="text-gray-secondary text-[12px]"
+                    style={{
+                      fontFamily: 'Geist Mono, ui-monospace, monospace',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {String(idx + 1).padStart(2, '0')}
+                  </span>
+                  <h3 className="text-black text-[14px] font-semibold leading-tight">
+                    {t.title}
+                  </h3>
+                </header>
+                <p className="text-[13px] text-[#3F4B54] leading-snug whitespace-pre-line">
+                  {t.summary}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Pre-meeting agenda (reference only) — shown when the meeting had
+          one. Now decoupled from analysis: each agenda item is just the
+          title the user / AI set before the meeting. */}
+      {agendas.length > 0 && (
+        <section className="flex flex-col gap-[12px]">
+          <h2 className="text-black text-[16px] font-semibold">
+            Pre-meeting agenda
+          </h2>
+          <div className="flex flex-col gap-[8px]">
+            {agendas.map((a, idx) => (
+              <article
+                key={a.id}
+                className="bg-white-item border border-gray-border-light rounded-[10px] px-[15px] py-[10px] flex items-baseline gap-[10px]"
+              >
+                <span
+                  className="text-gray-secondary text-[12px]"
+                  style={{
+                    fontFamily: 'Geist Mono, ui-monospace, monospace',
+                    fontWeight: 600,
+                  }}
                 >
-                  <header className="flex items-baseline gap-[10px]">
-                    <span
-                      className="text-gray-secondary text-[12px]"
-                      style={{
-                        fontFamily: 'Geist Mono, ui-monospace, monospace',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {String(idx + 1).padStart(2, '0')}
-                    </span>
-                    <h3 className="text-black text-[14px] font-semibold leading-tight">
-                      {a.title}
-                    </h3>
-                  </header>
-                  {a.summary ? (
-                    <p className="text-[13px] text-[#3F4B54] leading-snug whitespace-pre-line">
-                      {a.summary}
-                    </p>
-                  ) : (
-                    <p className="text-[12px] text-gray-secondary italic">
-                      Not yet summarized.
-                    </p>
-                  )}
-                  {a.transcript && (
-                    <details className="group">
-                      <summary className="cursor-pointer text-[11px] text-gray-main hover:text-black inline-flex items-center gap-[4px] list-none select-none">
-                        <span className="transition-transform group-open:rotate-90">
-                          ▸
-                        </span>
-                        <span>관련 회의록</span>
-                      </summary>
-                      <pre
-                        className="mt-[8px] text-[11px] text-[#3F4B54] bg-white-item rounded-[5px] px-[10px] py-[8px] leading-[1.6] whitespace-pre-wrap"
-                        style={{
-                          fontFamily: 'Geist Mono, ui-monospace, monospace',
-                        }}
-                      >
-                        {a.transcript}
-                      </pre>
-                    </details>
-                  )}
-                </article>
-              ))}
-              {hasOther && (
-                <article className="bg-white-item border border-gray-border-light rounded-[10px] p-[15px] flex flex-col gap-[10px]">
-                  <header className="flex items-baseline gap-[10px]">
-                    <span
-                      className="text-gray-secondary text-[12px]"
-                      style={{
-                        fontFamily: 'Geist Mono, ui-monospace, monospace',
-                        fontWeight: 600,
-                      }}
-                    >
-                      ─
-                    </span>
-                    <h3 className="text-black text-[14px] font-semibold leading-tight">
-                      기타
-                    </h3>
-                  </header>
-                  {otherSummary && (
-                    <p className="text-[13px] text-[#3F4B54] leading-snug whitespace-pre-line">
-                      {otherSummary}
-                    </p>
-                  )}
-                  {otherTranscript && (
-                    <details className="group">
-                      <summary className="cursor-pointer text-[11px] text-gray-main hover:text-black inline-flex items-center gap-[4px] list-none select-none">
-                        <span className="transition-transform group-open:rotate-90">
-                          ▸
-                        </span>
-                        <span>관련 회의록</span>
-                      </summary>
-                      <pre
-                        className="mt-[8px] text-[11px] text-[#3F4B54] bg-white-white rounded-[5px] px-[10px] py-[8px] leading-[1.6] whitespace-pre-wrap"
-                        style={{
-                          fontFamily: 'Geist Mono, ui-monospace, monospace',
-                        }}
-                      >
-                        {otherTranscript}
-                      </pre>
-                    </details>
-                  )}
-                </article>
-              )}
-            </div>
-          </section>
-        )
-      })()}
+                  {String(idx + 1).padStart(2, '0')}
+                </span>
+                <h3 className="text-black text-[13px] font-medium leading-tight">
+                  {a.title}
+                </h3>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Generated Action Items */}
       {insights && insights.actionItems.length > 0 && (

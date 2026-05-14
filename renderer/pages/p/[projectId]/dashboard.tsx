@@ -149,28 +149,6 @@ function MiniTaskCard({
   )
 }
 
-/** "Kanban / Timeline" segmented tabs at the top of the kanban snapshot. */
-function KanbanTabs({ value }: { value: 'kanban' | 'timeline' }) {
-  return (
-    <div className="bg-white-item rounded-[5px] flex items-center p-[3px] gap-[5px]">
-      {(['kanban', 'timeline'] as const).map((k) => {
-        const active = k === value
-        return (
-          <span
-            key={k}
-            className={`px-[10px] py-[5px] rounded-[3px] text-[12px] font-medium capitalize ${
-              active ? 'bg-white-white text-black shadow-sm' : 'text-gray-main'
-            }`}
-            style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
-          >
-            {k}
-          </span>
-        )
-      })}
-    </div>
-  )
-}
-
 /** 3/4-circle gauge — open at the bottom, with rounded end caps. Geometry is
  *  picked so the arc, including the stroke radius, fits inside viewBox 200×160. */
 /** Half-circle (180°) gauge opening downward — matches Figma 966:8367. */
@@ -395,7 +373,6 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
             title="Kanban snapshot"
             action={
               <div className="flex items-center gap-[10px] shrink-0">
-                <KanbanTabs value="kanban" />
                 <button
                   type="button"
                   onClick={() => router.push(`/p/${projectId}/kanban`)}

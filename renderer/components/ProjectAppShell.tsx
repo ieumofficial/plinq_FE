@@ -37,7 +37,6 @@ export type ProjectActiveKey =
   | 'dashboard'
   | 'kanban'
   | 'backlog'
-  | 'timeline'
   | 'meetings'
   | 'members'
   | 'knowledge'
@@ -133,7 +132,6 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
     { key: 'dashboard', icon: 'Dashboard', label: 'Project Dashboard' },
     { key: 'kanban', icon: 'Kanban', label: 'Kanban Board' },
     { key: 'backlog', icon: 'Task', label: 'Backlog', count: counts?.tasks },
-    { key: 'timeline', icon: 'Calendar', label: 'Timeline' },
     { key: 'meetings', icon: 'Meeting', label: 'Meetings', count: counts?.meetings },
     { key: 'members', icon: 'People', label: 'Members', count: counts?.members },
     { key: 'knowledge', icon: 'File', label: 'Knowledge Base', count: counts?.docs },

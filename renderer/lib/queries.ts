@@ -370,6 +370,98 @@ export async function createProject(
   return { id: projectId }
 }
 
+/**
+ * Delete a project plus every row that references it. The schema does not
+ * have `ON DELETE CASCADE` on most project FKs, so a plain
+ * `delete from projects` fails with a foreign-key violation as soon as the
+ * project has a member, task, meeting, doc, or chat session. We clear the
+ * children explicitly in dependency order. Mirrors `deleteMeeting`.
+ */
+export async function deleteProject(
+  projectId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const [tasksRes, meetingsRes, sessionsRes] = await Promise.all([
+    supabase.from('tasks').select('id').eq('project_id', projectId),
+    supabase.from('meetings').select('id').eq('project_id', projectId),
+    supabase.from('chat_sessions').select('id').eq('project_id', projectId),
+  ])
+  const taskIds = (tasksRes.data ?? []).map((r) => (r as { id: string }).id)
+  const meetingIds = (meetingsRes.data ?? []).map((r) => (r as { id: string }).id)
+  const sessionIds = (sessionsRes.data ?? []).map((r) => (r as { id: string }).id)
+
+  // chat — `chat_sessions` has ON DELETE CASCADE for messages/members per
+  // `deleteChatSession`, so deleting the parent rows is enough.
+  if (sessionIds.length > 0) {
+    const { error } = await supabase
+      .from('chat_sessions')
+      .delete()
+      .in('id', sessionIds)
+    if (error) return { error: error.message }
+  }
+
+  // meetings — mirror `deleteMeeting`'s manual child cleanup.
+  if (meetingIds.length > 0) {
+    for (const table of [
+      'meeting_attendees',
+      'meeting_agendas',
+      'meeting_invites',
+      'meeting_minutes',
+      'transcript_segments',
+      'meeting_decisions',
+    ]) {
+      const { error: e } = await supabase
+        .from(table)
+        .delete()
+        .in('meeting_id', meetingIds)
+      if (e) console.warn(`[deleteProject] ${table}:`, e.message)
+    }
+    const { error } = await supabase
+      .from('meetings')
+      .delete()
+      .in('id', meetingIds)
+    if (error) return { error: error.message }
+  }
+
+  // tasks — `task_assignees` references `tasks.id`.
+  if (taskIds.length > 0) {
+    await supabase.from('task_assignees').delete().in('task_id', taskIds)
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .in('id', taskIds)
+    if (error) return { error: error.message }
+  }
+
+  // remaining direct children of the project row
+  for (const table of [
+    'knowledge_documents',
+    'project_invites',
+    'project_members',
+  ]) {
+    const { error: e } = await supabase
+      .from(table)
+      .delete()
+      .eq('project_id', projectId)
+    if (e) console.warn(`[deleteProject] ${table}:`, e.message)
+  }
+
+  // Use `.select('id')` so an RLS-filtered delete (caller is not the lead /
+  // admin) is surfaced as 0 returned rows instead of looking like success.
+  const { data, error } = await supabase
+    .from('projects')
+    .delete()
+    .eq('id', projectId)
+    .select('id')
+  if (error) return { error: error.message }
+  if (!data || data.length === 0) {
+    return {
+      error:
+        "Couldn't delete the project — you may not have permission. Only the project lead can delete this project.",
+    }
+  }
+  return { ok: true }
+}
+
 export async function addProjectInvite(input: {
   project_id: string
   email: string

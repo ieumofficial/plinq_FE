@@ -10,6 +10,7 @@ import {
   createKnowledgeDoc,
   deleteChatSession,
   deleteKnowledgeDoc,
+  deleteProject,
   // toggleDocPin removed — pin state lives in localStorage for now (see lib/pinPref.ts)
   getChatMessages,
   getChatSessionMembers,
@@ -104,8 +105,8 @@ export function useDeleteProject() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (projectId: string) => {
-      const { error } = await supabase.from('projects').delete().eq('id', projectId)
-      if (error) throw new Error(error.message)
+      const result = await deleteProject(projectId)
+      if ('error' in result) throw new Error(result.error)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.projects.all })

@@ -1477,6 +1477,67 @@ export type ChatMessageWithAuthor = ChatMessageRow & {
   author: UserRow
 }
 
+export type ChatSearchHit = {
+  /** session_id this message belongs to */
+  session_id: string
+  /** chat_messages.id */
+  message_id: string
+  body: string
+  created_at: string
+  /** Snippet around the first match — pre-trimmed for the UI. */
+  snippet: string
+}
+
+/** Search messages across all chat sessions in an org that the current user
+ *  can read. RLS on chat_messages restricts visibility to sessions the user is
+ *  a member of, so the org_id scope just narrows the join. */
+export async function searchChatMessages(
+  orgId: string,
+  query: string,
+  opts?: { limit?: number }
+): Promise<ChatSearchHit[]> {
+  const q = query.trim()
+  if (q.length < 2) return []
+  const limit = opts?.limit ?? 30
+  // ilike on body, joined with chat_sessions for the org filter. RLS does the
+  // membership scoping; we just constrain to the active org.
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select(
+      'id, session_id, body, created_at, chat_sessions!inner(org_id)'
+    )
+    .ilike('body', `%${q}%`)
+    .eq('chat_sessions.org_id', orgId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) {
+    console.error('[queries] searchChatMessages', error)
+    return []
+  }
+  return (data ?? []).map((row) => {
+    const r = row as unknown as {
+      id: string
+      session_id: string
+      body: string
+      created_at: string
+    }
+    const lower = r.body.toLowerCase()
+    const at = lower.indexOf(q.toLowerCase())
+    const radius = 40
+    const from = Math.max(0, at - radius)
+    const to = Math.min(r.body.length, at + q.length + radius)
+    const snippet =
+      (from > 0 ? '…' : '') + r.body.slice(from, to) + (to < r.body.length ? '…' : '')
+    return {
+      session_id: r.session_id,
+      message_id: r.id,
+      body: r.body,
+      created_at: r.created_at,
+      snippet,
+    }
+  })
+}
+
 export async function getChatMessages(
   sessionId: string,
   opts?: { limit?: number; before?: string }

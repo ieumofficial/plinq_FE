@@ -8,6 +8,7 @@ import Button from '../../components/ui/Button'
 import ProjectLabel from '../../components/ui/ProjectLabel'
 import UserGroup from '../../components/ui/UserGroup'
 import PriorityTag from '../../components/ui/PriorityTag'
+import { useProjectPreview } from '../../components/ProjectPreviewProvider'
 import Tag from '../../components/ui/Tag'
 import Checkbox from '../../components/ui/Checkbox'
 import ProfileDropdown from '../../components/ProfileDropdown'
@@ -200,6 +201,7 @@ function SectionEyebrow({
 
 export default function MyOverviewPage() {
   const router = useRouter()
+  const preview = useProjectPreview()
   const { data: user, isFetched: userFetched } = useCurrentUser()
   const { data: org } = useMyOrg(user?.id)
 
@@ -423,7 +425,7 @@ export default function MyOverviewPage() {
                       <button
                         key={p.id}
                         type="button"
-                        onClick={() => router.push(`/p/${p.id}/dashboard`)}
+                        onClick={() => preview.open(p.id)}
                         className="bg-white-item rounded-[5px] flex items-center justify-between px-[14px] py-[10px] gap-[10px] text-left hover:bg-white-secondary transition-colors"
                       >
                         <div className="flex items-center gap-[15px] min-w-0 flex-1">

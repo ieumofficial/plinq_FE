@@ -44,24 +44,38 @@ function memberLabel(u: UserRow): string {
   return u.nickname || `${u.first_name} ${u.last_name}`.trim() || u.email
 }
 
-function useClickOutside(open: boolean, onClose: () => void) {
-  const ref = useRef<HTMLDivElement>(null)
+/** Closes the dropdown when clicking outside both the trigger and the floating
+ *  popup. Both refs are needed because the popup is rendered in a different
+ *  part of the DOM (fixed-positioned sibling) than the trigger button. */
+function useFloatingClose(
+  open: boolean,
+  onClose: () => void,
+  triggerRef: React.RefObject<HTMLElement>,
+  popupRef: React.RefObject<HTMLElement>
+) {
   useEffect(() => {
     if (!open) return
     const onMouseDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+      const t = e.target as Node
+      if (triggerRef.current?.contains(t)) return
+      if (popupRef.current?.contains(t)) return
+      onClose()
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
+    const onScrollOrResize = () => onClose()
     document.addEventListener('mousedown', onMouseDown)
     document.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
     return () => {
       document.removeEventListener('mousedown', onMouseDown)
       document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
     }
-  }, [open, onClose])
-  return ref
+  }, [open, onClose, triggerRef, popupRef])
 }
 
 export default function ProjectSettingsPage() {
@@ -104,8 +118,30 @@ function SettingsBody({ projectId }: { projectId: string }) {
   const [description, setDescription] = useState('')
   const [leadId, setLeadId] = useState<string | null>(null)
   const [leadPickerOpen, setLeadPickerOpen] = useState(false)
-  const leadPickerRef = useClickOutside(leadPickerOpen, () => setLeadPickerOpen(false))
-  const customHexRef = useClickOutside(customHexOpen, () => setCustomHexOpen(false))
+  const [leadAnchor, setLeadAnchor] = useState<DOMRect | null>(null)
+  const leadTriggerRef = useRef<HTMLButtonElement>(null)
+  const leadPopupRef = useRef<HTMLDivElement>(null)
+  const [customHexAnchor, setCustomHexAnchor] = useState<DOMRect | null>(null)
+  const customHexTriggerRef = useRef<HTMLButtonElement>(null)
+  const customHexPopupRef = useRef<HTMLDivElement>(null)
+  useFloatingClose(
+    leadPickerOpen,
+    () => {
+      setLeadPickerOpen(false)
+      setLeadAnchor(null)
+    },
+    leadTriggerRef,
+    leadPopupRef
+  )
+  useFloatingClose(
+    customHexOpen,
+    () => {
+      setCustomHexOpen(false)
+      setCustomHexAnchor(null)
+    },
+    customHexTriggerRef,
+    customHexPopupRef
+  )
   const [status, setStatus] = useState<ProjectStatusDb>('planned')
   const [error, setError] = useState('')
   const [memberSearch, setMemberSearch] = useState('')
@@ -271,15 +307,24 @@ function SettingsBody({ projectId }: { projectId: string }) {
               })}
             </div>
           </div>
-          <div ref={customHexRef} className="relative flex flex-col gap-[5px]">
+          <div className="flex flex-col gap-[5px]">
             <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px] invisible">
               .
             </label>
             <button
+              ref={customHexTriggerRef}
               type="button"
               onClick={() => {
+                if (customHexOpen) {
+                  setCustomHexOpen(false)
+                  setCustomHexAnchor(null)
+                  return
+                }
                 setCustomHexInput(isCustomHex ? color : '')
-                setCustomHexOpen((s) => !s)
+                setCustomHexAnchor(
+                  customHexTriggerRef.current?.getBoundingClientRect() ?? null
+                )
+                setCustomHexOpen(true)
               }}
               className={`h-[39px] px-[12px] rounded-[8px] border border-solid border-gray-border bg-white-white text-[12px] inline-flex items-center gap-[6px] hover:bg-white-item transition-colors ${
                 isCustomHex ? 'text-black font-semibold' : 'text-black'
@@ -287,27 +332,6 @@ function SettingsBody({ projectId }: { projectId: string }) {
             >
               🎨 Custom hex
             </button>
-            {customHexOpen && (
-              <div className="absolute z-20 top-[calc(100%+4px)] right-0 bg-white-white border border-solid border-gray-border-light rounded-[8px] shadow-md p-[10px] flex flex-col gap-[6px] min-w-[200px]">
-                <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                  Hex value
-                </label>
-                <input
-                  type="text"
-                  placeholder="#4F8FE6"
-                  value={customHexInput}
-                  onChange={(e) => setCustomHexInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') applyCustomHex()
-                  }}
-                  autoFocus
-                  className="bg-white-white border border-solid border-gray-border rounded-[8px] px-[10px] py-[6px] text-[12px] outline-none focus:border-primary-main"
-                />
-                <Button size="compact" onClick={applyCustomHex}>
-                  Apply
-                </Button>
-              </div>
-            )}
           </div>
         </div>
 
@@ -330,13 +354,24 @@ function SettingsBody({ projectId }: { projectId: string }) {
 
         {/* Lead + Due date + Status row */}
         <div className="grid grid-cols-[1fr_180px_1fr] gap-[15px] items-end">
-          <div className="flex flex-col gap-[5px] relative" ref={leadPickerRef}>
+          <div className="flex flex-col gap-[5px]">
             <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
               Project Lead *
             </label>
             <button
+              ref={leadTriggerRef}
               type="button"
-              onClick={() => setLeadPickerOpen((s) => !s)}
+              onClick={() => {
+                if (leadPickerOpen) {
+                  setLeadPickerOpen(false)
+                  setLeadAnchor(null)
+                } else {
+                  setLeadAnchor(
+                    leadTriggerRef.current?.getBoundingClientRect() ?? null
+                  )
+                  setLeadPickerOpen(true)
+                }
+              }}
               className="bg-white-white border border-solid border-gray-border rounded-[8px] px-[12px] py-[6px] h-[48px] flex items-center gap-[10px] hover:border-primary-main"
             >
               {lead ? (
@@ -356,43 +391,14 @@ function SettingsBody({ projectId }: { projectId: string }) {
               ) : (
                 <span className="text-gray-secondary text-[12px]">— pick lead —</span>
               )}
-              <Icon name="ArrowRight" size={12} className="ml-auto text-gray-secondary rotate-90" />
+              <Icon
+                name="ArrowRight"
+                size={12}
+                className={`ml-auto text-gray-secondary transition-transform ${
+                  leadPickerOpen ? 'rotate-90' : ''
+                }`}
+              />
             </button>
-            {leadPickerOpen && (
-              <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white-white border border-solid border-gray-border rounded-[8px] shadow-md z-20 max-h-[260px] overflow-y-auto">
-                {members.length === 0 ? (
-                  <p className="px-[12px] py-[8px] text-gray-secondary text-[11px]">
-                    No members yet.
-                  </p>
-                ) : (
-                  members.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        setLeadId(m.id)
-                        setLeadPickerOpen(false)
-                      }}
-                      className={`w-full flex items-center gap-[10px] px-[12px] py-[8px] text-left hover:bg-white-item ${
-                        leadId === m.id ? 'bg-blue-light/30' : ''
-                      }`}
-                    >
-                      <UserGroup members={[userToMember(m)]} size={24} />
-                      <span className="flex flex-col min-w-0">
-                        <span className="text-black text-[12px] truncate">
-                          {memberLabel(m)}
-                        </span>
-                        {m.job_title && (
-                          <span className="text-gray-secondary text-[10px] truncate">
-                            {m.job_title}
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
           </div>
 
           {/* Due date — placeholder, no DB column yet */}
@@ -545,6 +551,89 @@ function SettingsBody({ projectId }: { projectId: string }) {
           {isPending ? 'Saving…' : 'Save changes'}
         </Button>
       </div>
+
+      {/* Floating custom-hex popover — `position: fixed` so it escapes the
+       *  scrolling form-card overflow. */}
+      {customHexOpen && customHexAnchor && (
+        <div
+          ref={customHexPopupRef}
+          style={{
+            position: 'fixed',
+            top: customHexAnchor.bottom + 4,
+            left: Math.max(8, customHexAnchor.right - 200),
+            width: 200,
+            zIndex: 100,
+          }}
+          className="bg-white-white border border-solid border-gray-border-light rounded-[8px] shadow-md p-[10px] flex flex-col gap-[6px]"
+        >
+          <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
+            Hex value
+          </label>
+          <input
+            type="text"
+            placeholder="#4F8FE6"
+            value={customHexInput}
+            onChange={(e) => setCustomHexInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') applyCustomHex()
+            }}
+            autoFocus
+            className="bg-white-white border border-solid border-gray-border rounded-[8px] px-[10px] py-[6px] text-[12px] outline-none focus:border-primary-main"
+          />
+          <Button size="compact" onClick={applyCustomHex}>
+            Apply
+          </Button>
+        </div>
+      )}
+
+      {/* Floating lead picker — same fixed-positioning pattern as the rest of
+       *  the app's dropdowns. */}
+      {leadPickerOpen && leadAnchor && (
+        <div
+          ref={leadPopupRef}
+          style={{
+            position: 'fixed',
+            top: leadAnchor.bottom + 4,
+            left: leadAnchor.left,
+            width: leadAnchor.width,
+            zIndex: 100,
+          }}
+          className="bg-white-white border border-solid border-gray-border rounded-[8px] shadow-md max-h-[260px] overflow-y-auto"
+        >
+          {members.length === 0 ? (
+            <p className="px-[12px] py-[8px] text-gray-secondary text-[11px]">
+              No members yet.
+            </p>
+          ) : (
+            members.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => {
+                  setLeadId(m.id)
+                  setLeadPickerOpen(false)
+                  setLeadAnchor(null)
+                }}
+                className={`w-full flex items-center gap-[10px] px-[12px] py-[8px] text-left hover:bg-white-item ${
+                  leadId === m.id ? 'bg-blue-light/30' : ''
+                }`}
+              >
+                <UserGroup members={[userToMember(m)]} size={24} />
+                <span className="flex flex-col min-w-0">
+                  <span className="text-black text-[12px] truncate">
+                    {memberLabel(m)}
+                  </span>
+                  {m.job_title && (
+                    <span className="text-gray-secondary text-[10px] truncate">
+                      {m.job_title}
+                    </span>
+                  )}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 }

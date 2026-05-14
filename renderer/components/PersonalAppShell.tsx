@@ -8,6 +8,7 @@ import CreateNewMenu, { type CreateType } from './CreateNewMenu'
 import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
+import CreateChatSessionModal from './CreateChatSessionModal'
 import { useCurrentUser, useMyOrg, useMyOrgRole } from '../lib/hooks'
 import { useSidebarPref, useSpaceTransition } from '../lib/sidebarPref'
 
@@ -40,9 +41,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'organization', icon: 'Organization', label: 'Organization' },
 ]
 
-const FOOTER_ITEMS: NavItem[] = [
-  { key: 'settings', icon: 'Settings', label: 'Settings' },
-]
+const FOOTER_ITEMS: NavItem[] = []
 
 function routeFor(key: ActiveKey, orgId: string | null): string {
   switch (key) {
@@ -166,6 +165,7 @@ export default function PersonalAppShell({
             title={title}
             userInitials={initials}
             hasNotifications={false}
+            aiOpen={askAiOpen}
             onBack={() => router.back()}
             onForward={() => window.history.forward()}
             onCreateNew={openMenu}
@@ -219,6 +219,12 @@ export default function PersonalAppShell({
         open={createType === 'meeting'}
         onClose={closeAll}
         onCreated={onCreated}
+      />
+      <CreateChatSessionModal
+        open={createType === 'chat'}
+        orgId={orgId}
+        onClose={closeAll}
+        onCreated={() => closeAll()}
       />
     </CreateNewContext.Provider>
   )

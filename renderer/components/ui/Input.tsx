@@ -1,4 +1,9 @@
-import { type ChangeEvent, type InputHTMLAttributes, useState } from 'react'
+import {
+  type ChangeEvent,
+  type InputHTMLAttributes,
+  type ReactNode,
+  useState,
+} from 'react'
 import Icon from './Icon'
 
 type Variant =
@@ -10,7 +15,8 @@ type Variant =
   | 'disabled'
 
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> & {
-  label?: string
+  /** Label text or ReactNode (e.g. for colored asterisks). */
+  label?: ReactNode
   variant?: Variant
   errorMessage?: string
   /** Search variant only — show clear icon when value is non-empty */

@@ -3,6 +3,8 @@ import type { AppProps } from 'next/app'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import '../styles/globals.css'
+import { useTrackNavHistory } from '../lib/navHistory'
+import ProjectPreviewProvider from '../components/ProjectPreviewProvider'
 
 function MyApp({ Component, pageProps }: AppProps) {
   // Create one client per app instance.
@@ -23,9 +25,14 @@ function MyApp({ Component, pageProps }: AppProps) {
       })
   )
 
+  // Track in-app navigation history for the header's < > buttons.
+  useTrackNavHistory()
+
   return (
     <QueryClientProvider client={queryClient}>
-      <Component {...pageProps} />
+      <ProjectPreviewProvider>
+        <Component {...pageProps} />
+      </ProjectPreviewProvider>
     </QueryClientProvider>
   )
 }

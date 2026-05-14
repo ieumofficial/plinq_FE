@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { aiStream } from '../../lib/aiClient'
+import { markAiBusy } from '../../lib/aiActivity'
 import { renderMarkdown } from '../../lib/markdown'
 import {
   useAgentConversations,
@@ -273,6 +274,7 @@ export default function AskAiPanel({
     setMessages((prev) => [...prev, userMsg, assistantMsg])
     setDraft('')
     setSending(true)
+    markAiBusy(true)
     requestAnimationFrame(() => {
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
     })
@@ -364,6 +366,7 @@ export default function AskAiPanel({
       })))
     } finally {
       setSending(false)
+      markAiBusy(false)
       // The new conversation appears in the sessions list — refresh next open.
       // (TanStack invalidation happens via mutation; here we just re-fetch on view switch.)
     }
@@ -994,7 +997,7 @@ function AssistantBubble({
     <div className="flex flex-col items-start gap-[5px] pr-[15px]">
       <div className="flex items-center gap-[5px] text-[10px]">
         <div className="flex size-[18px] items-center justify-center rounded-[3px] bg-white/15">
-          <SparkleIcon size={10} />
+          <SparkleIcon size={14} />
         </div>
         <span className="font-semibold text-white-main">plinq AI</span>
         <span className="font-mono text-primary-main">· {time}</span>
@@ -1074,7 +1077,7 @@ function ProposalCard({
       <div className="flex flex-col items-start gap-[5px] pr-[15px]">
         <div className="flex items-center gap-[5px] text-[10px]">
           <div className="flex size-[18px] items-center justify-center rounded-[3px] bg-white/15">
-            <SparkleIcon size={10} />
+            <SparkleIcon size={14} />
           </div>
           <span className="font-semibold text-white-main">Proposal · {kindLabel}</span>
           <span className="font-mono text-primary-main">· {card.time}</span>
@@ -1162,7 +1165,7 @@ function ProposalCard({
     <div className="flex flex-col items-start gap-[5px] pr-[15px]">
       <div className="flex items-center gap-[5px] text-[10px]">
         <div className="flex size-[18px] items-center justify-center rounded-[3px] bg-white/15">
-          <SparkleIcon size={10} />
+          <SparkleIcon size={14} />
         </div>
         <span className="font-semibold text-white-main">Proposal · {kindLabel}</span>
         <span className="font-mono text-primary-main">· {card.time}</span>
@@ -1609,10 +1612,16 @@ function relTime(iso: string): string {
 // ─── Icons (inline SVG so we don't need extra files) ────────────
 
 function SparkleIcon({ size = 12 }: { size?: number }) {
+  // Two-sparkle glyph — mirrors public/icons/Sparkle.svg so the in-panel
+  // AI avatar matches the rest of the app's AI marks.
   return (
-    <svg width={size} height={size} viewBox="0 0 12 12" fill="none">
+    <svg width={size} height={size} viewBox="0 0 15 15" fill="none">
       <path
-        d="M6 0L7.2 4.8L12 6L7.2 7.2L6 12L4.8 7.2L0 6L4.8 4.8L6 0Z"
+        d="M5.5 1.5L6.45 4.05L9 5L6.45 5.95L5.5 8.5L4.55 5.95L2 5L4.55 4.05L5.5 1.5Z"
+        fill="white"
+      />
+      <path
+        d="M10.75 7.25L11.3 8.95L13 9.5L11.3 10.05L10.75 11.75L10.2 10.05L8.5 9.5L10.2 8.95L10.75 7.25Z"
         fill="white"
       />
     </svg>

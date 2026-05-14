@@ -3,7 +3,6 @@ import Head from 'next/head'
 import PersonalAppShell, { useCreateNew } from '../components/PersonalAppShell'
 import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
-import Filter from '../components/ui/Filter'
 import FilterChecklist from '../components/ui/FilterChecklist'
 import Checkbox from '../components/ui/Checkbox'
 import StatusLabelBig from '../components/ui/StatusLabelBig'
@@ -40,7 +39,28 @@ function resolveProjectColor(color: string | null | undefined): string {
   return PROJECT_PALETTE[color] ?? PROJECT_PALETTE.blue
 }
 
-type FilterKey = 'all' | 'today' | 'overdue'
+type SortKey = 'status' | 'priority' | 'due'
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'status', label: 'Status' },
+  { key: 'priority', label: 'Priority' },
+  { key: 'due', label: 'Due date' },
+]
+
+/** Stable ordering for status / priority so the sorted output is predictable. */
+const STATUS_ORDER: Record<string, number> = {
+  blocked: 0,
+  in_progress: 1,
+  review: 2,
+  planned: 3,
+  done: 4,
+}
+const PRIORITY_ORDER: Record<TaskPriorityDb, number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+}
 
 const COLS: Column[] = [
   // Action stretches to fill the row; the right-side columns are fixed
@@ -65,12 +85,6 @@ function isOverdue(t: TaskWithProject): boolean {
   return new Date(t.due_date + 'T00:00:00') < startOfToday() && t.status !== 'done'
 }
 
-function isDueToday(t: TaskWithProject): boolean {
-  if (!t.due_date) return false
-  const today = startOfToday()
-  const due = new Date(t.due_date + 'T00:00:00')
-  return due.getTime() === today.getTime() && t.status !== 'done'
-}
 
 /** "Today" / "Tomorrow" / "April 22" style. */
 function formatDueLabel(due: string | null): string {
@@ -125,7 +139,7 @@ function ActionItemsBody() {
   const { mutate: updateTaskStatus } = useUpdateTaskStatus()
   const deleteTask = useDeleteTask()
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<FilterKey>('all')
+  const [sortBy, setSortBy] = useState<SortKey>('due')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState<TaskWithProject | null>(null)
   const [openTask, setOpenTask] = useState<TaskWithProject | null>(null)
@@ -133,13 +147,6 @@ function ActionItemsBody() {
     () => new Set(PRIORITY_OPTIONS.map((p) => p.key))
   )
   const [projectFilter, setProjectFilter] = useState<Set<string> | null>(null)
-
-  const counts = useMemo(() => {
-    const all = tasks.length
-    const today = tasks.filter(isDueToday).length
-    const overdue = tasks.filter(isOverdue).length
-    return { all, today, overdue }
-  }, [tasks])
 
   const priorityCounts = useMemo(() => {
     const m = new Map<TaskPriorityDb, number>()
@@ -157,10 +164,7 @@ function ActionItemsBody() {
   }, [tasks])
 
   const filteredTasks = useMemo(() => {
-    let arr = tasks
-    if (filter === 'today') arr = arr.filter(isDueToday)
-    if (filter === 'overdue') arr = arr.filter(isOverdue)
-    arr = arr.filter((t) => priorityFilter.has(t.priority))
+    let arr = tasks.filter((t) => priorityFilter.has(t.priority))
     if (projectFilter)
       arr = arr.filter((t) => projectFilter.has(t.project_name ?? 'No project'))
     if (search.trim()) {
@@ -171,8 +175,27 @@ function ActionItemsBody() {
           t.project_name?.toLowerCase().includes(q)
       )
     }
-    return arr
-  }, [tasks, filter, priorityFilter, projectFilter, search])
+    // Sort
+    const sorted = [...arr]
+    if (sortBy === 'status') {
+      sorted.sort(
+        (a, b) =>
+          (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99)
+      )
+    } else if (sortBy === 'priority') {
+      sorted.sort(
+        (a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]
+      )
+    } else {
+      // 'due' — nulls last, ascending
+      sorted.sort((a, b) => {
+        const ad = a.due_date ?? '9999-12-31'
+        const bd = b.due_date ?? '9999-12-31'
+        return ad.localeCompare(bd)
+      })
+    }
+    return sorted
+  }, [tasks, priorityFilter, projectFilter, search, sortBy])
 
   const grouped = useMemo(() => {
     const map = new Map<
@@ -260,24 +283,6 @@ function ActionItemsBody() {
           </em>
         </h1>
         <div className="flex items-center gap-[10px]">
-          <Filter
-            label="All"
-            count={counts.all}
-            selected={filter === 'all'}
-            onClick={() => setFilter('all')}
-          />
-          <Filter
-            label="Today"
-            count={counts.today}
-            selected={filter === 'today'}
-            onClick={() => setFilter('today')}
-          />
-          <Filter
-            label="Overdue"
-            count={counts.overdue}
-            selected={filter === 'overdue'}
-            onClick={() => setFilter('overdue')}
-          />
           <Input
             variant="search"
             placeholder="Search for a task..."
@@ -289,6 +294,8 @@ function ActionItemsBody() {
             counts={priorityCounts}
             onToggle={togglePriority}
             onToggleAll={togglePriorityAll}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
           />
           <ProjectFilterButton
             options={projectOptions}
@@ -531,25 +538,35 @@ function useClickOutside(open: boolean, onClose: () => void) {
   return ref
 }
 
+/** Combined Priority filter + Sort picker. Single "Filter" button opens a
+ *  two-column dropdown: priority checklist on the left, sort radio on the
+ *  right. (The user requested merging sort into the filter rather than a
+ *  separate button.) */
 function PriorityFilterButton({
   selected,
   counts,
   onToggle,
   onToggleAll,
+  sortBy,
+  onSortChange,
 }: {
   selected: Set<TaskPriorityDb>
   counts: Map<TaskPriorityDb, number>
   onToggle: (key: TaskPriorityDb) => void
   onToggleAll: () => void
+  sortBy: SortKey
+  onSortChange: (next: SortKey) => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useClickOutside(open, () => setOpen(false))
   const allSelected = selected.size === PRIORITY_OPTIONS.length
-  const label = allSelected ? 'Priority' : `Priority · ${selected.size}`
   const totalCount = PRIORITY_OPTIONS.reduce(
     (sum, p) => sum + (counts.get(p.key) ?? 0),
     0
   )
+  // Counter chip on the button only when the user has narrowed something.
+  const narrowed = !allSelected
+  const label = narrowed ? `Filter · ${selected.size}` : 'Filter'
 
   return (
     <div ref={ref} className="relative">
@@ -562,25 +579,77 @@ function PriorityFilterButton({
         {label}
       </Button>
       {open && (
-        <div className="absolute top-[40px] right-0 z-20 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md p-[10px] flex flex-col gap-[2px] min-w-[240px]">
-          <FilterChecklist
-            label="All"
-            count={totalCount}
-            color="#455E6A"
-            checked={allSelected}
-            onChange={onToggleAll}
-          />
-          <div className="h-px bg-gray-border-light my-[5px]" />
-          {PRIORITY_OPTIONS.map((p) => (
+        <div className="absolute top-[40px] right-0 z-20 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md p-[10px] flex items-start gap-[15px]">
+          {/* Priority — left column. We pass `!w-full` to FilterChecklist so
+              it stretches to fill this column instead of locking at 225px. */}
+          <div className="w-[160px] shrink-0 flex flex-col gap-[2px]">
+            <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px] px-[2px] mb-[5px]">
+              Priority
+            </p>
             <FilterChecklist
-              key={p.key}
-              label={p.label}
-              count={counts.get(p.key) ?? 0}
-              color={p.color}
-              checked={selected.has(p.key)}
-              onChange={() => onToggle(p.key)}
+              label="All"
+              count={totalCount}
+              color="#455E6A"
+              checked={allSelected}
+              onChange={onToggleAll}
+              className="!w-full"
             />
-          ))}
+            <div className="h-px bg-gray-border-light my-[5px]" />
+            {PRIORITY_OPTIONS.map((p) => (
+              <FilterChecklist
+                key={p.key}
+                label={p.label}
+                count={counts.get(p.key) ?? 0}
+                color={p.color}
+                checked={selected.has(p.key)}
+                onChange={() => onToggle(p.key)}
+                className="!w-full"
+              />
+            ))}
+          </div>
+
+          <div className="w-px self-stretch bg-gray-border-light" />
+
+          {/* Sort — right column */}
+          <div className="w-[170px] shrink-0 flex flex-col gap-[2px]">
+            <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px] px-[2px] mb-[5px]">
+              Sort by
+            </p>
+            {SORT_OPTIONS.map((o) => {
+              const isSel = o.key === sortBy
+              return (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => onSortChange(o.key)}
+                  className={`flex items-center justify-between px-[8px] py-[6px] rounded-[3px] text-left text-[12px] transition-colors ${
+                    isSel
+                      ? 'bg-white-item text-black font-semibold'
+                      : 'text-black hover:bg-white-item'
+                  }`}
+                >
+                  <span>{o.label}</span>
+                  {isSel && (
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      aria-hidden
+                    >
+                      <path
+                        d="M2 6.5L4.8 9L10 3.5"
+                        stroke="#455E6A"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

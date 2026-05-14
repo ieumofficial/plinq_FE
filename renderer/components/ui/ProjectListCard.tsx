@@ -19,8 +19,12 @@ type Props = {
   lead?: Member
   /** Other project members (shown as overlapping avatars bottom-right). */
   members?: Member[]
+  /** Pinned state — when true, a filled pin renders in the card header. When
+   *  false, an empty pin appears on hover. */
+  pinned?: boolean
   onOpen?: () => void
   onMenuClick?: () => void
+  onTogglePin?: () => void
 }
 
 /**
@@ -38,32 +42,56 @@ export default function ProjectListCard({
   due,
   lead,
   members,
+  pinned,
   onOpen,
   onMenuClick,
+  onTogglePin,
 }: Props) {
   const pct = Math.max(0, Math.min(100, progress))
 
   return (
     <div
       onClick={onOpen}
-      className="bg-white-white border border-gray-border-light rounded-[10px] p-[20px] flex flex-col justify-between gap-4 cursor-pointer hover:shadow-sm transition-shadow"
+      className="group bg-white-white border border-gray-border-light rounded-[10px] p-[20px] flex flex-col justify-between gap-4 cursor-pointer hover:shadow-sm transition-shadow"
     >
       {/* TOP: status + title + description */}
       <div className="flex flex-col gap-[15px] w-full">
-        {/* Header: status + dot menu */}
+        {/* Header: status + (pin + dot menu) */}
         <div className="flex items-center justify-between w-full">
           {status ? <StatusLabelBig status={status} size="md" /> : <span />}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onMenuClick?.()
-            }}
-            className="text-gray-secondary hover:text-black p-1 rounded"
-            aria-label="Project options"
-          >
-            <Icon name="Dot-Menu" size={15} />
-          </button>
+          <div className="flex items-center gap-[2px]">
+            {onTogglePin && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onTogglePin()
+                }}
+                aria-label={pinned ? 'Unpin project' : 'Pin project'}
+                aria-pressed={pinned}
+                className={`p-1 rounded transition-opacity ${
+                  pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}
+              >
+                <Icon
+                  name={pinned ? 'PinFilled' : 'Pin'}
+                  size={15}
+                  className={pinned ? 'text-gray-main' : 'text-primary-main'}
+                />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onMenuClick?.()
+              }}
+              className="text-gray-secondary hover:text-black p-1 rounded"
+              aria-label="Project options"
+            >
+              <Icon name="Dot-Menu" size={15} />
+            </button>
+          </div>
         </div>
 
         {/* Title row: avatar + name */}

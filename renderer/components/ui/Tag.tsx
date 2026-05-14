@@ -42,7 +42,7 @@ const sizeStyles: Record<Size, { padding: string; text: string; iconSize: number
   },
   md: {
     padding: 'px-[7px] py-[3px]',
-    text: 'text-[12px] font-semibold tracking-[1px]',
+    text: 'text-[10px] font-semibold tracking-[1px]',
     iconSize: 12,
     gap: 'gap-[3px]',
     rounded: 'rounded-[2px]',

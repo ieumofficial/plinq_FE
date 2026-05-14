@@ -26,6 +26,7 @@ const ICON_NAMES = [
   'Organization',
   'People',
   'Pin',
+  'PinFilled',
   'Search',
   'Settings',
   'Sidebar',

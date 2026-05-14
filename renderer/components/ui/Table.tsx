@@ -52,7 +52,7 @@ export function TableHeader({ columns, className }: HeaderProps) {
           key={c.key}
           className={`flex items-center min-w-0 ${alignClass[c.align ?? 'left']} ${c.width ?? 'flex-1'} ${c.className ?? ''}`}
         >
-          <span className="text-gray-main text-[12px] font-medium uppercase tracking-[1.5px] truncate">
+          <span className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px] truncate">
             {c.label}
           </span>
         </div>

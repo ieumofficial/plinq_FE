@@ -189,6 +189,10 @@ export default function Calendar({
               <span className="w-[6px] h-[6px] rounded-full bg-brown-med" />
               <span className="text-gray-main text-[10px] leading-[1.5]">Task</span>
             </span>
+            <span className="flex items-center gap-[5px]">
+              <span className="w-[6px] h-[6px] rounded-full bg-red-main" />
+              <span className="text-gray-main text-[10px] leading-[1.5]">Project</span>
+            </span>
             <button
               type="button"
               onClick={onOpen}

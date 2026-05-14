@@ -8,6 +8,8 @@ import Icon, { type IconName } from '../components/ui/Icon'
 import ProjectListCard from '../components/ui/ProjectListCard'
 import FilterChecklist from '../components/ui/FilterChecklist'
 import { useCurrentUser, useDeleteProject, useUserProjects } from '../lib/hooks'
+import { useAllPinnedProjects } from '../lib/pinPref'
+import { useProjectPreview } from '../components/ProjectPreviewProvider'
 import {
   dbStatusToUi,
   formatDueDate,
@@ -129,8 +131,10 @@ function ProjectCardWithMenu({
   lead,
   members,
   canDelete,
+  pinned,
   onOpen,
   onDelete,
+  onTogglePin,
 }: {
   id: string
   name: string
@@ -144,8 +148,10 @@ function ProjectCardWithMenu({
   lead?: Member
   members: Member[]
   canDelete: boolean
+  pinned?: boolean
   onOpen: () => void
   onDelete: (id: string, name: string) => void
+  onTogglePin?: () => void
 }) {
   const [open, setOpen] = useState(false)
 
@@ -162,8 +168,10 @@ function ProjectCardWithMenu({
         due={due}
         lead={lead}
         members={members}
+        pinned={pinned}
         onOpen={onOpen}
         onMenuClick={() => setOpen((s) => !s)}
+        onTogglePin={onTogglePin}
       />
       <ProjectActionMenu
         open={open}
@@ -246,6 +254,7 @@ function StatusFilterButton({
 
 function ProjectsPageBody() {
   const router = useRouter()
+  const preview = useProjectPreview()
   const createNew = useCreateNew()
   const { data: user } = useCurrentUser()
   const { data: projects = [], isLoading } = useUserProjects(user?.id)
@@ -254,6 +263,15 @@ function ProjectsPageBody() {
   const [statusFilter, setStatusFilter] = useState<Set<ProjectStatusDb>>(
     () => new Set(STATUS_FILTERS.map((s) => s.key))
   )
+
+  // Pin state spans every org represented in the user's project list, so
+  // pinning here reflects on each project's owning org's dashboard too.
+  const orgIds = useMemo(
+    () => Array.from(new Set(projects.map((p) => p.org_id))),
+    [projects]
+  )
+  const { pinned, isPinned, toggle: togglePinned } =
+    useAllPinnedProjects(orgIds)
 
   const toggleStatus = (key: ProjectStatusDb) => {
     setStatusFilter((prev) => {
@@ -274,8 +292,13 @@ function ProjectsPageBody() {
           p.description?.toLowerCase().includes(q)
       )
     }
-    return arr
-  }, [projects, search, statusFilter])
+    // Pinned projects float to the top of the grid.
+    return [...arr].sort((a, b) => {
+      const ap = pinned.has(a.id) ? 1 : 0
+      const bp = pinned.has(b.id) ? 1 : 0
+      return bp - ap
+    })
+  }, [projects, search, statusFilter, pinned])
 
   const handleDelete = (id: string, name: string) => {
     if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return
@@ -349,8 +372,10 @@ function ProjectsPageBody() {
                 lead={lead ? userToMember(lead) : undefined}
                 members={others.map(userToMember)}
                 canDelete={!!user && p.lead_id === user.id}
-                onOpen={() => router.push(`/p/${p.id}/dashboard`)}
+                pinned={isPinned(p.id)}
+                onOpen={() => preview.open(p.id)}
                 onDelete={handleDelete}
+                onTogglePin={() => togglePinned(p.org_id, p.id)}
               />
             )
           })}

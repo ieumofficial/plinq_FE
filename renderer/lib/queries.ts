@@ -621,6 +621,37 @@ export async function createTask(
   return { id: taskId }
 }
 
+/**
+ * Delete a task. Cleans up `task_assignees` first (no cascade in schema),
+ * then nulls out `parent_task_id` on any children so they survive the
+ * delete, then deletes the task row. Uses `.select()` on the final step so
+ * an RLS-filtered delete (caller is not a project admin) surfaces as 0
+ * returned rows.
+ */
+export async function deleteTask(
+  taskId: string,
+): Promise<{ ok: true } | { error: string }> {
+  await supabase.from('task_assignees').delete().eq('task_id', taskId)
+  await supabase
+    .from('tasks')
+    .update({ parent_task_id: null })
+    .eq('parent_task_id', taskId)
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', taskId)
+    .select('id')
+  if (error) return { error: error.message }
+  if (!data || data.length === 0) {
+    return {
+      error:
+        "Couldn't delete the task — you may not have permission. Only the project lead or an admin can delete tasks.",
+    }
+  }
+  return { ok: true }
+}
+
 // ─── Meeting mutations ──────────────────────────────────────────────────────
 
 export type NewMeetingInput = {

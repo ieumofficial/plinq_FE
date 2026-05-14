@@ -11,6 +11,7 @@ import {
   deleteChatSession,
   deleteKnowledgeDoc,
   deleteProject,
+  deleteTask,
   // toggleDocPin removed — pin state lives in localStorage for now (see lib/pinPref.ts)
   getChatMessages,
   getChatSessionMembers,
@@ -126,6 +127,23 @@ export function useUserActionItems(
     queryKey: queryKeys.tasks.actionItems(userId ?? '', opts),
     queryFn: () => getUserActionItems(userId!, opts),
     enabled: !!userId,
+  })
+}
+
+/** Delete a task and its assignees. Invalidates task/calendar/project caches. */
+export function useDeleteTask() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (taskId: string) => {
+      const result = await deleteTask(taskId)
+      if ('error' in result) throw new Error(result.error)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.tasks.all })
+      qc.invalidateQueries({ queryKey: queryKeys.calendar.all })
+      qc.invalidateQueries({ queryKey: queryKeys.projects.all })
+      qc.invalidateQueries({ queryKey: ['project'] })
+    },
   })
 }
 

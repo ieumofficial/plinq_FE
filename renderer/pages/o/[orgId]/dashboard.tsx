@@ -295,6 +295,7 @@ function ProjectMiniCard({
   health,
   pinned,
   onOpen,
+  onTogglePin,
 }: {
   name: string
   color?: string | null
@@ -304,14 +305,22 @@ function ProjectMiniCard({
   health: Health
   pinned?: boolean
   onOpen?: () => void
+  onTogglePin?: () => void
 }) {
   const pct = Math.max(0, Math.min(100, progress))
   const healthColor = HEALTH_COLOR[health]
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
-      className="bg-[#f8fafb] rounded-[10px] p-[15px] flex flex-col justify-between min-h-[95px] gap-[10px] text-left hover:bg-[#eef3f5] transition-colors"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen?.()
+        }
+      }}
+      className="group bg-[#f8fafb] rounded-[10px] p-[15px] flex flex-col justify-between min-h-[95px] gap-[10px] text-left hover:bg-[#eef3f5] transition-colors cursor-pointer"
     >
       {/* Top — name + description tight together. */}
       <div className="flex flex-col gap-[4px] w-full min-w-0">
@@ -326,8 +335,28 @@ function ProjectMiniCard({
             <Tag color={healthColor} size="md">
               {HEALTH_LABEL[health]}
             </Tag>
-            {pinned && (
-              <Icon name="Pin" size={13} className="text-gray-main shrink-0" />
+            {/* Hover-to-pin button — empty pin on hover, filled (primary
+                color) when pinned. Always rendered when pinned, fades in on
+                card hover otherwise. */}
+            {onTogglePin && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onTogglePin()
+                }}
+                aria-label={pinned ? 'Unpin project' : 'Pin project'}
+                aria-pressed={pinned}
+                className={`inline-flex items-center justify-center w-[20px] h-[20px] rounded transition-opacity hover:bg-white-white/60 ${
+                  pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}
+              >
+                <Icon
+                  name={pinned ? 'PinFilled' : 'Pin'}
+                  size={13}
+                  className={pinned ? 'text-gray-main' : 'text-primary-main'}
+                />
+              </button>
             )}
           </div>
         </div>
@@ -350,7 +379,7 @@ function ProjectMiniCard({
           {pct}%
         </span>
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -532,7 +561,8 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
 
   const { data: members = [] } = useOrgMembers(orgId)
   const { data: allProjects = [] } = useOrgProjects(orgId)
-  const { pinned: pinnedProjectIds } = usePinnedProjects(orgId)
+  const { pinned: pinnedProjectIds, toggle: togglePinned } =
+    usePinnedProjects(orgId)
 
   // Quarter picker — initialized to today's quarter; user can rewind a
   // couple of years if they want a historical view.
@@ -739,6 +769,7 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
                 health={projectHealth(p)}
                 pinned={pinnedProjectIds.has(p.id)}
                 onOpen={() => router.push(`/p/${p.id}/dashboard`)}
+                onTogglePin={() => togglePinned(p.id)}
               />
             ))}
           </div>

@@ -378,7 +378,7 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
   const orgName = org?.name ?? 'Organization'
   const { data: members = [] } = useOrgMembers(orgId)
   const { data: allProjects = [] } = useOrgProjects(orgId)
-  const { isPinned } = usePinnedProjects(orgId)
+  const { isPinned, toggle: togglePinned } = usePinnedProjects(orgId)
   const deleteProject = useDeleteProject()
   const [deleting, setDeleting] = useState<ProjectWithStats | null>(null)
 
@@ -574,15 +574,36 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
                   key={p.id}
                   isLast={i === sortedProjects.length - 1}
                   onClick={() => router.push(`/p/${p.id}/dashboard`)}
+                  className="group"
                 >
                   <TableCell width="flex-[2]">
                     <ProjectLabel name={p.name} color={p.color ?? 'blue'} size="sm" />
                     <span className="text-black text-[14px] font-semibold truncate">
                       {p.name}
                     </span>
-                    {pinned && (
-                      <Icon name="Pin" size={12} className="text-gray-main shrink-0" />
-                    )}
+                    {/* Pin — filled when pinned, empty on row hover. */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        togglePinned(p.id)
+                      }}
+                      aria-label={pinned ? 'Unpin project' : 'Pin project'}
+                      aria-pressed={pinned}
+                      className={`inline-flex items-center justify-center w-[20px] h-[20px] rounded transition-opacity ${
+                        pinned
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-100'
+                      } hover:bg-white-secondary`}
+                    >
+                      <Icon
+                        name={pinned ? 'PinFilled' : 'Pin'}
+                        size={12}
+                        className={
+                          pinned ? 'text-gray-main' : 'text-primary-main'
+                        }
+                      />
+                    </button>
                   </TableCell>
                   <TableCell width="flex-1">
                     {lead ? (
@@ -625,19 +646,17 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
                     </span>
                   </TableCell>
                   <TableCell width="w-[30px]" align="right">
-                    {user && p.lead_id === user.id ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDeleting(p)
-                        }}
-                        className="text-red-main hover:bg-red-50 inline-flex items-center justify-center w-[24px] h-[24px] rounded transition-colors"
-                        aria-label="Delete project"
-                      >
-                        <Icon name="Trash" size={15} />
-                      </button>
-                    ) : null}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDeleting(p)
+                      }}
+                      className="text-red-main inline-flex items-center justify-center w-[24px] h-[24px] rounded hover:bg-red-light transition-colors"
+                      aria-label="Delete project"
+                    >
+                      <Icon name="Trash" size={15} />
+                    </button>
                   </TableCell>
                 </TableRow>
               )

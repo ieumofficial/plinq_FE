@@ -142,3 +142,66 @@ export function usePinnedProjects(orgId: string): {
 
   return { pinned, isPinned, toggle }
 }
+
+/** Cross-org pin lookup. Used by the personal Projects page where projects
+ *  span multiple orgs — each project carries its own `org_id` so toggle
+ *  routes the write to the right bucket. Re-renders when any of the orgs in
+ *  the passed list updates.
+ *
+ *  Returns `pinned` as a fresh Set on every toggle so memo deps that read
+ *  it (e.g. sort order) re-run correctly. */
+export function useAllPinnedProjects(orgIds: string[]): {
+  pinned: Set<string>
+  isPinned: (projectId: string) => boolean
+  toggle: (orgId: string, projectId: string) => void
+} {
+  // Stable list so the effect only re-subscribes when the org set actually
+  // changes.
+  const key = orgIds.slice().sort().join(',')
+
+  const merge = useCallback(() => {
+    const ids = key.split(',').filter(Boolean)
+    const out = new Set<string>()
+    for (const oid of ids) {
+      for (const pid of readProjects(oid)) out.add(pid)
+    }
+    return out
+  }, [key])
+
+  const [pinned, setPinned] = useState<Set<string>>(merge)
+
+  useEffect(() => {
+    setPinned(merge())
+    const ids = key.split(',').filter(Boolean)
+    const refresh = () => setPinned(merge())
+    const subs: Array<() => void> = []
+    for (const oid of ids) {
+      let set = projectListeners.get(oid)
+      if (!set) {
+        set = new Set()
+        projectListeners.set(oid, set)
+      }
+      set.add(refresh)
+      subs.push(() => set!.delete(refresh))
+    }
+    return () => {
+      for (const off of subs) off()
+    }
+  }, [key, merge])
+
+  const isPinned = useCallback(
+    (projectId: string) => pinned.has(projectId),
+    [pinned]
+  )
+
+  const toggle = useCallback((orgId: string, projectId: string) => {
+    const next = new Set(readProjects(orgId))
+    if (next.has(projectId)) next.delete(projectId)
+    else next.add(projectId)
+    writeProjects(orgId, next)
+    const set = projectListeners.get(orgId)
+    if (set) set.forEach((cb) => cb(next))
+  }, [])
+
+  return { pinned, isPinned, toggle }
+}

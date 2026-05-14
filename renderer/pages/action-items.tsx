@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Head from 'next/head'
-import { useRouter } from 'next/router'
 import PersonalAppShell, { useCreateNew } from '../components/PersonalAppShell'
 import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
@@ -12,9 +11,11 @@ import PriorityTag from '../components/ui/PriorityTag'
 import ProjectLabel from '../components/ui/ProjectLabel'
 import Icon from '../components/ui/Icon'
 import Table, { TableHeader, TableRow, TableCell, type Column } from '../components/ui/Table'
-import { useCurrentUser, useUpdateTaskStatus, useUserActionItems } from '../lib/hooks'
+import { useCurrentUser, useDeleteTask, useUpdateTaskStatus, useUserActionItems } from '../lib/hooks'
 import { type TaskWithProject } from '../lib/queries'
 import { dbStatusToUi, dbPriorityToUi, type TaskPriorityDb } from '../lib/types'
+import DeleteConfirmModal from '../components/DeleteConfirmModal'
+import TaskDetailModal from '../components/TaskDetailModal'
 
 const PRIORITY_OPTIONS: { key: TaskPriorityDb; label: string; color: string }[] = [
   { key: 'urgent', label: 'Highest', color: '#9B3838' },
@@ -118,20 +119,16 @@ export default function ActionItemsPage() {
 }
 
 function ActionItemsBody() {
-  const router = useRouter()
   const createNew = useCreateNew()
   const { data: user } = useCurrentUser()
   const { data: tasks = [], isLoading } = useUserActionItems(user?.id, { includeDone: true })
   const { mutate: updateTaskStatus } = useUpdateTaskStatus()
+  const deleteTask = useDeleteTask()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterKey>('all')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null)
-  const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null)
-  const closeRowMenu = () => {
-    setOpenMenuTaskId(null)
-    setMenuAnchorRect(null)
-  }
+  const [deleting, setDeleting] = useState<TaskWithProject | null>(null)
+  const [openTask, setOpenTask] = useState<TaskWithProject | null>(null)
   const [priorityFilter, setPriorityFilter] = useState<Set<TaskPriorityDb>>(
     () => new Set(PRIORITY_OPTIONS.map((p) => p.key))
   )
@@ -364,17 +361,23 @@ function ActionItemsBody() {
                       const dueLabel = formatDueLabel(t.due_date)
                       const source = formatSource(t)
                       return (
-                        <TableRow key={t.id} isLast={i === rows.length - 1}>
+                        <TableRow
+                          key={t.id}
+                          isLast={i === rows.length - 1}
+                          onClick={() => setOpenTask(t)}
+                        >
                           <TableCell width="flex-1">
-                            <Checkbox
-                              checked={isDone}
-                              onChange={(next) =>
-                                updateTaskStatus({
-                                  taskId: t.id,
-                                  status: next ? 'done' : 'in_progress',
-                                })
-                              }
-                            />
+                            <span onClick={(e) => e.stopPropagation()}>
+                              <Checkbox
+                                checked={isDone}
+                                onChange={(next) =>
+                                  updateTaskStatus({
+                                    taskId: t.id,
+                                    status: next ? 'done' : 'in_progress',
+                                  })
+                                }
+                              />
+                            </span>
                             <span
                               className={`text-[14px] font-medium truncate min-w-0 ${
                                 isDone
@@ -415,47 +418,17 @@ function ActionItemsBody() {
                             </span>
                           </TableCell>
                           <TableCell width="w-[30px]" align="right">
-                            <div onClick={(e) => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  if (openMenuTaskId === t.id) {
-                                    closeRowMenu()
-                                  } else {
-                                    setMenuAnchorRect(
-                                      e.currentTarget.getBoundingClientRect()
-                                    )
-                                    setOpenMenuTaskId(t.id)
-                                  }
-                                }}
-                                className="text-gray-secondary hover:text-black inline-flex items-center justify-center w-[24px] h-[24px] rounded transition-colors"
-                                aria-label="More"
-                              >
-                                <Icon name="Dot-Menu" size={15} />
-                              </button>
-                              <TaskRowMenu
-                                open={openMenuTaskId === t.id}
-                                anchorRect={
-                                  openMenuTaskId === t.id ? menuAnchorRect : null
-                                }
-                                isDone={isDone}
-                                hasProject={!!t.project_id}
-                                onClose={closeRowMenu}
-                                onOpenProject={() => {
-                                  closeRowMenu()
-                                  if (t.project_id) {
-                                    router.push(`/p/${t.project_id}/backlog`)
-                                  }
-                                }}
-                                onToggleDone={() => {
-                                  updateTaskStatus({
-                                    taskId: t.id,
-                                    status: isDone ? 'in_progress' : 'done',
-                                  })
-                                  closeRowMenu()
-                                }}
-                              />
-                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDeleting(t)
+                              }}
+                              className="text-red-main hover:bg-red-50 inline-flex items-center justify-center w-[24px] h-[24px] rounded transition-colors"
+                              aria-label="Delete task"
+                            >
+                              <Icon name="Trash" size={15} />
+                            </button>
                           </TableCell>
                         </TableRow>
                       )
@@ -468,6 +441,71 @@ function ActionItemsBody() {
         </div>
       )}
       </div>
+
+      <DeleteConfirmModal
+        open={deleting !== null}
+        type="task"
+        title="Delete this task?"
+        body={
+          <>
+            This action is <strong className="font-bold">permanent</strong>. The
+            task will be removed from your action items.
+          </>
+        }
+        subject={
+          deleting && (
+            <div className="flex flex-col gap-[3px] min-w-0">
+              <p className="text-black text-[12px] font-semibold truncate">
+                {deleting.title}
+              </p>
+              <p className="text-gray-main text-[10px] truncate">
+                {deleting.project_name ?? 'No project'}
+                {deleting.due_date ? ` · Due ${deleting.due_date}` : ''}
+              </p>
+            </div>
+          )
+        }
+        consequences={
+          deleting
+            ? [
+                'Removed from your action items',
+                deleting.project_id
+                  ? 'Removed from the project backlog'
+                  : 'Standalone task — nothing else is touched',
+              ]
+            : []
+        }
+        confirmLabel="Delete task"
+        submitting={deleteTask.isPending}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => {
+          if (!deleting) return
+          deleteTask.mutate(deleting.id, {
+            onSuccess: () => setDeleting(null),
+          })
+        }}
+      />
+
+      <TaskDetailModal
+        open={openTask !== null}
+        task={openTask}
+        projectName={openTask?.project_name ?? 'No project'}
+        ticketId={openTask ? openTask.id.slice(0, 8).toUpperCase() : ''}
+        sourceMeeting={
+          openTask?.source_meeting_name && openTask?.source_meeting_scheduled_at
+            ? {
+                name: openTask.source_meeting_name,
+                date: new Date(
+                  openTask.source_meeting_scheduled_at
+                ).toLocaleDateString('en-US', {
+                  month: 'long',
+                  day: 'numeric',
+                }),
+              }
+            : null
+        }
+        onClose={() => setOpenTask(null)}
+      />
     </div>
   )
 }
@@ -622,91 +660,3 @@ function ProjectFilterButton({
   )
 }
 
-function TaskRowMenu({
-  open,
-  anchorRect,
-  isDone,
-  hasProject,
-  onClose,
-  onOpenProject,
-  onToggleDone,
-}: {
-  open: boolean
-  /** Trigger button's bounding rect — used so the menu can render with
-   *  `position: fixed` and escape the page's `overflow-y-auto` scroll
-   *  container without needing a portal. Null when closed. */
-  anchorRect: DOMRect | null
-  isDone: boolean
-  hasProject: boolean
-  onClose: () => void
-  onOpenProject: () => void
-  onToggleDone: () => void
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onDocClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
-    function onScrollOrResize() {
-      onClose()
-    }
-    document.addEventListener('mousedown', onDocClick)
-    document.addEventListener('keydown', onKey)
-    window.addEventListener('scroll', onScrollOrResize, true)
-    window.addEventListener('resize', onScrollOrResize)
-    return () => {
-      document.removeEventListener('mousedown', onDocClick)
-      document.removeEventListener('keydown', onKey)
-      window.removeEventListener('scroll', onScrollOrResize, true)
-      window.removeEventListener('resize', onScrollOrResize)
-    }
-  }, [open, onClose])
-
-  if (!open || !anchorRect || typeof window === 'undefined') return null
-
-  const style: React.CSSProperties = {
-    position: 'fixed',
-    top: anchorRect.bottom + 4,
-    right: Math.max(8, window.innerWidth - anchorRect.right),
-    minWidth: 180,
-  }
-
-  return (
-    <div
-      ref={ref}
-      onClick={(e) => e.stopPropagation()}
-      style={style}
-      className="z-50 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md py-[5px]"
-    >
-      <button
-        type="button"
-        disabled={!hasProject}
-        title={hasProject ? undefined : 'This task is not attached to a project'}
-        onClick={(e) => {
-          e.stopPropagation()
-          onOpenProject()
-        }}
-        className="w-full flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left text-black hover:bg-white-item transition-colors disabled:text-gray-secondary disabled:cursor-not-allowed disabled:hover:bg-transparent"
-      >
-        <Icon name="ArrowRight" size={13} className="text-gray-main" />
-        <span>Open in project</span>
-      </button>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          onToggleDone()
-        }}
-        className="w-full flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left text-black hover:bg-white-item transition-colors"
-      >
-        <Icon name="Task" size={13} className="text-gray-main" />
-        <span>{isDone ? 'Mark as not done' : 'Mark as done'}</span>
-      </button>
-    </div>
-  )
-}

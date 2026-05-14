@@ -6,7 +6,9 @@ import Task from '../../../components/ui/Task'
 import Button from '../../../components/ui/Button'
 import Icon from '../../../components/ui/Icon'
 import FilterChecklist from '../../../components/ui/FilterChecklist'
+import TaskDetailModal from '../../../components/TaskDetailModal'
 import { useProject, useProjectTasks } from '../../../lib/hooks'
+import type { ProjectTask } from '../../../lib/queries'
 import {
   dbPriorityToUi,
   formatShortDate,
@@ -86,6 +88,9 @@ function KanbanBody({ projectId }: { projectId: string }) {
   const { open } = useCreateNew()
   const { data: project } = useProject(projectId)
   const { data: tasks = [] } = useProjectTasks(projectId)
+  const [openTask, setOpenTask] = useState<{ task: ProjectTask; idx: number } | null>(
+    null
+  )
 
   // Filters — default to "all checked" so the user sees everything until they
   // narrow down.
@@ -301,6 +306,7 @@ function KanbanBody({ projectId }: { projectId: string }) {
                     priority={dbPriorityToUi(t.priority)}
                     dueDate={formatShortDate(t.due_date) ?? undefined}
                     assignees={t.assignees.map(userToMember)}
+                    onClick={() => setOpenTask({ task: t, idx: t._idx })}
                   />
                 ))}
                 {c.items.length === 0 && (
@@ -313,6 +319,18 @@ function KanbanBody({ projectId }: { projectId: string }) {
           ))
         )}
       </div>
+
+      <TaskDetailModal
+        open={openTask !== null}
+        task={openTask?.task ?? null}
+        projectName={project?.name ?? 'Project'}
+        ticketId={
+          openTask
+            ? ticketId(project?.name ?? 'TSK', openTask.idx)
+            : ''
+        }
+        onClose={() => setOpenTask(null)}
+      />
     </div>
   )
 }

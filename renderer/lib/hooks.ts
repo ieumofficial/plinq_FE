@@ -147,6 +147,52 @@ export function useUpdateTaskStatus() {
   })
 }
 
+/** Delete a task. Invalidates task/calendar/project caches on success. */
+export function useDeleteTask() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (taskId: string) => {
+      const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.tasks.all })
+      qc.invalidateQueries({ queryKey: queryKeys.calendar.all })
+      qc.invalidateQueries({ queryKey: queryKeys.projects.all })
+      qc.invalidateQueries({ queryKey: ['project'] })
+    },
+  })
+}
+
+export type TaskPatch = {
+  title?: string
+  description?: string | null
+  status?: TaskStatusDb
+  priority?: import('./types').TaskPriorityDb
+  due_date?: string | null
+  start_date?: string | null
+}
+
+/** Patch arbitrary task fields. Invalidates the same caches as status updates. */
+export function useUpdateTask() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ taskId, patch }: { taskId: string; patch: TaskPatch }) => {
+      const { error } = await supabase
+        .from('tasks')
+        .update(patch)
+        .eq('id', taskId)
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.tasks.all })
+      qc.invalidateQueries({ queryKey: queryKeys.calendar.all })
+      qc.invalidateQueries({ queryKey: queryKeys.projects.all })
+      qc.invalidateQueries({ queryKey: ['project'] })
+    },
+  })
+}
+
 // ─── Meetings ───────────────────────────────────────────────────────────────
 
 export function useUserUpcomingMeetings(

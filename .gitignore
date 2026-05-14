@@ -34,3 +34,8 @@ yarn-error.log*
 
 # package lock (yarn 사용 시 yarn.lock만 유지)
 # package-lock.json
+
+# local tooling / editor state
+.claude/
+.omc/
+.vscode/

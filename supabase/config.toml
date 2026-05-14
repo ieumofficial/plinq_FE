@@ -1,0 +1,7 @@
+# Per-function settings — deploys without --no-verify-jwt still leave
+# Free-tier flows (anonKey-only fetch) working.
+[functions.analyze-audio]
+verify_jwt = false
+
+[functions.zoom-analyze]
+verify_jwt = false

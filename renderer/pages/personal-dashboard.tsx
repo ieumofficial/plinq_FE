@@ -101,6 +101,9 @@ export default function PersonalDashboardPage() {
     statuses: ['planned', 'in_progress', 'review'],
     limit: ACTIVE_PROJECTS_LIMIT,
   })
+  // Separate unfiltered fetch for the mini calendar — we want every project
+  // the user belongs to so their due dates show up regardless of status.
+  const { data: allProjects = [] } = useUserProjects(userId)
 
   const { data: tasks = [], isLoading: tasksLoading } = useUserActionItems(userId, {
     limit: ACTION_ITEMS_LIMIT,
@@ -124,6 +127,23 @@ export default function PersonalDashboardPage() {
 
   const calEvents: CalendarEvent[] = useMemo(() => {
     if (!rawEvents) return []
+    // Project-due events: each project the user belongs to whose `dueDate`
+    // (latest task due_date — see queries.ts) lands inside the visible month.
+    const monthStart = startOfMonth(calMonth).getTime()
+    const monthEnd = endOfMonth(calMonth).getTime()
+    const projectEvents = allProjects
+      .filter((p) => {
+        if (!p.dueDate) return false
+        const t = new Date(p.dueDate + 'T00:00:00').getTime()
+        return t >= monthStart && t <= monthEnd
+      })
+      .map((p) => ({
+        id: `p-${p.id}`,
+        date: p.dueDate!,
+        title: `${p.name} due`,
+        // Red chips, matching the "Project" legend dot. Reuses EVENT_COLORS.project.
+        type: 'project' as const,
+      }))
     return [
       ...rawEvents.meetings.map((m) => ({
         id: `m-${m.id}`,
@@ -137,10 +157,13 @@ export default function PersonalDashboardPage() {
           id: `t-${t.id}`,
           date: t.due_date!,
           title: t.title,
-          type: 'deadline' as const,
+          // Task chips render amber so they line up with the "Task" legend
+          // dot at the top of the mini calendar. (Was 'deadline' = red.)
+          type: 'task' as const,
         })),
+      ...projectEvents,
     ]
-  }, [rawEvents])
+  }, [rawEvents, allProjects, calMonth])
 
   return (
     <>

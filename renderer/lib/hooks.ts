@@ -169,7 +169,12 @@ export function useDeleteTask() {
   })
 }
 
-/** Update a task's status. Invalidates task/calendar/project caches on success. */
+/** Update a task's status. Uses an optimistic cache patch so the checkbox
+ *  flips instantly. Deliberately does NOT invalidate the actionItems list —
+ *  if the user just ticked the task as done, we want them to keep seeing it
+ *  (with the checkmark) until they navigate away. The task naturally drops
+ *  off the next time the query refetches (page revisit, focus, or staleTime
+ *  expiration), which matches "page redirect 시 dashboard에서 사라지도록". */
 export function useUpdateTaskStatus() {
   const qc = useQueryClient()
   return useMutation({
@@ -180,8 +185,38 @@ export function useUpdateTaskStatus() {
         .eq('id', taskId)
       if (error) throw new Error(error.message)
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.tasks.all })
+    onMutate: async ({ taskId, status }) => {
+      // Optimistically patch every cached query that contains this task —
+      // covers both `tasks.actionItems` (personal) and `project.tasks` (kanban
+      // / backlog). Snapshot for rollback on error.
+      await qc.cancelQueries({ queryKey: queryKeys.tasks.all })
+      await qc.cancelQueries({ queryKey: ['project'] })
+      const snapshot: [readonly unknown[], unknown][] = []
+      const patch = (data: unknown): unknown => {
+        if (!Array.isArray(data)) return data
+        return data.map((t) =>
+          t && typeof t === 'object' && (t as { id?: unknown }).id === taskId
+            ? { ...(t as object), status }
+            : t
+        )
+      }
+      qc.getQueriesData({ queryKey: queryKeys.tasks.all }).forEach(([key, data]) => {
+        snapshot.push([key, data])
+        qc.setQueryData(key, patch(data))
+      })
+      qc.getQueriesData({ queryKey: ['project'] }).forEach(([key, data]) => {
+        snapshot.push([key, data])
+        qc.setQueryData(key, patch(data))
+      })
+      return { snapshot }
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.snapshot.forEach(([key, data]) => qc.setQueryData(key, data))
+    },
+    onSettled: () => {
+      // Refresh project + calendar stats, but leave the actionItems list alone
+      // so the dashboard / action-items page keeps the just-completed row
+      // visible until the user navigates away.
       qc.invalidateQueries({ queryKey: queryKeys.calendar.all })
       qc.invalidateQueries({ queryKey: queryKeys.projects.all })
       qc.invalidateQueries({ queryKey: ['project'] })

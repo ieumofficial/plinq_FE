@@ -28,9 +28,19 @@ export default function ProjectCard({
   const pct = Math.max(0, Math.min(100, progress))
   return (
     <div
+      onClick={onOpen}
+      role={onOpen ? 'button' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (!onOpen) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
       className={`bg-white-item rounded-[5px] flex flex-col justify-between p-[10px] ${
-        fluid ? 'w-full min-w-0 h-full' : 'w-[170px] h-[225px]'
-      }`}
+        onOpen ? 'cursor-pointer hover:bg-white-secondary transition-colors' : ''
+      } ${fluid ? 'w-full min-w-0 h-full' : 'w-[170px] h-[225px]'}`}
     >
       <div className="flex flex-col gap-[10px] w-full">
         <div className="flex items-center justify-between w-full">
@@ -56,13 +66,16 @@ export default function ProjectCard({
         </div>
         <div className="flex items-center justify-between w-full">
           {members && members.length > 0 ? (
-            <UserGroup members={members} size={15} borderColor="#FFFFFF" overflowVariant="blue" />
+            <UserGroup members={members} size={22} borderColor="#FFFFFF" overflowVariant="blue" />
           ) : (
             <span />
           )}
           <button
             type="button"
-            onClick={onOpen}
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpen?.()
+            }}
             className="inline-flex items-center pl-[10px] py-[5px] rounded-[5px] text-gray-main hover:bg-gray-extra-light transition-colors"
           >
             <span

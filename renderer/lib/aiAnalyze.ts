@@ -1,8 +1,11 @@
-// Client-side hook + invocation for the Gemini-powered AI meeting
-// analysis pipeline. Talks to the `zoom-analyze` Supabase Edge Function
-// and reads `meeting_minutes` rows back via React Query so the card can
-// render the four-section insight inline once it's saved.
+// Client-side hook + invocation for the AI meeting analysis pipeline.
+// Calls plinq_ai's `/meetings/{id}/analyze-audio` (FastAPI, NDJSON
+// streamed) which downloads the recording from Storage, runs Whisper
+// + Sonnet, and writes meeting_minutes / transcript_segments /
+// meeting_decisions back. React Query hooks then surface those rows
+// to the meeting detail UI.
 import { useQuery } from '@tanstack/react-query'
+import { aiStream } from './aiClient'
 import { supabase } from './supabase'
 
 export type AgendaBucket = {
@@ -340,85 +343,90 @@ async function findUserIdByName(name: string): Promise<string | null> {
   return data?.[0]?.id ?? null
 }
 
-/** Upload a local Zoom recording (m4a) to the `analyze-audio` Edge
- *  Function and resolve with the extracted insights. We bypass
- *  `supabase.functions.invoke` here because that path JSON-stringifies
- *  the body — we need to ship raw audio bytes with an `audio/*`
- *  Content-Type instead. */
+/**
+ * Two-step in-person analysis:
+ *   1. Upload the recording to the `meeting-audio` Storage bucket.
+ *   2. Tell plinq_ai to fetch + transcribe + analyze + persist + index.
+ *
+ * The `onProgress` callback (optional) gets each NDJSON event the server
+ * streams — useful for showing "Transcribing… → Analyzing… → Done".
+ */
 export async function analyzeAudio(
   meetingId: string,
   file: File | Blob,
-): Promise<{ transcript: string; extracted: ExtractedMeeting }> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!supabaseUrl || !anonKey) {
-    throw new Error('Supabase env vars are missing')
+  opts: { onProgress?: (evt: AnalyzeProgressEvent) => void } = {},
+): Promise<AnalyzeAudioResult> {
+  // Pick a stable extension based on MIME type or fall back to webm.
+  const mime = (file as File).type || 'audio/webm'
+  const ext =
+    mime === 'audio/m4a' || mime === 'audio/mp4'
+      ? 'm4a'
+      : mime === 'audio/mpeg'
+        ? 'mp3'
+        : mime === 'audio/wav'
+          ? 'wav'
+          : 'webm'
+  const path = `${meetingId}.${ext}`
+
+  // 1. Upload to Storage. `upsert: true` lets the user re-record + analyze.
+  const { error: upErr } = await supabase.storage
+    .from('meeting-audio')
+    .upload(path, file, { upsert: true, contentType: mime })
+  if (upErr) {
+    throw new Error(`Upload failed: ${upErr.message}`)
   }
-  const url = `${supabaseUrl}/functions/v1/analyze-audio?meetingId=${encodeURIComponent(meetingId)}`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': (file as File).type || 'audio/mp4',
-      Authorization: `Bearer ${anonKey}`,
-      apikey: anonKey,
+
+  // 2. Stream-call plinq_ai.
+  let result: AnalyzeAudioResult | null = null
+  await aiStream(
+    `/meetings/${encodeURIComponent(meetingId)}/analyze-audio`,
+    { audio_path: path, bucket: 'meeting-audio' },
+    (evt) => {
+      const t = evt.type as AnalyzeProgressEvent['type']
+      if (t === 'done') {
+        result = {
+          minutesId: String(evt.minutes_id ?? ''),
+          decisionCount: Number(evt.decision_count ?? 0),
+          segmentCount: Number(evt.segment_count ?? 0),
+          actionItemCount: Number(evt.action_item_count ?? 0),
+          language: (evt.language as string | null) ?? null,
+          durationSeconds: Number(evt.duration_seconds ?? 0),
+        }
+      } else if (t === 'error') {
+        throw new Error(String(evt.message ?? 'analyze failed'))
+      }
+      opts.onProgress?.(evt as AnalyzeProgressEvent)
     },
-    body: file,
-  })
-  const text = await res.text()
-  if (!res.ok) {
-    try {
-      const body = JSON.parse(text)
-      throw new Error(body.error || `HTTP ${res.status}`)
-    } catch (e) {
-      // not JSON or already a real Error — surface what we can
-      if (e instanceof Error && e.message && !e.message.startsWith('HTTP'))
-        throw e
-      throw new Error(text.slice(0, 300) || `HTTP ${res.status}`)
-    }
+  )
+  if (!result) {
+    throw new Error('analyze-audio stream ended without a `done` event')
   }
-  const data = JSON.parse(text) as
-    | { ok: true; transcript: string; extracted: ExtractedMeeting }
-    | { error: string }
-  if ('error' in data) throw new Error(data.error)
-  return { transcript: data.transcript, extracted: data.extracted }
+  return result
 }
 
-/** Legacy: kick off the cloud-recording pipeline. Kept for Pro accounts
- *  that have Zoom cloud recording on. Free users should use
- *  `analyzeAudio()` with a local file instead.
- *  supabase-js's FunctionsHttpError.message is always the generic
- *  "Edge Function returned a non-2xx status code" — to surface the real
- *  message from the function body we have to dig into `error.context`,
- *  which is the raw Response. */
-export async function analyzeMeeting(meetingId: string): Promise<{
-  transcript: string
-  extracted: ExtractedMeeting
-}> {
-  const { data, error } = await supabase.functions.invoke('zoom-analyze', {
-    method: 'POST',
-    body: { meetingId },
-  })
-  if (error) {
-    let detail = error.message
-    const ctx = (error as unknown as { context?: Response }).context
-    if (ctx && typeof ctx.json === 'function') {
-      try {
-        const body = await ctx.clone().json()
-        if (body && typeof body.error === 'string') detail = body.error
-      } catch {
-        try {
-          const txt = await ctx.clone().text()
-          if (txt) detail = txt.slice(0, 300)
-        } catch {
-          /* keep generic message */
-        }
-      }
-    }
-    throw new Error(detail)
-  }
-  const result = data as
-    | { ok: true; transcript: string; extracted: ExtractedMeeting }
-    | { error: string }
-  if ('error' in result) throw new Error(result.error)
-  return { transcript: result.transcript, extracted: result.extracted }
+export type AnalyzeAudioResult = {
+  minutesId: string
+  decisionCount: number
+  segmentCount: number
+  actionItemCount: number
+  language: string | null
+  durationSeconds: number
+}
+
+export type AnalyzeProgressEvent =
+  | { type: 'downloading' }
+  | { type: 'transcribing' }
+  | { type: 'analyzing' }
+  | { type: 'persisting' }
+  | { type: 'indexing' }
+  | { type: 'done'; minutes_id: string; decision_count: number; segment_count: number; action_item_count: number; language: string | null; duration_seconds: number }
+  | { type: 'error'; message: string }
+
+/**
+ * Stub for the (future) Zoom cloud-recording analysis pipeline. Kept so
+ * call sites don't break — throws a clear error until Phase 3.5 wires it
+ * into plinq_ai.
+ */
+export async function analyzeMeeting(_meetingId: string): Promise<never> {
+  throw new Error('Zoom analysis is not enabled in this build (Coming soon)')
 }

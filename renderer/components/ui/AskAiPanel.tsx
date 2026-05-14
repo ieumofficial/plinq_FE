@@ -471,7 +471,7 @@ export default function AskAiPanel({
 
   return (
     <aside
-      className="flex h-full w-[265px] shrink-0 flex-col justify-between border-l border-gray-border-light text-white"
+      className="flex h-full w-[320px] shrink-0 flex-col justify-between border-l border-gray-border-light text-white"
       style={{
         backgroundImage:
           'linear-gradient(139.48deg, #2E434E 0%, #1F2F38 100%)',
@@ -511,9 +511,9 @@ export default function AskAiPanel({
                   >
                     <SessionsIcon size={14} />
                   </button>
-                  <div className="flex w-[120px] flex-col">
-                    <p className="text-[14px] font-semibold leading-none text-white">Ask AI</p>
-                    <p className="text-[10px] leading-[1.5] text-gray-secondary">
+                  <div className="flex w-[160px] flex-col gap-[3px]">
+                    <p className="text-[15px] font-semibold leading-none text-white">Ask AI</p>
+                    <p className="text-[11px] leading-[1.4] text-gray-secondary">
                       About this session{scopeLabel ? ` · ${scopeLabel}` : ''}
                     </p>
                   </div>
@@ -550,7 +550,7 @@ export default function AskAiPanel({
             <DateDivider label={todayLabel} />
 
             {messages.length === 0 && !messagesQuery.isLoading && (
-              <p className="px-[15px] text-center text-[10px] italic text-gray-secondary">
+              <p className="px-[15px] text-center text-[12px] italic leading-[1.5] text-gray-secondary">
                 Ask anything about this {scopeLabel ?? 'workspace'} — meetings, tasks,
                 decisions, or plain reasoning. I can also propose tasks/meetings for
                 you to review.
@@ -620,17 +620,17 @@ export default function AskAiPanel({
                   rows={1}
                   placeholder={`Ask anything about ${scopeLabel ?? 'this session'}...`}
                   disabled={sending}
-                  className="min-h-[20px] w-full resize-none bg-transparent text-[10px] leading-normal text-white placeholder:text-gray-secondary focus:outline-none disabled:opacity-60"
+                  className="min-h-[24px] w-full resize-none bg-transparent text-[12px] leading-normal text-white placeholder:text-gray-secondary focus:outline-none disabled:opacity-60"
                 />
                 <div className="flex items-center justify-end gap-[10px]">
-                  <span className="text-[10px] text-gray-secondary">⏎ to send</span>
+                  <span className="text-[11px] text-gray-secondary">⏎ to send</span>
                   <button
                     type="button"
                     onClick={() => void send()}
                     disabled={sending || !draft.trim()}
-                    className="flex h-[25px] items-center justify-center gap-[5px] rounded-[5px] bg-white pl-[7px] pr-[10px] text-[10px] font-semibold text-primary-main disabled:opacity-50"
+                    className="flex h-[28px] items-center justify-center gap-[5px] rounded-[5px] bg-white pl-[8px] pr-[12px] text-[11px] font-semibold text-primary-main disabled:opacity-50"
                   >
-                    <SendIcon size={11} />
+                    <SendIcon size={12} />
                     Send
                   </button>
                 </div>
@@ -679,7 +679,7 @@ function SessionsView({
           >
             <BackIcon size={12} />
           </button>
-          <p className="text-[14px] font-semibold leading-none text-white">Sessions</p>
+          <p className="text-[15px] font-semibold leading-none text-white">Sessions</p>
         </div>
         <div className="flex items-center gap-[5px]">
           <button
@@ -704,16 +704,16 @@ function SessionsView({
 
       <div className="flex flex-1 flex-col gap-[15px] overflow-y-auto px-[10px] py-[12px]">
         {loading && (
-          <p className="px-[10px] text-[10px] italic text-gray-secondary">Loading…</p>
+          <p className="px-[10px] text-[12px] italic text-gray-secondary">Loading…</p>
         )}
         {!loading && conversations.length === 0 && (
-          <p className="px-[10px] text-[10px] italic text-gray-secondary">
+          <p className="px-[10px] text-[12px] italic text-gray-secondary">
             No prior sessions yet. Start a new chat below.
           </p>
         )}
         {grouped.map((g) => (
           <div key={g.label} className="flex flex-col gap-[3px]">
-            <p className="px-[10px] text-[8px] uppercase tracking-[1.5px] text-gray-main">
+            <p className="px-[10px] text-[10px] uppercase tracking-[1.5px] text-gray-main">
               {g.label}
             </p>
             {g.items.map((c) => (
@@ -767,13 +767,13 @@ function SessionRow({
         className="flex flex-1 flex-col items-start gap-[2px] truncate text-left"
       >
         <p
-          className={`w-full truncate text-[11px] ${
+          className={`w-full truncate text-[12px] ${
             active ? 'font-semibold text-white' : 'text-primary-light'
           }`}
         >
           {title}
         </p>
-        <p className="text-[9px] text-gray-main">{relTime(convo.created_at)}</p>
+        <p className="text-[10px] text-gray-main">{relTime(convo.created_at)}</p>
       </button>
       <button
         type="button"
@@ -805,9 +805,9 @@ function ContextChip({
         dashed
           ? 'border-dashed border-primary-main text-gray-light'
           : 'border-primary-main bg-white/10 text-primary-light'
-      } px-[10px] py-[3px] text-[10px]`}
+      } px-[12px] py-[4px] text-[11px]`}
     >
-      {dot && <span className="size-[5px] rounded-full bg-blue-med" />}
+      {dot && <span className="size-[6px] rounded-full bg-blue-med" />}
       {label}
     </span>
   )
@@ -817,7 +817,7 @@ function DateDivider({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-[6px] px-[10px]">
       <div className="h-px flex-1 bg-primary-main/60" />
-      <span className="whitespace-pre text-[8px] uppercase tracking-[1.5px] text-gray-main">
+      <span className="whitespace-pre text-[10px] uppercase tracking-[1.5px] text-gray-main">
         {label}
       </span>
       <div className="h-px flex-1 bg-primary-main/60" />
@@ -828,11 +828,11 @@ function DateDivider({ label }: { label: string }) {
 function UserBubble({ content, time }: { content: string; time: string }) {
   return (
     <div className="flex flex-col items-end gap-[5px] pl-[15px]">
-      <div className="flex items-center gap-[4px] text-[8px]">
+      <div className="flex items-center gap-[5px] text-[10px]">
         <span className="font-semibold text-white">YOU</span>
         <span className="font-mono text-primary-main">· {time}</span>
       </div>
-      <div className="rounded-[10px] rounded-tr-[3px] border border-gray-main bg-white/15 px-[10px] py-[5px] text-[10px] leading-[1.5] text-white">
+      <div className="rounded-[10px] rounded-tr-[3px] border border-gray-main bg-white/15 px-[12px] py-[7px] text-[12px] leading-[1.5] text-white">
         {content}
       </div>
     </div>
@@ -853,9 +853,9 @@ function AssistantBubble({
   const showGenerating = streaming && content.length === 0 && !error
   return (
     <div className="flex flex-col items-start gap-[5px] pr-[15px]">
-      <div className="flex items-center gap-[4px] text-[8px]">
-        <div className="flex size-[15px] items-center justify-center rounded-[3px] bg-white/15">
-          <SparkleIcon size={8} />
+      <div className="flex items-center gap-[5px] text-[10px]">
+        <div className="flex size-[18px] items-center justify-center rounded-[3px] bg-white/15">
+          <SparkleIcon size={10} />
         </div>
         <span className="font-semibold text-white-main">plinq AI</span>
         <span className="font-mono text-primary-main">· {time}</span>
@@ -865,7 +865,7 @@ function AssistantBubble({
         <GeneratingAnimation />
       ) : (
         <div
-          className="prose-invert w-full rounded-[10px] rounded-tl-[3px] border border-gray-main bg-white/15 px-[10px] py-[5px] text-[10px] leading-[1.5] text-white [&_code]:rounded [&_code]:bg-white/10 [&_code]:px-1 [&_li]:ml-4 [&_ol]:list-decimal [&_strong]:font-semibold [&_table]:border [&_table]:border-collapse [&_td]:border [&_td]:border-white/20 [&_td]:px-1 [&_td]:py-0.5 [&_th]:border [&_th]:border-white/20 [&_th]:bg-white/10 [&_th]:px-1 [&_th]:py-0.5 [&_ul]:list-disc"
+          className="prose-invert w-full rounded-[10px] rounded-tl-[3px] border border-gray-main bg-white/15 px-[12px] py-[7px] text-[12px] leading-[1.55] text-white [&_code]:rounded [&_code]:bg-white/10 [&_code]:px-1 [&_li]:ml-4 [&_ol]:list-decimal [&_strong]:font-semibold [&_table]:border [&_table]:border-collapse [&_td]:border [&_td]:border-white/20 [&_td]:px-1 [&_td]:py-0.5 [&_th]:border [&_th]:border-white/20 [&_th]:bg-white/10 [&_th]:px-1 [&_th]:py-0.5 [&_ul]:list-disc"
           dangerouslySetInnerHTML={
             streaming
               ? { __html: escapeForStreaming(content) }
@@ -875,7 +875,7 @@ function AssistantBubble({
       )}
 
       {error && (
-        <p className="rounded-[6px] border border-red-med/60 bg-red-med/15 px-[8px] py-[5px] text-[10px] text-red-light">
+        <p className="rounded-[6px] border border-red-med/60 bg-red-med/15 px-[10px] py-[6px] text-[11px] text-red-light">
           {error}
         </p>
       )}
@@ -893,14 +893,14 @@ function escapeForStreaming(s: string): string {
 
 function GeneratingAnimation() {
   return (
-    <div className="flex items-center gap-[5px]">
-      <div className="grid size-[20px] grid-cols-2 grid-rows-2 gap-[1px]">
-        <div className="size-[9px] animate-pulse rounded-[2px] bg-gray-light" />
-        <div className="size-[9px] animate-pulse rounded-full bg-blue-med [animation-delay:120ms]" />
-        <div className="size-[9px] animate-pulse rounded-[2px] bg-blue-med [animation-delay:240ms]" />
-        <div className="size-[9px] animate-pulse rounded-[2px] bg-gray-main [animation-delay:360ms]" />
+    <div className="flex items-center gap-[6px]">
+      <div className="grid size-[24px] grid-cols-2 grid-rows-2 gap-[1px]">
+        <div className="size-[11px] animate-pulse rounded-[2px] bg-gray-light" />
+        <div className="size-[11px] animate-pulse rounded-full bg-blue-med [animation-delay:120ms]" />
+        <div className="size-[11px] animate-pulse rounded-[2px] bg-blue-med [animation-delay:240ms]" />
+        <div className="size-[11px] animate-pulse rounded-[2px] bg-gray-main [animation-delay:360ms]" />
       </div>
-      <p className="text-[10px] leading-[1.5] text-gray-light">Generating a response...</p>
+      <p className="text-[11px] leading-[1.5] text-gray-light">Generating a response...</p>
     </div>
   )
 }
@@ -933,9 +933,9 @@ function ProposalCard({
     const includedCount = card.taskDrafts.filter((t) => t.include && t.title.trim()).length
     return (
       <div className="flex flex-col items-start gap-[5px] pr-[15px]">
-        <div className="flex items-center gap-[4px] text-[8px]">
-          <div className="flex size-[15px] items-center justify-center rounded-[3px] bg-white/15">
-            <SparkleIcon size={8} />
+        <div className="flex items-center gap-[5px] text-[10px]">
+          <div className="flex size-[18px] items-center justify-center rounded-[3px] bg-white/15">
+            <SparkleIcon size={10} />
           </div>
           <span className="font-semibold text-white-main">Proposal · {kindLabel}</span>
           <span className="font-mono text-primary-main">· {card.time}</span>
@@ -943,20 +943,20 @@ function ProposalCard({
 
         <div className="w-full overflow-hidden rounded-[10px] rounded-tl-[3px] border border-gray-main bg-white/15">
           {/* Project header (read-only for now) */}
-          <div className="flex flex-col gap-[3px] px-[10px] pb-[8px] pt-[10px]">
-            <p className="text-[12px] font-semibold text-white">{project?.name ?? 'New project'}</p>
+          <div className="flex flex-col gap-[4px] px-[12px] pb-[10px] pt-[12px]">
+            <p className="text-[14px] font-semibold text-white">{project?.name ?? 'New project'}</p>
             {project?.description && (
-              <p className="text-[10px] leading-[1.4] text-primary-light">
+              <p className="text-[12px] leading-[1.5] text-primary-light">
                 {String(project.description)}
               </p>
             )}
           </div>
 
-          <div className="border-t border-white/10 px-[10px] pb-[6px] pt-[8px]">
-            <p className="mb-[5px] text-[8px] uppercase tracking-[1.5px] text-gray-light">
+          <div className="border-t border-white/10 px-[12px] pb-[8px] pt-[10px]">
+            <p className="mb-[6px] text-[10px] uppercase tracking-[1.5px] text-gray-light">
               Initial tasks · {card.taskDrafts.length}
             </p>
-            <ul className="flex flex-col gap-[5px]">
+            <ul className="flex flex-col gap-[6px]">
               {card.taskDrafts.map((task, i) => (
                 <TaskDraftRow
                   key={i}
@@ -968,13 +968,13 @@ function ProposalCard({
             </ul>
           </div>
 
-          <div className="flex items-center justify-between border-t border-white/10 bg-black/15 px-[8px] py-[6px]">
+          <div className="flex items-center justify-between border-t border-white/10 bg-black/15 px-[10px] py-[8px]">
             {isPending && (
               <>
                 <button
                   type="button"
                   onClick={onDismiss}
-                  className="text-[10px] text-gray-light hover:text-white"
+                  className="text-[12px] text-gray-light hover:text-white"
                 >
                   Dismiss
                 </button>
@@ -982,22 +982,22 @@ function ProposalCard({
                   type="button"
                   onClick={onApply}
                   disabled={!project}
-                  className="rounded-[5px] bg-white px-[10px] py-[4px] text-[10px] font-semibold text-primary-main disabled:opacity-50"
+                  className="rounded-[5px] bg-white px-[12px] py-[5px] text-[12px] font-semibold text-primary-main disabled:opacity-50"
                 >
                   Create project + {includedCount} task{includedCount === 1 ? '' : 's'}
                 </button>
               </>
             )}
             {isApplying && (
-              <span className="text-[10px] italic text-primary-light">Applying…</span>
+              <span className="text-[12px] italic text-primary-light">Applying…</span>
             )}
             {isApplied && (
-              <span className="text-[10px] text-green-light">
+              <span className="text-[12px] text-green-light">
                 ✓ Applied{card.appliedSummary ? ` · ${card.appliedSummary}` : ''}
               </span>
             )}
             {isDismissed && (
-              <span className="text-[10px] text-gray-light">
+              <span className="text-[12px] text-gray-light">
                 Dismissed{card.dismissedReason ? ` · ${card.dismissedReason}` : ''}
               </span>
             )}
@@ -1005,7 +1005,7 @@ function ProposalCard({
         </div>
 
         {card.error && (
-          <p className="rounded-[6px] border border-red-med/60 bg-red-med/15 px-[8px] py-[5px] text-[10px] text-red-light">
+          <p className="rounded-[6px] border border-red-med/60 bg-red-med/15 px-[10px] py-[6px] text-[11px] text-red-light">
             {card.error}
           </p>
         )}
@@ -1016,18 +1016,18 @@ function ProposalCard({
   // ── Generic card (other kinds) ──
   return (
     <div className="flex flex-col items-start gap-[5px] pr-[15px]">
-      <div className="flex items-center gap-[4px] text-[8px]">
-        <div className="flex size-[15px] items-center justify-center rounded-[3px] bg-white/15">
-          <SparkleIcon size={8} />
+      <div className="flex items-center gap-[5px] text-[10px]">
+        <div className="flex size-[18px] items-center justify-center rounded-[3px] bg-white/15">
+          <SparkleIcon size={10} />
         </div>
         <span className="font-semibold text-white-main">Proposal · {kindLabel}</span>
         <span className="font-mono text-primary-main">· {card.time}</span>
       </div>
 
       <div className="w-full overflow-hidden rounded-[10px] rounded-tl-[3px] border border-gray-main bg-white/15">
-        <ul className="flex flex-col gap-[2px] p-[8px]">
+        <ul className="flex flex-col gap-[3px] p-[10px]">
           {card.items.length === 0 && (
-            <li className="text-[10px] italic text-gray-light">No items in this proposal.</li>
+            <li className="text-[12px] italic text-gray-light">No items in this proposal.</li>
           )}
           {card.items.map((item) => {
             const checked = card.selectedItemIds.includes(item.id)
@@ -1046,43 +1046,43 @@ function ProposalCard({
             return (
               <li
                 key={item.id}
-                className="flex items-start gap-[6px] rounded-[5px] px-[5px] py-[4px] hover:bg-white/10"
+                className="flex items-start gap-[7px] rounded-[5px] px-[6px] py-[5px] hover:bg-white/10"
               >
                 <input
                   type="checkbox"
                   checked={checked}
                   disabled={!isPending}
                   onChange={() => onToggleItem(item.id)}
-                  className="mt-[2px] size-[11px] cursor-pointer accent-blue-med disabled:cursor-not-allowed"
+                  className="mt-[3px] size-[13px] cursor-pointer accent-blue-med disabled:cursor-not-allowed"
                 />
-                <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                  <p className="truncate text-[10px] font-semibold text-white">{title}</p>
+                <div className="flex min-w-0 flex-1 flex-col gap-[4px]">
+                  <p className="truncate text-[12px] font-semibold text-white">{title}</p>
                   {item.description && (
-                    <p className="line-clamp-2 text-[9px] leading-[1.4] text-primary-light">
+                    <p className="line-clamp-2 text-[11px] leading-[1.45] text-primary-light">
                       {String(item.description)}
                     </p>
                   )}
                   {meta && (
-                    <p className="text-[8px] uppercase tracking-[1px] text-gray-light">{meta}</p>
+                    <p className="text-[10px] uppercase tracking-[1px] text-gray-light">{meta}</p>
                   )}
                   {nestedTasks && nestedTasks.length > 0 && (
-                    <div className="mt-[3px] flex flex-col gap-[2px] rounded-[4px] border border-white/10 bg-black/15 px-[6px] py-[4px]">
-                      <p className="text-[8px] uppercase tracking-[1px] text-gray-light">
+                    <div className="mt-[4px] flex flex-col gap-[3px] rounded-[4px] border border-white/10 bg-black/15 px-[8px] py-[6px]">
+                      <p className="text-[10px] uppercase tracking-[1px] text-gray-light">
                         Initial tasks · {nestedTasks.length}
                       </p>
-                      <ul className="flex flex-col gap-[1px]">
+                      <ul className="flex flex-col gap-[2px]">
                         {nestedTasks.map((t, i) => {
                           const tTitle = String(t.title ?? `Task ${i + 1}`)
                           const tMeta = [t.priority, t.due_date].filter(Boolean).join(' · ')
                           return (
-                            <li key={i} className="flex items-start gap-[4px]">
-                              <span className="text-[9px] text-gray-light">•</span>
+                            <li key={i} className="flex items-start gap-[5px]">
+                              <span className="text-[11px] text-gray-light">•</span>
                               <div className="flex min-w-0 flex-1 flex-col">
-                                <span className="truncate text-[9px] text-primary-light">
+                                <span className="truncate text-[11px] text-primary-light">
                                   {tTitle}
                                 </span>
                                 {tMeta && (
-                                  <span className="text-[8px] uppercase tracking-[0.8px] text-gray-main">
+                                  <span className="text-[10px] uppercase tracking-[0.8px] text-gray-main">
                                     {tMeta}
                                   </span>
                                 )}
@@ -1094,7 +1094,7 @@ function ProposalCard({
                     </div>
                   )}
                   {nestedMembers && nestedMembers.length > 0 && (
-                    <p className="text-[8px] uppercase tracking-[1px] text-gray-light">
+                    <p className="text-[10px] uppercase tracking-[1px] text-gray-light">
                       Members · {nestedMembers.length}
                     </p>
                   )}
@@ -1104,13 +1104,13 @@ function ProposalCard({
           })}
         </ul>
 
-        <div className="flex items-center justify-between border-t border-white/10 bg-black/15 px-[8px] py-[6px]">
+        <div className="flex items-center justify-between border-t border-white/10 bg-black/15 px-[10px] py-[8px]">
           {isPending && (
             <>
               <button
                 type="button"
                 onClick={onDismiss}
-                className="text-[10px] text-gray-light hover:text-white"
+                className="text-[12px] text-gray-light hover:text-white"
               >
                 Dismiss
               </button>
@@ -1118,22 +1118,22 @@ function ProposalCard({
                 type="button"
                 onClick={onApply}
                 disabled={card.selectedItemIds.length === 0}
-                className="rounded-[5px] bg-white px-[10px] py-[4px] text-[10px] font-semibold text-primary-main disabled:opacity-50"
+                className="rounded-[5px] bg-white px-[12px] py-[5px] text-[12px] font-semibold text-primary-main disabled:opacity-50"
               >
                 Apply ({card.selectedItemIds.length})
               </button>
             </>
           )}
           {isApplying && (
-            <span className="text-[10px] italic text-primary-light">Applying…</span>
+            <span className="text-[12px] italic text-primary-light">Applying…</span>
           )}
           {isApplied && (
-            <span className="text-[10px] text-green-light">
+            <span className="text-[12px] text-green-light">
               ✓ Applied{card.appliedSummary ? ` · ${card.appliedSummary}` : ''}
             </span>
           )}
           {isDismissed && (
-            <span className="text-[10px] text-gray-light">
+            <span className="text-[12px] text-gray-light">
               Dismissed{card.dismissedReason ? ` · ${card.dismissedReason}` : ''}
             </span>
           )}
@@ -1141,7 +1141,7 @@ function ProposalCard({
       </div>
 
       {card.error && (
-        <p className="rounded-[6px] border border-red-med/60 bg-red-med/15 px-[8px] py-[5px] text-[10px] text-red-light">
+        <p className="rounded-[6px] border border-red-med/60 bg-red-med/15 px-[10px] py-[6px] text-[11px] text-red-light">
           {card.error}
         </p>
       )}
@@ -1162,17 +1162,17 @@ function TaskDraftRow({
   const dim = !task.include
   return (
     <li
-      className={`flex flex-col gap-[3px] rounded-[5px] border border-white/10 px-[6px] py-[5px] ${
+      className={`flex flex-col gap-[5px] rounded-[5px] border border-white/10 px-[8px] py-[7px] ${
         dim ? 'opacity-50' : ''
       }`}
     >
-      <div className="flex items-start gap-[6px]">
+      <div className="flex items-start gap-[7px]">
         <input
           type="checkbox"
           checked={task.include}
           disabled={disabled}
           onChange={(e) => onPatch({ include: e.target.checked })}
-          className="mt-[3px] size-[11px] cursor-pointer accent-blue-med disabled:cursor-not-allowed"
+          className="mt-[4px] size-[13px] cursor-pointer accent-blue-med disabled:cursor-not-allowed"
         />
         <textarea
           rows={1}
@@ -1180,20 +1180,20 @@ function TaskDraftRow({
           disabled={disabled || !task.include}
           onChange={(e) => onPatch({ title: e.target.value })}
           placeholder="Task title"
-          className="min-h-[15px] flex-1 resize-none bg-transparent text-[10px] font-semibold leading-[1.3] text-white placeholder:text-gray-main focus:outline-none disabled:opacity-70"
+          className="min-h-[18px] flex-1 resize-none bg-transparent text-[12px] font-semibold leading-[1.35] text-white placeholder:text-gray-main focus:outline-none disabled:opacity-70"
         />
         <button
           type="button"
           aria-label={expanded ? 'Collapse' : 'Edit details'}
           onClick={() => setExpanded((v) => !v)}
           disabled={disabled || !task.include}
-          className="mt-[1px] text-[10px] text-gray-light hover:text-white disabled:opacity-50"
+          className="mt-[2px] text-[12px] text-gray-light hover:text-white disabled:opacity-50"
         >
           {expanded ? '▾' : '▸'}
         </button>
       </div>
 
-      <div className="flex items-center gap-[5px] pl-[17px]">
+      <div className="flex items-center gap-[6px] pl-[20px]">
         <PriorityPill
           value={task.priority}
           disabled={disabled || !task.include}
@@ -1204,7 +1204,7 @@ function TaskDraftRow({
           value={task.due_date}
           disabled={disabled || !task.include}
           onChange={(e) => onPatch({ due_date: e.target.value })}
-          className="rounded-[4px] border border-white/10 bg-white/5 px-[5px] py-[2px] text-[9px] text-primary-light focus:border-white/30 focus:outline-none disabled:opacity-50"
+          className="rounded-[4px] border border-white/10 bg-white/5 px-[6px] py-[3px] text-[11px] text-primary-light focus:border-white/30 focus:outline-none disabled:opacity-50"
           style={{ colorScheme: 'dark' }}
         />
       </div>
@@ -1216,7 +1216,7 @@ function TaskDraftRow({
           onChange={(v) => onPatch({ description: v })}
           placeholder="Description (optional)"
           minRows={2}
-          className="ml-[17px] resize-none rounded-[4px] border border-white/10 bg-white/5 p-[5px] text-[9px] leading-[1.4] text-primary-light placeholder:text-gray-main focus:border-white/30 focus:outline-none disabled:opacity-70"
+          className="ml-[20px] resize-none rounded-[4px] border border-white/10 bg-white/5 p-[7px] text-[11px] leading-[1.5] text-primary-light placeholder:text-gray-main focus:border-white/30 focus:outline-none disabled:opacity-70"
         />
       )}
     </li>
@@ -1290,13 +1290,13 @@ function PriorityPill({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center gap-[3px] rounded-full border px-[6px] py-[1px] text-[8px] font-semibold uppercase tracking-[0.5px] disabled:opacity-50 ${priorityTone(value)}`}
+        className={`flex items-center gap-[4px] rounded-full border px-[8px] py-[2px] text-[10px] font-semibold uppercase tracking-[0.5px] disabled:opacity-50 ${priorityTone(value)}`}
       >
         {value || 'medium'}
-        <span className="text-[7px] opacity-70">▾</span>
+        <span className="text-[9px] opacity-70">▾</span>
       </button>
       {open && (
-        <ul className="absolute left-0 top-[calc(100%+3px)] z-10 flex w-[80px] flex-col gap-[1px] rounded-[5px] border border-white/15 bg-primary-deep p-[3px] shadow-lg">
+        <ul className="absolute left-0 top-[calc(100%+4px)] z-10 flex w-[100px] flex-col gap-[1px] rounded-[5px] border border-white/15 bg-primary-deep p-[4px] shadow-lg">
           {PRIORITY_CYCLE.map((p) => (
             <li key={p}>
               <button
@@ -1305,12 +1305,12 @@ function PriorityPill({
                   onChange(p)
                   setOpen(false)
                 }}
-                className={`flex w-full items-center justify-between rounded-[4px] px-[5px] py-[3px] text-[9px] uppercase tracking-[0.5px] hover:bg-white/10 ${
+                className={`flex w-full items-center justify-between rounded-[4px] px-[7px] py-[4px] text-[11px] uppercase tracking-[0.5px] hover:bg-white/10 ${
                   p === value ? 'text-white' : 'text-primary-light'
                 }`}
               >
                 <span>{p}</span>
-                {p === value && <span className="text-[8px]">✓</span>}
+                {p === value && <span className="text-[10px]">✓</span>}
               </button>
             </li>
           ))}

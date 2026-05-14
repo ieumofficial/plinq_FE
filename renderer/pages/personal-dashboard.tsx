@@ -2,6 +2,9 @@ import { useMemo, useState, type ReactNode } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import PersonalAppShell from '../components/PersonalAppShell'
+import { useProjectPreview } from '../components/ProjectPreviewProvider'
+import TaskDetailModal from '../components/TaskDetailModal'
+import type { TaskWithProject } from '../lib/queries'
 import ProjectCard from '../components/ui/ProjectCard'
 import ActionItem from '../components/ui/ActionItem'
 import Calendar, { type CalendarEvent } from '../components/ui/Calendar'
@@ -67,8 +70,10 @@ function endOfDay(d: Date) {
 
 export default function PersonalDashboardPage() {
   const router = useRouter()
+  const preview = useProjectPreview()
   const { data: user } = useCurrentUser()
   const userId = user?.id
+  const [openTask, setOpenTask] = useState<TaskWithProject | null>(null)
 
   const [calMonth] = useState(startOfMonth(new Date()))
   const today = useMemo(() => new Date(), [])
@@ -210,7 +215,7 @@ export default function PersonalDashboardPage() {
                       status={dbStatusToUi(p.status)}
                       progress={p.progressPct ?? 0}
                       members={p.members.map(userToMember)}
-                      onOpen={() => router.push(`/p/${p.id}/dashboard`)}
+                      onOpen={() => preview.open(p.id)}
                     />
                   ))}
                 </div>
@@ -271,6 +276,7 @@ export default function PersonalDashboardPage() {
                               status: next ? 'done' : 'in_progress',
                             })
                           }
+                          onClick={() => setOpenTask(t)}
                         />
                       ))}
                       {hidden > 0 && (
@@ -355,6 +361,26 @@ export default function PersonalDashboardPage() {
           </div>
         </div>
       </PersonalAppShell>
+      <TaskDetailModal
+        open={openTask !== null}
+        task={openTask}
+        projectName={openTask?.project_name ?? 'No project'}
+        ticketId={openTask ? openTask.id.slice(0, 8).toUpperCase() : ''}
+        sourceMeeting={
+          openTask?.source_meeting_name && openTask?.source_meeting_scheduled_at
+            ? {
+                name: openTask.source_meeting_name,
+                date: new Date(
+                  openTask.source_meeting_scheduled_at
+                ).toLocaleDateString('en-US', {
+                  month: 'long',
+                  day: 'numeric',
+                }),
+              }
+            : null
+        }
+        onClose={() => setOpenTask(null)}
+      />
     </>
   )
 }

@@ -22,6 +22,7 @@ import {
   useOrgProjects,
 } from '../../../lib/hooks'
 import { usePinnedProjects } from '../../../lib/pinPref'
+import { useProjectPreview } from '../../../components/ProjectPreviewProvider'
 import { userToMember, type ProjectStatusDb } from '../../../lib/types'
 import type { ProjectWithStats } from '../../../lib/queries'
 import DeleteConfirmModal from '../../../components/DeleteConfirmModal'
@@ -372,6 +373,7 @@ export default function OrgProjectsPage() {
 
 function OrgProjectsBody({ orgId }: { orgId: string }) {
   const router = useRouter()
+  const preview = useProjectPreview()
   const { open } = useCreateNew()
   const { data: user } = useCurrentUser()
   const { data: org } = useMyOrg(user?.id)
@@ -573,7 +575,7 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
                 <TableRow
                   key={p.id}
                   isLast={i === sortedProjects.length - 1}
-                  onClick={() => router.push(`/p/${p.id}/dashboard`)}
+                  onClick={() => preview.open(p.id)}
                   className="group"
                 >
                   <TableCell width="flex-[2]">

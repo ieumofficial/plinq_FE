@@ -6,6 +6,7 @@ import ProjectLabel from './ui/ProjectLabel'
 import UserGroup from './ui/UserGroup'
 import DatePicker from './ui/DatePicker'
 import { aiStream } from '../lib/aiClient'
+import { markAiBusy } from '../lib/aiActivity'
 import { useQueryClient } from '@tanstack/react-query'
 import { createTask } from '../lib/queries'
 import { useCurrentUser, useProjectMembers, useUserProjects } from '../lib/hooks'
@@ -498,6 +499,7 @@ export default function CreateTaskModal({
     if (!t || aiBusy) return
     setAiError(null)
     setAiBusy(true)
+    markAiBusy(true)
     aiCancelRef.current = false
     // A fresh suggestion run invalidates any previous accepted snapshots —
     // the user's pre-accept values are kept though by NOT touching the form
@@ -551,6 +553,7 @@ export default function CreateTaskModal({
       // Only flip back to idle if this run wasn't already cancelled — when
       // cancelled, toggleAiPanel already set aiBusy=false.
       if (!aiCancelRef.current) setAiBusy(false)
+      markAiBusy(false)
     }
   }
 
@@ -562,6 +565,9 @@ export default function CreateTaskModal({
       if (aiBusy) {
         aiCancelRef.current = true
         setAiBusy(false)
+        // The stream's finally-block also decrements, but we want the global
+        // signal to drop now since the user explicitly cancelled.
+        markAiBusy(false)
       }
       setAiPanelOpen(false)
       return

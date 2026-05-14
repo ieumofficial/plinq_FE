@@ -9,6 +9,7 @@ import ProjectListCard from '../components/ui/ProjectListCard'
 import FilterChecklist from '../components/ui/FilterChecklist'
 import { useCurrentUser, useDeleteProject, useUserProjects } from '../lib/hooks'
 import { useAllPinnedProjects } from '../lib/pinPref'
+import { useProjectPreview } from '../components/ProjectPreviewProvider'
 import {
   dbStatusToUi,
   formatDueDate,
@@ -253,6 +254,7 @@ function StatusFilterButton({
 
 function ProjectsPageBody() {
   const router = useRouter()
+  const preview = useProjectPreview()
   const createNew = useCreateNew()
   const { data: user } = useCurrentUser()
   const { data: projects = [], isLoading } = useUserProjects(user?.id)
@@ -371,7 +373,7 @@ function ProjectsPageBody() {
                 members={others.map(userToMember)}
                 canDelete={!!user && p.lead_id === user.id}
                 pinned={isPinned(p.id)}
-                onOpen={() => router.push(`/p/${p.id}/dashboard`)}
+                onOpen={() => preview.open(p.id)}
                 onDelete={handleDelete}
                 onTogglePin={() => togglePinned(p.org_id, p.id)}
               />

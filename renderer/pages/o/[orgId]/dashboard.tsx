@@ -16,6 +16,7 @@ import {
 import { userToMember } from '../../../lib/types'
 import type { ProjectStatusDb } from '../../../lib/types'
 import { usePinnedProjects } from '../../../lib/pinPref'
+import { useProjectPreview } from '../../../components/ProjectPreviewProvider'
 
 // ─── Health helpers ───────────────────────────────────────────────────────────
 
@@ -553,6 +554,7 @@ export default function OrgDashboardPage() {
 
 function OrgDashboardBody({ orgId }: { orgId: string }) {
   const router = useRouter()
+  const preview = useProjectPreview()
   const { data: user } = useCurrentUser()
   const userId = user?.id
 
@@ -768,7 +770,7 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
                 progress={p.progressPct ?? 0}
                 health={projectHealth(p)}
                 pinned={pinnedProjectIds.has(p.id)}
-                onOpen={() => router.push(`/p/${p.id}/dashboard`)}
+                onOpen={() => preview.open(p.id)}
                 onTogglePin={() => togglePinned(p.id)}
               />
             ))}

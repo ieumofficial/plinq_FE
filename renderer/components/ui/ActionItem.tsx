@@ -9,6 +9,9 @@ type Props = {
   projectTag?: { label: string; color?: TagColor }
   checked?: boolean
   onCheckedChange?: (next: boolean) => void
+  /** Click anywhere on the row (except the checkbox) — used to open the
+   *  task detail modal. */
+  onClick?: () => void
 }
 
 export default function ActionItem({
@@ -18,11 +21,19 @@ export default function ActionItem({
   projectTag,
   checked = false,
   onCheckedChange,
+  onClick,
 }: Props) {
   return (
-    <div className="bg-white-item rounded-[5px] flex items-center justify-between px-[14px] py-[10px] w-full gap-4">
+    <div
+      onClick={onClick}
+      className={`bg-white-item rounded-[5px] flex items-center justify-between px-[14px] py-[10px] w-full gap-4 ${
+        onClick ? 'cursor-pointer hover:bg-white-secondary transition-colors' : ''
+      }`}
+    >
       <div className="flex items-center gap-[15px] min-w-0 flex-1">
-        <Checkbox checked={checked} onChange={onCheckedChange} />
+        <span onClick={(e) => e.stopPropagation()}>
+          <Checkbox checked={checked} onChange={onCheckedChange} />
+        </span>
         <div className="flex flex-col gap-[5px] min-w-0">
           <p
             className={`font-sans text-[14px] font-semibold truncate ${

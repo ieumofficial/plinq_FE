@@ -6,7 +6,9 @@ import GlobalSearchDropdown from '../GlobalSearchDropdown'
 import OrgSwitcherDropdown from '../OrgSwitcherDropdown'
 import NotificationPanel from '../NotificationPanel'
 import ProfileDropdown from '../ProfileDropdown'
+import { useAiBusy } from '../../lib/aiActivity'
 import { useCurrentUser } from '../../lib/hooks'
+import { useNavHistory } from '../../lib/navHistory'
 import { usePresence } from '../../lib/presencePref'
 
 const drag: CSSProperties = { WebkitAppRegion: 'drag' } as CSSProperties
@@ -165,6 +167,8 @@ export default function Header({
   const router = useRouter()
   const { data: currentUser } = useCurrentUser()
   const [presence, setPresence] = usePresence()
+  const nav = useNavHistory()
+  const aiBusy = useAiBusy()
   const headerUserName = currentUser
     ? currentUser.nickname ||
       `${currentUser.first_name} ${currentUser.last_name}`.trim() ||
@@ -231,16 +235,24 @@ export default function Header({
         <div className="flex items-center gap-[10px] shrink-0" style={noDrag}>
           <button
             type="button"
-            onClick={onBack}
-            className="p-1 rounded text-primary-light hover:bg-white/10 transition-colors"
+            onClick={() => {
+              if (nav.canBack) nav.back()
+              else onBack?.()
+            }}
+            disabled={!nav.canBack}
+            className="p-1 rounded text-primary-light hover:bg-white/10 transition-colors disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
             aria-label="Back"
           >
             <Icon name="ArrowLeft" size={15} />
           </button>
           <button
             type="button"
-            onClick={onForward}
-            className="p-1 rounded text-primary-light hover:bg-white/10 transition-colors"
+            onClick={() => {
+              if (nav.canForward) nav.forward()
+              else onForward?.()
+            }}
+            disabled={!nav.canForward}
+            className="p-1 rounded text-primary-light hover:bg-white/10 transition-colors disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
             aria-label="Forward"
           >
             <Icon name="ArrowRight" size={15} />
@@ -266,7 +278,13 @@ export default function Header({
         <div className="w-[500px] max-w-[45vw]" style={noDrag}>
           <GlobalSearchDropdown />
         </div>
-        <Button variant="ghost" size="compact" iconLeft="Sparkle" onClick={onAskAi}>
+        <Button
+          variant="ghost"
+          size="compact"
+          iconLeft="Sparkle"
+          iconLeftClassName={aiBusy ? 'ai-sparkle-anim' : undefined}
+          onClick={onAskAi}
+        >
           {aiOpen ? 'Hide AI' : 'Ask AI'}
         </Button>
         <Button variant="primary" size="compact" iconLeft="Add" onClick={onCreateNew}>

@@ -8,6 +8,8 @@ type Props = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
   variant?: Variant
   size?: Size
   iconLeft?: IconName
+  /** Extra class names to apply to the left icon (e.g. for animation). */
+  iconLeftClassName?: string
   iconRight?: IconName
   iconOnly?: IconName
   children?: ReactNode
@@ -74,6 +76,7 @@ export default function Button({
   variant = 'primary',
   size = 'default',
   iconLeft,
+  iconLeftClassName,
   iconRight,
   iconOnly,
   children,
@@ -105,7 +108,13 @@ export default function Button({
         <Icon name={iconOnly} size={iconSize} />
       ) : (
         <>
-          {iconLeft && <Icon name={iconLeft} size={iconSize} />}
+          {iconLeft && (
+            <Icon
+              name={iconLeft}
+              size={iconSize}
+              className={iconLeftClassName}
+            />
+          )}
           {children}
           {iconRight && <Icon name={iconRight} size={iconSize} />}
         </>

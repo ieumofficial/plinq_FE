@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/router'
 import Head from 'next/head'
 import PersonalAppShell from '../components/PersonalAppShell'
 import Calendar, { type CalendarEvent } from '../components/ui/Calendar'
 import FilterChecklist from '../components/ui/FilterChecklist'
 import ProjectLabel from '../components/ui/ProjectLabel'
 import Icon from '../components/ui/Icon'
+import Button from '../components/ui/Button'
+import { useProjectPreview } from '../components/ProjectPreviewProvider'
+import TaskDetailModal, { type TaskDetailInput } from '../components/TaskDetailModal'
 import {
   useCurrentUser,
   useUserCalendarEvents,
@@ -103,6 +107,8 @@ function DayItemRow({
 type DetailItem =
   | {
       kind: 'meetings'
+      meetingId: string
+      projectId: string
       title: string
       projectName: string
       projectColor: string | null
@@ -113,6 +119,7 @@ type DetailItem =
     }
   | {
       kind: 'project_due'
+      projectId: string
       title: string
       projectName: string
       projectColor: string | null
@@ -125,6 +132,8 @@ type DetailItem =
     }
   | {
       kind: 'task_due'
+      /** Full task row — handed to TaskDetailModal on action click. */
+      task: TaskDetailInput
       title: string
       projectName: string
       projectColor: string | null
@@ -173,7 +182,15 @@ function PriorityPill({ priority }: { priority: string }) {
   )
 }
 
-function DetailModal({ item, onClose }: { item: DetailItem; onClose: () => void }) {
+function DetailModal({
+  item,
+  onClose,
+  onAction,
+}: {
+  item: DetailItem
+  onClose: () => void
+  onAction: (item: DetailItem) => void
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -401,6 +418,25 @@ function DetailModal({ item, onClose }: { item: DetailItem; onClose: () => void 
             </>
           )}
         </div>
+
+        {/* Footer — jump to the underlying meeting / project / task. */}
+        <div className="mt-auto border-t border-solid border-gray-border-light bg-white-item px-[20px] py-[12px] flex items-center justify-end gap-[10px]">
+          <Button variant="secondary" size="compact" onClick={onClose}>
+            Close
+          </Button>
+          <Button
+            variant="primary"
+            size="compact"
+            iconRight="ArrowRight"
+            onClick={() => onAction(item)}
+          >
+            {item.kind === 'meetings'
+              ? 'Open meeting'
+              : item.kind === 'project_due'
+                ? 'Open project'
+                : 'Open task'}
+          </Button>
+        </div>
       </div>
     </div>
   )
@@ -449,6 +485,9 @@ export default function CalendarPage() {
   const { data: allProjects = [] } = useUserProjects(userId)
   const isSelectedToday = isSameDate(selectedDate, today)
   const [detail, setDetail] = useState<DetailItem | null>(null)
+  const [openTask, setOpenTask] = useState<TaskDetailInput | null>(null)
+  const router = useRouter()
+  const preview = useProjectPreview()
 
   const selectedYmd = useMemo(() => ymd(selectedDate), [selectedDate])
 
@@ -608,6 +647,8 @@ export default function CalendarPage() {
                         onClick={() =>
                           setDetail({
                             kind: 'meetings',
+                            meetingId: m.id,
+                            projectId: m.project_id,
                             title: m.name,
                             projectName: p?.name ?? m.name,
                             projectColor: p?.color ?? null,
@@ -637,6 +678,7 @@ export default function CalendarPage() {
                         onClick={() =>
                           setDetail({
                             kind: 'project_due',
+                            projectId: p.id,
                             title: `${p.name} due`,
                             projectName: p.name,
                             projectColor: p.color ?? null,
@@ -666,6 +708,7 @@ export default function CalendarPage() {
                         onClick={() =>
                           setDetail({
                             kind: 'task_due',
+                            task: t as TaskDetailInput,
                             title: t.title,
                             projectName: p?.name ?? t.title,
                             projectColor: p?.color ?? null,
@@ -723,8 +766,39 @@ export default function CalendarPage() {
             </section>
           </aside>
         </div>
-        {detail && <DetailModal item={detail} onClose={() => setDetail(null)} />}
+        {detail && (
+          <DetailModal
+            item={detail}
+            onClose={() => setDetail(null)}
+            onAction={(it) => {
+              if (it.kind === 'meetings') {
+                router.push(`/p/${it.projectId}/meetings/${it.meetingId}`)
+                setDetail(null)
+              } else if (it.kind === 'project_due') {
+                setDetail(null)
+                preview.open(it.projectId)
+              } else {
+                // task_due → swap to the dedicated task detail modal so the
+                // user can edit fields inline.
+                setOpenTask(it.task)
+                setDetail(null)
+              }
+            }}
+          />
+        )}
       </PersonalAppShell>
+      <TaskDetailModal
+        open={openTask !== null}
+        task={openTask}
+        projectName={
+          (openTask?.project_id &&
+            allProjects.find((p) => p.id === openTask.project_id)?.name) ||
+          'No project'
+        }
+        ticketId={openTask ? openTask.id.slice(0, 8).toUpperCase() : ''}
+        sourceMeeting={null}
+        onClose={() => setOpenTask(null)}
+      />
     </>
   )
 }

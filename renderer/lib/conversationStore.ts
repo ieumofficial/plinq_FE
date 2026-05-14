@@ -7,12 +7,13 @@
  * `GET /agent/conversations?limit=1` to find the most recent server-side.
  */
 
-type Scope = { orgId?: string | null; projectId?: string | null }
+// Sessions are scoped to an organization only — context (which projects to
+// load into the prompt) is per-message, not per-conversation.
+type Scope = { orgId?: string | null }
 
 function key(scope: Scope): string {
   const o = scope.orgId ?? '_'
-  const p = scope.projectId ?? '_'
-  return `plinq.activeAgentConv.${o}.${p}`
+  return `plinq.activeAgentConv.${o}`
 }
 
 export function getActiveConversationId(scope: Scope): string | null {

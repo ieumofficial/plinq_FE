@@ -278,7 +278,8 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
           askAiOpen ? (
             <AskAiPanel
               onClose={() => setAskAiOpen(false)}
-              projectId={projectId}
+              orgId={org?.id ?? undefined}
+              defaultContextProjectId={projectId}
               scopeLabel={projectName}
             />
           ) : undefined

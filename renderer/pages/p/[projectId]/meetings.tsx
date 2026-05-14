@@ -13,6 +13,7 @@ import { useProject, useProjectMeetings } from '../../../lib/hooks'
 import { queryKeys } from '../../../lib/queryKeys'
 import { supabase } from '../../../lib/supabase'
 import { deleteMeeting as deleteMeetingRow } from '../../../lib/queries'
+import { parseSummary } from '../../../lib/aiAnalyze'
 import { userToMember, type MeetingType } from '../../../lib/types'
 import MeetingTypeLabel from '../../../components/ui/MeetingTypeLabel'
 import { resolveProjectColor } from '../../../lib/projectColors'
@@ -176,7 +177,7 @@ function MeetingsBody({ projectId }: { projectId: string }) {
   const totalActions = meetings.reduce((s, m) => s + m.action_count, 0)
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="p-6 flex flex-col gap-6 h-full overflow-y-auto">
           {/* Toolbar */}
           <div className="flex items-end justify-between gap-4">
             <div className="flex flex-col gap-[5px]">

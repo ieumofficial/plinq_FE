@@ -8,15 +8,11 @@ import { useQuery } from '@tanstack/react-query'
 import { aiStream } from './aiClient'
 import { supabase } from './supabase'
 
-export type AgendaBucket = {
-  agendaId: string
+/** A topic the analyzer discovered from the transcript. The pre-meeting
+ *  agenda is only a hint — the model is free to invent / merge / reorder. */
+export type TopicBucket = {
+  title: string
   summary: string
-  transcript: string
-}
-
-export type OtherBucket = {
-  summary: string
-  transcript: string
 }
 
 export type ExtractedMeeting = {
@@ -29,11 +25,9 @@ export type ExtractedMeeting = {
   }[]
   followUps: string[]
   unresolved: string[]
-  /** Per-agenda summary + transcript excerpt — populated when the
-   *  meeting had agendas at analysis time. Empty array on legacy rows. */
-  byAgenda: AgendaBucket[]
-  /** Content that did not fit any agenda. Empty fields when nothing. */
-  other: OtherBucket
+  /** AI-discovered topics (replaces the old per-agenda buckets). Empty on
+   *  legacy rows that pre-date the topics field. */
+  topics: TopicBucket[]
 }
 
 export type MeetingMinutesRow = {
@@ -109,33 +103,23 @@ export function parseSummary(raw: string | null | undefined): ExtractedMeeting |
   if (trimmed.startsWith('{')) {
     try {
       const obj = JSON.parse(trimmed)
-      const byAgenda: AgendaBucket[] = []
-      if (Array.isArray(obj.byAgenda)) {
-        for (const b of obj.byAgenda) {
-          if (!b || typeof b.agendaId !== 'string') continue
-          byAgenda.push({
-            agendaId: b.agendaId,
-            summary: typeof b.summary === 'string' ? b.summary : '',
-            transcript: typeof b.transcript === 'string' ? b.transcript : '',
-          })
+      const topics: TopicBucket[] = []
+      if (Array.isArray(obj.topics)) {
+        for (const t of obj.topics) {
+          if (!t) continue
+          const title = typeof t.title === 'string' ? t.title.trim() : ''
+          const summary = typeof t.summary === 'string' ? t.summary.trim() : ''
+          if (!title || !summary) continue
+          topics.push({ title, summary })
         }
       }
-      const other: OtherBucket =
-        obj.other && typeof obj.other === 'object'
-          ? {
-              summary: typeof obj.other.summary === 'string' ? obj.other.summary : '',
-              transcript:
-                typeof obj.other.transcript === 'string' ? obj.other.transcript : '',
-            }
-          : { summary: '', transcript: '' }
       return {
         summary: obj.summary,
         keyDecisions: obj.keyDecisions ?? [],
         actionItems: obj.actionItems ?? [],
         followUps: obj.followUps ?? [],
         unresolved: obj.unresolved ?? [],
-        byAgenda,
-        other,
+        topics,
       }
     } catch {
       /* fall through */
@@ -147,8 +131,7 @@ export function parseSummary(raw: string | null | undefined): ExtractedMeeting |
     actionItems: [],
     followUps: [],
     unresolved: [],
-    byAgenda: [],
-    other: { summary: '', transcript: '' },
+    topics: [],
   }
 }
 
@@ -377,10 +360,42 @@ export async function analyzeAudio(
   }
 
   // 2. Stream-call plinq_ai.
+  return runAnalyzeStream(meetingId, 'meeting-audio', path, opts)
+}
+
+/**
+ * Re-run analysis using audio that's already in Storage from a prior pass.
+ * Used by the meeting detail "Regenerate" button so the user doesn't need
+ * to re-upload (or re-pull from Zoom) just to re-analyze with a newer
+ * prompt. `rawAudioUrl` is what we wrote into `meeting_minutes.raw_audio_url`
+ * — `<bucket>/<key inside bucket>`.
+ */
+export async function reanalyzeAudio(
+  meetingId: string,
+  rawAudioUrl: string,
+  opts: { onProgress?: (evt: AnalyzeProgressEvent) => void } = {},
+): Promise<AnalyzeAudioResult> {
+  const sep = rawAudioUrl.indexOf('/')
+  if (sep <= 0) {
+    throw new Error(
+      `raw_audio_url is not in "<bucket>/<path>" form: ${rawAudioUrl}`,
+    )
+  }
+  const bucket = rawAudioUrl.slice(0, sep)
+  const audio_path = rawAudioUrl.slice(sep + 1)
+  return runAnalyzeStream(meetingId, bucket, audio_path, opts)
+}
+
+async function runAnalyzeStream(
+  meetingId: string,
+  bucket: string,
+  audio_path: string,
+  opts: { onProgress?: (evt: AnalyzeProgressEvent) => void },
+): Promise<AnalyzeAudioResult> {
   let result: AnalyzeAudioResult | null = null
   await aiStream(
     `/meetings/${encodeURIComponent(meetingId)}/analyze-audio`,
-    { audio_path: path, bucket: 'meeting-audio' },
+    { audio_path, bucket },
     (evt) => {
       const t = evt.type as AnalyzeProgressEvent['type']
       if (t === 'done') {

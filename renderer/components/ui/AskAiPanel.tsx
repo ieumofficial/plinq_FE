@@ -5,7 +5,9 @@ import { renderMarkdown } from '../../lib/markdown'
 import {
   useAgentConversations,
   useAgentMessages,
+  useCurrentUser,
   useDeleteAgentConversation,
+  useUserProjects,
   type AgentConversation,
 } from '../../lib/hooks'
 import { queryKeys } from '../../lib/queryKeys'
@@ -79,15 +81,20 @@ const PRIORITY_CYCLE = ['urgent', 'high', 'medium', 'low'] as const
 type Props = {
   /** Close (✕) — parent toggles the panel mount. */
   onClose: () => void
-  /**
-   * Personal Agent: omit `projectId`, the server picks the user's single org
-   * unless `orgId` is also given. Project Agent: pass `projectId` and the
-   * server uses that project's org automatically.
-   */
+  /** Org the panel belongs to. Sessions are listed per-org. */
   orgId?: string
-  projectId?: string
+  /** When opened from a project page, that project starts as a default
+   *  context chip (the user can remove it). */
+  defaultContextProjectId?: string
   /** Shown in the subtitle ("About this session · {label}"). */
   scopeLabel?: string
+}
+
+type ContextChipItem = {
+  id: string
+  label: string
+  /** Optional dot color to mirror the project's brand color. */
+  color?: string
 }
 
 type View = 'chat' | 'sessions'
@@ -109,13 +116,10 @@ function newId(): string {
 export default function AskAiPanel({
   onClose,
   orgId,
-  projectId,
+  defaultContextProjectId,
   scopeLabel,
 }: Props) {
-  const scope = useMemo(
-    () => ({ orgId: orgId ?? null, projectId: projectId ?? null }),
-    [orgId, projectId],
-  )
+  const scope = useMemo(() => ({ orgId: orgId ?? null }), [orgId])
 
   const qc = useQueryClient()
   const [view, setView] = useState<View>('chat')
@@ -125,6 +129,44 @@ export default function AskAiPanel({
   const [restored, setRestored] = useState(false) // tracked to avoid re-hydrating once user starts typing
   const [sending, setSending] = useState(false)
   const [composing, setComposing] = useState(false)
+
+  // ── Active context (project chips) ─────────────────────────────
+  const { data: currentUser } = useCurrentUser()
+  const { data: userProjects = [] } = useUserProjects(currentUser?.id)
+  const [contextItems, setContextItems] = useState<ContextChipItem[]>(() =>
+    defaultContextProjectId
+      ? [{ id: defaultContextProjectId, label: scopeLabel ?? 'Project' }]
+      : [],
+  )
+  const [pickerOpen, setPickerOpen] = useState(false)
+
+  // Hydrate the default chip's label/color once user projects load.
+  useEffect(() => {
+    if (!defaultContextProjectId) return
+    const proj = userProjects.find((p) => p.id === defaultContextProjectId)
+    if (!proj) return
+    setContextItems((prev) =>
+      prev.map((c) =>
+        c.id === defaultContextProjectId
+          ? { ...c, label: proj.name, color: proj.color ?? undefined }
+          : c,
+      ),
+    )
+    // We only want to enrich once each time the project actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultContextProjectId, userProjects.length])
+
+  function addContextProject(p: { id: string; name: string; color?: string | null }) {
+    setContextItems((prev) =>
+      prev.some((c) => c.id === p.id)
+        ? prev
+        : [...prev, { id: p.id, label: p.name, color: p.color ?? undefined }],
+    )
+    setPickerOpen(false)
+  }
+  function removeContextItem(id: string) {
+    setContextItems((prev) => prev.filter((c) => c.id !== id))
+  }
 
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -242,7 +284,9 @@ export default function AskAiPanel({
           message: body,
           conversation_id: conversationId,
           org_id: conversationId ? null : orgId ?? null,
-          project_id: projectId ?? null,
+          // Active context chips drive system-prompt enrichment per turn.
+          // The conversation itself stays org-scoped (project_id NULL on BE).
+          context_project_ids: contextItems.map((c) => c.id),
         },
         (evt) => {
           const t = evt.type
@@ -538,9 +582,33 @@ export default function AskAiPanel({
                   </button>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-[5px]">
-                {scopeLabel && <ContextChip label={scopeLabel} dot />}
-                <ContextChip label="+ Add Context" dashed />
+              <div className="relative flex flex-wrap items-center gap-[5px]">
+                {contextItems.map((c) => (
+                  <ContextChip
+                    key={c.id}
+                    label={c.label}
+                    dot
+                    color={c.color}
+                    onRemove={() => removeContextItem(c.id)}
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen((v) => !v)}
+                  aria-label="Add context"
+                  className="rounded-[15px] border border-dashed border-primary-main px-[12px] py-[4px] text-[11px] text-gray-light hover:bg-white/10"
+                >
+                  + Add Context
+                </button>
+                {pickerOpen && (
+                  <ContextPicker
+                    projects={userProjects.filter(
+                      (p) => !contextItems.some((c) => c.id === p.id),
+                    )}
+                    onPick={addContextProject}
+                    onClose={() => setPickerOpen(false)}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -794,22 +862,93 @@ function ContextChip({
   label,
   dot,
   dashed,
+  color,
+  onRemove,
 }: {
   label: string
   dot?: boolean
   dashed?: boolean
+  color?: string
+  onRemove?: () => void
 }) {
+  // Map a Tailwind color token name to an actual swatch for the dot.
+  const dotBg =
+    color && color !== 'blue'
+      ? `bg-${color}-main`
+      : 'bg-blue-med'
   return (
     <span
       className={`flex items-center gap-[6px] rounded-[15px] border ${
         dashed
           ? 'border-dashed border-primary-main text-gray-light'
           : 'border-primary-main bg-white/10 text-primary-light'
-      } px-[12px] py-[4px] text-[11px]`}
+      } pl-[10px] pr-[8px] py-[4px] text-[11px]`}
     >
-      {dot && <span className="size-[6px] rounded-full bg-blue-med" />}
-      {label}
+      {dot && <span className={`size-[6px] rounded-full ${dotBg}`} />}
+      <span className="truncate max-w-[120px]">{label}</span>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Remove ${label}`}
+          className="ml-[2px] inline-flex size-[12px] items-center justify-center rounded-full text-gray-light hover:bg-white/15 hover:text-white"
+        >
+          <CloseIcon size={8} />
+        </button>
+      )}
     </span>
+  )
+}
+
+function ContextPicker({
+  projects,
+  onPick,
+  onClose,
+}: {
+  projects: { id: string; name: string; color?: string | null }[]
+  onPick: (p: { id: string; name: string; color?: string | null }) => void
+  onClose: () => void
+}) {
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!wrapRef.current) return
+      if (!wrapRef.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [onClose])
+
+  return (
+    <div
+      ref={wrapRef}
+      className="absolute left-0 top-[calc(100%+6px)] z-20 max-h-[240px] w-full overflow-y-auto rounded-[6px] border border-white/15 bg-primary-deep p-[5px] shadow-lg"
+    >
+      {projects.length === 0 ? (
+        <p className="px-[8px] py-[6px] text-[11px] italic text-gray-secondary">
+          No more projects to add.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-[1px]">
+          {projects.map((p) => (
+            <li key={p.id}>
+              <button
+                type="button"
+                onClick={() => onPick(p)}
+                className="flex w-full items-center gap-[7px] rounded-[4px] px-[8px] py-[5px] text-left hover:bg-white/10"
+              >
+                <span
+                  className={`size-[6px] shrink-0 rounded-full ${
+                    p.color && p.color !== 'blue' ? `bg-${p.color}-main` : 'bg-blue-med'
+                  }`}
+                />
+                <span className="truncate text-[11px] text-primary-light">{p.name}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -948,6 +1087,11 @@ function ProposalCard({
             {project?.description && (
               <p className="text-[12px] leading-[1.5] text-primary-light">
                 {String(project.description)}
+              </p>
+            )}
+            {typeof project?.due_date === 'string' && project.due_date && (
+              <p className="text-[10px] uppercase tracking-[1px] text-gray-light">
+                Due · {String(project.due_date)}
               </p>
             )}
           </div>

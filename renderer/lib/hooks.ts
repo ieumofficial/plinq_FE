@@ -624,21 +624,19 @@ export type AgentMessage = {
   created_at: string
 }
 
-/** List the user's recent AI conversations in (orgId, projectId) scope. */
+/** List the user's recent AI conversations in an org. Sessions are no longer
+ *  partitioned by project — context is per-message via the panel's chips. */
 export function useAgentConversations(scope: {
   orgId?: string | null
-  projectId?: string | null
   enabled?: boolean
 }) {
   const orgId = scope.orgId ?? null
-  const projectId = scope.projectId ?? null
   return useQuery({
-    queryKey: queryKeys.agentChats.list(orgId, projectId),
+    queryKey: queryKeys.agentChats.list(orgId, null),
     enabled: scope.enabled !== false,
     queryFn: async (): Promise<AgentConversation[]> => {
       const params = new URLSearchParams({ limit: '50' })
       if (orgId) params.set('org_id', orgId)
-      if (projectId) params.set('project_id', projectId)
       const r = await aiFetch(`/agent/conversations?${params.toString()}`, {
         method: 'GET',
       })

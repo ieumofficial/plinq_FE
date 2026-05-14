@@ -70,7 +70,7 @@ export async function getUserProjects(
   // 2. Fetch the projects themselves
   let q = supabase
     .from('projects')
-    .select('id, name, description, team_id, lead_id, status, color, budget, created_at')
+    .select('id, name, description, org_id, lead_id, status, color, budget, created_at')
     .in('id', projectIds)
   if (opts?.statuses && opts.statuses.length > 0) {
     q = q.in('status', opts.statuses)
@@ -156,7 +156,12 @@ export type NewProjectInput = {
   name: string
   description?: string
   color?: string
-  team_id?: string | null
+  /**
+   * Organization the project belongs to. Optional — if omitted, we look up
+   * the current user's org_memberships and use it when there's exactly
+   * one. Multiple memberships → caller must pass org_id explicitly.
+   */
+  org_id?: string
   status?: ProjectRow['status']
   /** Members to add (besides the lead, who is auto-added by trigger as admin). */
   members?: { user_id: string; role: import('./types').ProjectRoleDb }[]
@@ -167,6 +172,10 @@ export type NewProjectInput = {
 /**
  * Insert a project with the current user as `lead_id` so the
  * `handle_new_project` trigger auto-adds them to project_members.
+ *
+ * `org_id` is required by the schema. When the caller omits it we auto-
+ * resolve from the user's organization memberships (works as long as the
+ * user belongs to exactly one org — most common case for now).
  */
 export async function createProject(
   input: NewProjectInput
@@ -176,12 +185,35 @@ export async function createProject(
   } = await supabase.auth.getUser()
   if (!user) return { error: 'Not signed in' }
 
+  // Resolve org_id: explicit input → user's single org → error.
+  let orgId = input.org_id
+  if (!orgId) {
+    const { data: orgRows, error: orgErr } = await supabase
+      .from('organization_members')
+      .select('org_id')
+      .eq('user_id', user.id)
+    if (orgErr) {
+      console.error('[queries] lookup user orgs', orgErr)
+      return { error: orgErr.message }
+    }
+    if (!orgRows || orgRows.length === 0) {
+      return { error: 'You do not belong to any organization' }
+    }
+    if (orgRows.length > 1) {
+      return {
+        error:
+          'You belong to multiple organizations — choose which one to create the project in',
+      }
+    }
+    orgId = (orgRows[0] as { org_id: string }).org_id
+  }
+
   const { data, error } = await supabase
     .from('projects')
     .insert({
       name: input.name.trim(),
       description: input.description?.trim() || null,
-      team_id: input.team_id ?? null,
+      org_id: orgId,
       lead_id: user.id,
       ...(input.color ? { color: input.color } : {}),
       // status omitted → DB default 'planned' applies
@@ -512,7 +544,7 @@ export async function getUserActionItems(
   let q = supabase
     .from('tasks')
     .select(
-      'id, project_id, team_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, source_meeting_id, created_by, created_at, updated_at, projects(name, color), meetings:source_meeting_id(name, scheduled_at), users:created_by(first_name, last_name, nickname, email)'
+      'id, project_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, source_meeting_id, created_by, created_at, updated_at, projects(name, color), meetings:source_meeting_id(name, scheduled_at), users:created_by(first_name, last_name, nickname, email)'
     )
     .in('id', taskIds)
     .order('due_date', { ascending: true, nullsFirst: false })
@@ -618,7 +650,7 @@ export async function getUserUpcomingMeetings(
 export async function getProject(projectId: string): Promise<ProjectRow | null> {
   const { data, error } = await supabase
     .from('projects')
-    .select('id, name, description, team_id, lead_id, status, color, budget, created_at')
+    .select('id, name, description, org_id, lead_id, status, color, budget, created_at')
     .eq('id', projectId)
     .single()
   if (error) {
@@ -667,7 +699,7 @@ export async function getProjectTasks(projectId: string): Promise<ProjectTask[]>
   const { data: rows, error } = await supabase
     .from('tasks')
     .select(
-      'id, project_id, team_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, created_by, created_at, updated_at'
+      'id, project_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, created_by, created_at, updated_at'
     )
     .eq('project_id', projectId)
     .is('parent_task_id', null)
@@ -921,7 +953,7 @@ export async function getUserCalendarEvents(
     supabase
       .from('task_assignees')
       .select(
-        'tasks!inner(id, project_id, team_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, created_by, created_at, updated_at)'
+        'tasks!inner(id, project_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, created_by, created_at, updated_at)'
       )
       .eq('user_id', userId)
       .gte('tasks.due_date', from.toISOString().slice(0, 10))

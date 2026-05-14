@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import Input from './Input'
 import Button from './Button'
 import Icon from './Icon'
+import GlobalSearchDropdown from '../GlobalSearchDropdown'
 
 const drag: CSSProperties = { WebkitAppRegion: 'drag' } as CSSProperties
 const noDrag: CSSProperties = { WebkitAppRegion: 'no-drag' } as CSSProperties
@@ -201,12 +201,8 @@ export default function Header({
         className="flex items-center gap-[10px] pl-[10px] shrink-0"
         style={{ ...noDrag, paddingRight: isWindows ? 0 : 16 }}
       >
-        <div className="w-[240px]" style={noDrag}>
-          <Input
-            variant="search-dark"
-            placeholder="Global Search"
-            onChange={(e) => onSearchChange?.(e.target.value)}
-          />
+        <div className="w-[500px] max-w-[45vw]" style={noDrag}>
+          <GlobalSearchDropdown />
         </div>
         <Button variant="ghost" size="compact" iconLeft="Sparkle" onClick={onAskAi}>
           Ask AI

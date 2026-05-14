@@ -64,3 +64,13 @@ body {
   color: #EBEFF2;
   font-family: var(--font-sans);
 }
+
+/* AI sparkle motion — used inside the New Task AI assist banner / panel. */
+@keyframes ai-sparkle-pulse {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.85; }
+  50% { transform: scale(1.18) rotate(20deg); opacity: 1; }
+}
+.ai-sparkle-anim {
+  animation: ai-sparkle-pulse 1.4s ease-in-out infinite;
+  transform-origin: center;
+}

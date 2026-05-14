@@ -52,6 +52,10 @@ function projectHealth(p: { status: ProjectStatusDb; nextDueDate: string | null 
 const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'] as const
 type Quarter = (typeof QUARTERS)[number]
 
+/** Quarter picker — matches Figma 1455:34674 (Select dropdown, Quarter variant).
+ *  Right-aligned header showing "<Q> <year>" with caret, a scrollable list of
+ *  years (3 visible), separator rules, then a row of Q1–Q4 chips. Popover is
+ *  fixed-positioned to escape any modal/overflow clipping. */
 function QuarterPicker({
   year,
   quarter,
@@ -64,50 +68,109 @@ function QuarterPicker({
   onChange: (next: { year: number; quarter: Quarter }) => void
 }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [anchor, setAnchor] = useState<DOMRect | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
     function onDocClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const t = e.target as Node
+      if (triggerRef.current?.contains(t)) return
+      if (popupRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    function onScrollOrResize() {
+      setOpen(false)
     }
     document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
+    }
   }, [open])
 
+  const toggle = () => {
+    if (open) {
+      setOpen(false)
+      setAnchor(null)
+    } else {
+      setAnchor(triggerRef.current?.getBoundingClientRect() ?? null)
+      setOpen(true)
+    }
+  }
+
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         className="h-[32px] px-[12px] inline-flex items-center gap-[6px] rounded-[5px] border border-solid border-gray-border-light bg-white-white hover:bg-white-item text-black text-[12px]"
       >
         <span>
           {quarter} {year}
         </span>
-        <Icon name="ArrowRight" size={13} />
+        <Icon
+          name="ArrowRight"
+          size={13}
+          className={`transition-transform ${open ? '-rotate-90' : 'rotate-90'}`}
+        />
       </button>
-      {open && (
-        <div className="absolute right-0 top-[36px] z-20 w-[200px] bg-white-white border border-gray-border-light rounded-[8px] shadow-[0_8px_24px_rgba(22,36,46,0.12)] overflow-hidden">
-          <ul className="flex flex-col py-[5px]">
+      {open && anchor && (
+        <div
+          ref={popupRef}
+          style={{
+            position: 'fixed',
+            top: anchor.bottom + 4,
+            left: Math.max(8, anchor.right - 220),
+            width: 220,
+            zIndex: 100,
+          }}
+          className="bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md p-[15px] flex flex-col gap-[15px]"
+        >
+          {/* Header — current selection, right aligned */}
+          <div className="flex items-center justify-end gap-[2px] w-full">
+            <p className="text-black text-[12px] leading-none">
+              {quarter} {year}
+            </p>
+            <Icon name="ArrowRight" size={13} className="rotate-90 text-black" />
+          </div>
+
+          {/* Year list — separator after each row */}
+          <div className="flex flex-col gap-[5px] w-full">
             {years.map((y) => {
               const active = y === year
               return (
-                <li key={y}>
-                  <button
-                    type="button"
-                    onClick={() => onChange({ year: y, quarter })}
-                    className={`w-full px-[15px] py-[6px] text-left text-[12px] hover:bg-white-item ${
-                      active ? 'text-black font-semibold' : 'text-gray-main'
+                <button
+                  key={y}
+                  type="button"
+                  onClick={() => onChange({ year: y, quarter })}
+                  className="flex flex-col gap-[5px] w-full"
+                >
+                  <span
+                    className={`text-[10px] leading-[1.5] text-left w-full ${
+                      active ? 'text-black font-semibold' : 'text-black'
                     }`}
                   >
                     {y}
-                  </button>
-                </li>
+                  </span>
+                  <span className="h-px w-full bg-gray-border-light" />
+                </button>
               )
             })}
-          </ul>
-          <div className="border-t border-solid border-gray-border-light grid grid-cols-4 p-[5px] gap-[3px]">
+          </div>
+
+          {/* Quarter row */}
+          <div className="flex items-center justify-between w-full">
             {QUARTERS.map((q) => {
               const active = q === quarter
               return (
@@ -117,11 +180,12 @@ function QuarterPicker({
                   onClick={() => {
                     onChange({ year, quarter: q })
                     setOpen(false)
+                    setAnchor(null)
                   }}
-                  className={`py-[6px] text-[12px] rounded-[5px] ${
+                  className={`h-[23px] w-[35px] flex items-center justify-center rounded-[5px] text-[12px] transition-colors ${
                     active
-                      ? 'bg-white-item text-black font-semibold'
-                      : 'text-gray-main hover:bg-white-item'
+                      ? 'bg-primary-light text-primary-main font-semibold'
+                      : 'text-primary-main hover:bg-white-item'
                   }`}
                 >
                   {q}
@@ -131,7 +195,7 @@ function QuarterPicker({
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
 

@@ -8,6 +8,7 @@ import CreateNewMenu, { type CreateType } from './CreateNewMenu'
 import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
+import CreateChatSessionModal from './CreateChatSessionModal'
 import { useCurrentUser, useMyOrg, useMyOrgRole } from '../lib/hooks'
 import { useSidebarPref, useSpaceTransition } from '../lib/sidebarPref'
 
@@ -219,6 +220,12 @@ export default function PersonalAppShell({
         open={createType === 'meeting'}
         onClose={closeAll}
         onCreated={onCreated}
+      />
+      <CreateChatSessionModal
+        open={createType === 'chat'}
+        orgId={orgId}
+        onClose={closeAll}
+        onCreated={() => closeAll()}
       />
     </CreateNewContext.Provider>
   )

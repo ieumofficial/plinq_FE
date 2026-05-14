@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import DatePicker from './ui/DatePicker'
 import Input from './ui/Input'
 import Button from './ui/Button'
 import Icon from './ui/Icon'
@@ -42,6 +43,17 @@ function memberLabel(u: UserRow) {
   return u.nickname || `${u.first_name} ${u.last_name}`.trim() || u.email
 }
 
+type RoleKey = 'editor' | 'admin' | 'readonly'
+const ROLE_STYLES: Record<
+  RoleKey,
+  { label: string; bg: string; text: string }
+> = {
+  editor: { label: 'Editor', bg: 'bg-blue-light', text: 'text-blue-main' },
+  admin: { label: 'Admin', bg: 'bg-primary-dark', text: 'text-white' },
+  readonly: { label: 'Read-only', bg: 'bg-gray-extra-light', text: 'text-gray-main' },
+}
+const ROLE_ORDER: RoleKey[] = ['editor', 'admin', 'readonly']
+
 export default function CreateProjectModal({
   open,
   orgId,
@@ -62,12 +74,26 @@ export default function CreateProjectModal({
   const [description, setDescription] = useState('')
   const [leadId, setLeadId] = useState<string | null>(null)
   const [leadPickerOpen, setLeadPickerOpen] = useState(false)
+  const [leadAnchor, setLeadAnchor] = useState<DOMRect | null>(null)
+  const leadTriggerRef = useRef<HTMLButtonElement>(null)
   const [status, setStatus] = useState<ProjectStatusDb>('planned')
+  /** Due date — visual only for now; `projects` table has no due_date column.
+   *  Submitted but not persisted; see queries.ts notes. */
+  const [dueDate, setDueDate] = useState<string>('')
+  const [datePickerAnchor, setDatePickerAnchor] = useState<DOMRect | null>(null)
+  const dateTriggerRef = useRef<HTMLButtonElement>(null)
   const [memberIds, setMemberIds] = useState<string[]>([])
   const [memberRoles, setMemberRoles] = useState<Record<string, 'editor' | 'admin' | 'readonly'>>({})
   const [memberSearch, setMemberSearch] = useState('')
   const [emailInvites, setEmailInvites] = useState<{ email: string; role: ProjectRoleDb }[]>([])
   const [inviteOpen, setInviteOpen] = useState(false)
+  /** Which member-row's permission dropdown is open, and where the chip is.
+   *  `kind=user` keys to memberIds, `kind=invite` keys to emailInvites index. */
+  const [roleDropdown, setRoleDropdown] = useState<
+    | { kind: 'user'; id: string; rect: DOMRect }
+    | { kind: 'invite'; idx: number; rect: DOMRect }
+    | null
+  >(null)
 
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -102,6 +128,10 @@ export default function CreateProjectModal({
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (inviteOpen) return // InviteByEmailModal owns its own Esc handling
+        if (roleDropdown) {
+          setRoleDropdown(null)
+          return
+        }
         if (hexInputOpen) {
           setHexInputOpen(false)
           return
@@ -132,7 +162,33 @@ export default function CreateProjectModal({
     hexInputOpen,
     leadPickerOpen,
     inviteOpen,
+    roleDropdown,
   ])
+
+  // Role dropdown auto-close on outside click, scroll, or window resize.
+  // We need the ref so clicks INSIDE the dropdown aren't treated as outside —
+  // otherwise the dropdown unmounts before its onClick can fire, the click
+  // bubbles to the overlay, and the whole modal closes.
+  const roleDropdownPopupRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!roleDropdown) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (roleDropdownPopupRef.current?.contains(e.target as Node)) return
+      setRoleDropdown(null)
+    }
+    const onScrollOrResize = () => setRoleDropdown(null)
+    const id = setTimeout(() => {
+      document.addEventListener('mousedown', onMouseDown)
+    }, 0)
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
+    return () => {
+      clearTimeout(id)
+      document.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
+    }
+  }, [roleDropdown])
 
   const addedMembers = useMemo(
     () => orgMembers.filter((u) => memberIds.includes(u.id)),
@@ -354,8 +410,19 @@ export default function CreateProjectModal({
                 Project Lead *
               </label>
               <button
+                ref={leadTriggerRef}
                 type="button"
-                onClick={() => setLeadPickerOpen((v) => !v)}
+                onClick={() => {
+                  if (leadPickerOpen) {
+                    setLeadPickerOpen(false)
+                    setLeadAnchor(null)
+                  } else {
+                    setLeadAnchor(
+                      leadTriggerRef.current?.getBoundingClientRect() ?? null
+                    )
+                    setLeadPickerOpen(true)
+                  }
+                }}
                 className="bg-white-white border border-gray-border rounded-lg px-3 py-1.5 text-left flex items-center gap-2 h-[39px] hover:border-primary-main"
               >
                 {(() => {
@@ -376,13 +443,30 @@ export default function CreateProjectModal({
                           </span>
                         )}
                       </span>
-                      <Icon name="ArrowRight" size={12} style={{ color: '#94A0AA' }} />
+                      <Icon
+                        name="ArrowRight"
+                        size={12}
+                        style={{ color: '#94A0AA' }}
+                        className={`transition-transform ${
+                          leadPickerOpen ? 'rotate-90' : ''
+                        }`}
+                      />
                     </>
                   )
                 })()}
               </button>
-              {leadPickerOpen && (
-                <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white-white border border-gray-border rounded-lg shadow-lg z-10 max-h-[200px] overflow-y-auto">
+              {leadPickerOpen && leadAnchor && (
+                <div
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    position: 'fixed',
+                    top: leadAnchor.bottom + 4,
+                    left: leadAnchor.left,
+                    width: leadAnchor.width,
+                    zIndex: 100,
+                  }}
+                  className="bg-white-white border border-gray-border rounded-lg shadow-lg max-h-[260px] overflow-y-auto">
                   {[...(me ? [me] : []), ...orgMembers.filter((u) => u.id !== me?.id)].map((u) => (
                     <button
                       key={u.id}
@@ -390,6 +474,7 @@ export default function CreateProjectModal({
                       onClick={() => {
                         setLeadId(u.id)
                         setLeadPickerOpen(false)
+                        setLeadAnchor(null)
                       }}
                       className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-white-item text-left ${
                         leadId === u.id ? 'bg-blue-light/30' : ''
@@ -440,6 +525,45 @@ export default function CreateProjectModal({
             </div>
           </div>
 
+          {/* Due Date — Figma 1054:11820 adds this. Stored locally only since
+              `projects` table has no due_date column today. */}
+          <div className="flex flex-col gap-1 w-[200px]">
+            <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
+              Due Date
+            </label>
+            <button
+              ref={dateTriggerRef}
+              type="button"
+              title="Project due date isn't stored yet — visual only."
+              onClick={() => {
+                if (datePickerAnchor) setDatePickerAnchor(null)
+                else
+                  setDatePickerAnchor(
+                    dateTriggerRef.current?.getBoundingClientRect() ?? null
+                  )
+              }}
+              className="bg-white-white border border-gray-border rounded-lg px-3 h-[39px] flex items-center gap-[8px] text-left hover:border-primary-main"
+            >
+              <Icon
+                name="Calendar"
+                size={13}
+                className="text-gray-secondary shrink-0"
+              />
+              <span
+                className={`flex-1 text-[12px] ${
+                  dueDate ? 'text-black font-semibold' : 'text-gray-secondary'
+                }`}
+              >
+                {dueDate
+                  ? new Date(dueDate + 'T00:00:00').toLocaleDateString(
+                      'en-US',
+                      { month: 'long', day: 'numeric', year: 'numeric' }
+                    )
+                  : 'Pick a date'}
+              </span>
+            </button>
+          </div>
+
           {/* Members */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
@@ -456,7 +580,7 @@ export default function CreateProjectModal({
                 onClick={() => setInviteOpen(true)}
                 className="text-gray-main text-[11px] inline-flex items-center gap-1 hover:text-black"
               >
-                <Icon name="Email" size={12} />
+                <Icon name="Add" size={12} />
                 Invite by email
               </button>
             </div>
@@ -507,18 +631,9 @@ export default function CreateProjectModal({
                 <div className="divide-y divide-gray-border-light">
                   {addedMembers.map((u) => {
                     const role = memberRoles[u.id] ?? 'editor'
-                    const ROLE_STYLES = {
-                      editor: { label: 'Editor', bg: 'bg-blue-light', text: 'text-blue-main' },
-                      admin: { label: 'Admin', bg: 'bg-primary-dark', text: 'text-white' },
-                      readonly: { label: 'Read-only', bg: 'bg-gray-extra-light', text: 'text-gray-main' },
-                    } as const
                     const r = ROLE_STYLES[role]
-                    const cycle = () =>
-                      setMemberRoles((prev) => ({
-                        ...prev,
-                        [u.id]:
-                          role === 'editor' ? 'admin' : role === 'admin' ? 'readonly' : 'editor',
-                      }))
+                    const dropdownOpen =
+                      roleDropdown?.kind === 'user' && roleDropdown.id === u.id
                     return (
                       <div key={u.id} className="flex items-center justify-between px-3 py-2">
                         <div className="flex items-center gap-2 min-w-0">
@@ -539,11 +654,26 @@ export default function CreateProjectModal({
                         <div className="flex items-center gap-2 shrink-0">
                           <button
                             type="button"
-                            onClick={cycle}
+                            onClick={(e) => {
+                              if (dropdownOpen) {
+                                setRoleDropdown(null)
+                                return
+                              }
+                              const rect = (
+                                e.currentTarget as HTMLButtonElement
+                              ).getBoundingClientRect()
+                              setRoleDropdown({ kind: 'user', id: u.id, rect })
+                            }}
                             className={`inline-flex items-center gap-1 px-[10px] py-[4px] rounded-[5px] text-[10px] font-semibold uppercase tracking-[0.3px] ${r.bg} ${r.text} hover:opacity-90`}
                           >
                             {r.label}
-                            <Icon name="ArrowRight" size={11} />
+                            <Icon
+                              name="ArrowRight"
+                              size={11}
+                              className={`transition-transform ${
+                                dropdownOpen ? 'rotate-90' : ''
+                              }`}
+                            />
                           </button>
                           <button
                             type="button"
@@ -566,12 +696,9 @@ export default function CreateProjectModal({
               {emailInvites.length > 0 && (
                 <div className="divide-y divide-gray-border-light border-t border-gray-border-light">
                   {emailInvites.map((inv, i) => {
-                    const ROLE_STYLES = {
-                      editor: { label: 'Editor', bg: 'bg-blue-light', text: 'text-blue-main' },
-                      admin: { label: 'Admin', bg: 'bg-primary-dark', text: 'text-white' },
-                      readonly: { label: 'Read-only', bg: 'bg-gray-extra-light', text: 'text-gray-main' },
-                    } as const
-                    const r = ROLE_STYLES[inv.role]
+                    const r = ROLE_STYLES[inv.role as RoleKey]
+                    const dropdownOpen =
+                      roleDropdown?.kind === 'invite' && roleDropdown.idx === i
                     return (
                       <div
                         key={`${inv.email}-${i}`}
@@ -591,11 +718,29 @@ export default function CreateProjectModal({
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span
-                            className={`inline-flex items-center gap-1 px-[10px] py-[4px] rounded-[5px] text-[10px] font-semibold uppercase tracking-[0.3px] ${r.bg} ${r.text}`}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              if (dropdownOpen) {
+                                setRoleDropdown(null)
+                                return
+                              }
+                              const rect = (
+                                e.currentTarget as HTMLButtonElement
+                              ).getBoundingClientRect()
+                              setRoleDropdown({ kind: 'invite', idx: i, rect })
+                            }}
+                            className={`inline-flex items-center gap-1 px-[10px] py-[4px] rounded-[5px] text-[10px] font-semibold uppercase tracking-[0.3px] ${r.bg} ${r.text} hover:opacity-90`}
                           >
                             {r.label}
-                          </span>
+                            <Icon
+                              name="ArrowRight"
+                              size={11}
+                              className={`transition-transform ${
+                                dropdownOpen ? 'rotate-90' : ''
+                              }`}
+                            />
+                          </button>
                           <button
                             type="button"
                             onClick={() =>
@@ -651,6 +796,73 @@ export default function CreateProjectModal({
           setEmailInvites((prev) => [...prev, { email, role: role ?? 'editor' }])
         }}
       />
+
+      {/* Floating date picker for the due-date field */}
+      <DatePicker
+        anchorRect={datePickerAnchor}
+        value={dueDate || null}
+        onChange={(next) => setDueDate(next ?? '')}
+        onClose={() => setDatePickerAnchor(null)}
+      />
+
+      {/* Floating role dropdown — shared between member rows and email-invite
+       *  rows. Closed by clicking outside the modal, Esc, or scroll/resize. */}
+      {roleDropdown && (
+        <div
+          ref={roleDropdownPopupRef}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            top: roleDropdown.rect.bottom + 4,
+            left: Math.max(8, roleDropdown.rect.right - 130),
+            width: 130,
+            zIndex: 110,
+          }}
+          className="bg-white-white border border-gray-border rounded-lg shadow-lg overflow-hidden"
+        >
+          {ROLE_ORDER.map((key) => {
+            const meta = ROLE_STYLES[key]
+            const currentRole =
+              roleDropdown.kind === 'user'
+                ? memberRoles[roleDropdown.id] ?? 'editor'
+                : emailInvites[roleDropdown.idx]?.role ?? 'editor'
+            const active = key === currentRole
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  if (roleDropdown.kind === 'user') {
+                    setMemberRoles((prev) => ({ ...prev, [roleDropdown.id]: key }))
+                  } else {
+                    const idx = roleDropdown.idx
+                    setEmailInvites((prev) =>
+                      prev.map((inv, i) => (i === idx ? { ...inv, role: key } : inv))
+                    )
+                  }
+                  setRoleDropdown(null)
+                }}
+                className={`w-full px-3 py-2 text-left text-[11px] flex items-center justify-between hover:bg-white-item ${
+                  active ? 'bg-white-item' : ''
+                }`}
+              >
+                <span className={`font-semibold ${active ? 'text-black' : 'text-gray-main'}`}>
+                  {meta.label}
+                </span>
+                {active && (
+                  <span
+                    aria-hidden
+                    className="text-primary-main text-[10px] font-bold"
+                  >
+                    ✓
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -17,6 +17,7 @@ type Props = {
   priority?: Priority
   dueDate?: string
   assignees?: Member[]
+  onClick?: () => void
 }
 
 export default function Task({
@@ -26,10 +27,23 @@ export default function Task({
   priority,
   dueDate,
   assignees,
+  onClick,
 }: Props) {
   return (
     <div
-      className="bg-white-white rounded-[5px] flex flex-col gap-[10px] pt-[10px] pb-[8px] pl-[20px] pr-[10px] w-full border-l-[8px] border-solid"
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (!onClick) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className={`bg-white-white rounded-[5px] flex flex-col gap-[10px] pt-[10px] pb-[8px] pl-[20px] pr-[10px] w-full border-l-[8px] border-solid ${
+        onClick ? 'cursor-pointer hover:bg-white-item transition-colors' : ''
+      }`}
       style={{ borderLeftColor: STATUS_BORDER[status] }}
     >
       <p

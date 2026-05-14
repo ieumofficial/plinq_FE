@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import Icon, { type IconName } from './Icon'
 
-type Variant = 'primary' | 'secondary' | 'subtle' | 'tertiary'
+type Variant = 'primary' | 'secondary' | 'subtle' | 'tertiary' | 'ghost'
 type Size = 'default' | 'compact' | 'mini'
 
 type Props = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
@@ -34,6 +34,12 @@ const variantStyles: Record<Variant, { enabled: string; disabled: string }> = {
     enabled:
       'bg-white-main border border-gray-border-light text-black hover:bg-gray-extra-light',
     disabled: 'bg-white-main border border-gray-border-light text-gray-secondary',
+  },
+  // For dark surfaces (header, side menu) — outlined translucent button.
+  ghost: {
+    enabled:
+      'bg-white/[0.15] border border-gray-main text-primary-light hover:bg-white/25',
+    disabled: 'bg-white/5 border border-gray-main text-primary-light/40',
   },
 }
 

@@ -41,9 +41,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'organization', icon: 'Organization', label: 'Organization' },
 ]
 
-const FOOTER_ITEMS: NavItem[] = [
-  { key: 'settings', icon: 'Settings', label: 'Settings' },
-]
+const FOOTER_ITEMS: NavItem[] = []
 
 function routeFor(key: ActiveKey, orgId: string | null): string {
   switch (key) {
@@ -167,6 +165,7 @@ export default function PersonalAppShell({
             title={title}
             userInitials={initials}
             hasNotifications={false}
+            aiOpen={askAiOpen}
             onBack={() => router.back()}
             onForward={() => window.history.forward()}
             onCreateNew={openMenu}

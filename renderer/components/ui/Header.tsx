@@ -1,7 +1,13 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useRouter } from 'next/router'
 import Button from './Button'
 import Icon from './Icon'
 import GlobalSearchDropdown from '../GlobalSearchDropdown'
+import OrgSwitcherDropdown from '../OrgSwitcherDropdown'
+import NotificationPanel from '../NotificationPanel'
+import ProfileDropdown from '../ProfileDropdown'
+import { useCurrentUser } from '../../lib/hooks'
+import { usePresence } from '../../lib/presencePref'
 
 const drag: CSSProperties = { WebkitAppRegion: 'drag' } as CSSProperties
 const noDrag: CSSProperties = { WebkitAppRegion: 'no-drag' } as CSSProperties
@@ -19,9 +25,14 @@ type Props = {
   hasNotifications?: boolean
   /** OS hint for layout (Mac leaves room for traffic lights, Windows shows caption controls). Defaults from window.platform. */
   os?: 'darwin' | 'win32' | 'linux'
+  /** True when the Ask AI panel is open — switches button label to "Hide AI". */
+  aiOpen?: boolean
+  /** True when the notification panel is open — toggles bell visual state. */
+  notificationsOpen?: boolean
   onAskAi?: () => void
   onCreateNew?: () => void
   onNotifications?: () => void
+  onOrgClick?: () => void
   onAvatarClick?: () => void
   onSearchChange?: (value: string) => void
   onBack?: () => void
@@ -33,16 +44,30 @@ function detectOs(): 'darwin' | 'win32' | 'linux' {
   return 'darwin'
 }
 
-function OrgBlock({ orgName }: { orgName: string }) {
+function OrgBlock({
+  orgName,
+  onClick,
+  triggerRef,
+}: {
+  orgName: string
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void
+  triggerRef?: React.Ref<HTMLButtonElement>
+}) {
   return (
-    <div className="flex items-center gap-[5px]">
+    <button
+      ref={triggerRef}
+      type="button"
+      onClick={onClick}
+      style={noDrag}
+      className="flex items-center gap-[5px] -mx-[4px] px-[4px] py-[2px] rounded hover:bg-white/10 transition-colors"
+    >
       <span className="bg-primary-main text-white rounded-[2px] w-[23px] h-[23px] inline-flex items-center justify-center text-[12px] font-semibold uppercase shrink-0">
         {orgName.charAt(0)}
       </span>
       <span className="text-white text-[12px] font-semibold capitalize whitespace-nowrap truncate">
         {orgName}
       </span>
-    </div>
+    </button>
   )
 }
 
@@ -110,9 +135,12 @@ export default function Header({
   userInitials = 'YP',
   hasNotifications = false,
   os = detectOs(),
+  aiOpen = false,
+  notificationsOpen = false,
   onAskAi,
   onCreateNew,
   onNotifications,
+  onOrgClick,
   onAvatarClick,
   onSearchChange,
   onBack,
@@ -123,6 +151,25 @@ export default function Header({
   const hasGreeting = !!(eyebrow || title)
 
   const [isMaximized, setIsMaximized] = useState(false)
+  // Floating dropdown state. Each picker keeps its trigger rect so the popup
+  // can be `position: fixed` anchored to it.
+  const orgTriggerRef = useRef<HTMLButtonElement>(null)
+  const notifTriggerRef = useRef<HTMLButtonElement>(null)
+  const avatarTriggerRef = useRef<HTMLButtonElement>(null)
+  const [orgRect, setOrgRect] = useState<DOMRect | null>(null)
+  const [notifRect, setNotifRect] = useState<DOMRect | null>(null)
+  const [avatarRect, setAvatarRect] = useState<DOMRect | null>(null)
+
+  // Same data the sidebar ProfileDropdown uses — pulled here so the Header
+  // avatar can open the identical menu.
+  const router = useRouter()
+  const { data: currentUser } = useCurrentUser()
+  const [presence, setPresence] = usePresence()
+  const headerUserName = currentUser
+    ? currentUser.nickname ||
+      `${currentUser.first_name} ${currentUser.last_name}`.trim() ||
+      currentUser.email
+    : ''
 
   useEffect(() => {
     if (!isWindows || typeof window === 'undefined' || !window.ipc) return
@@ -161,7 +208,22 @@ export default function Header({
         }}
       >
         {isMac && <div style={{ width: 52, height: 12 }} aria-hidden />}
-        {orgName && <OrgBlock orgName={orgName} />}
+        {orgName && (
+          <OrgBlock
+            orgName={orgName}
+            triggerRef={orgTriggerRef}
+            onClick={() => {
+              if (orgRect) {
+                setOrgRect(null)
+                return
+              }
+              setOrgRect(
+                orgTriggerRef.current?.getBoundingClientRect() ?? null
+              )
+              onOrgClick?.()
+            }}
+          />
+        )}
       </div>
 
       {/* CENTER — nav arrows + greeting */}
@@ -205,14 +267,24 @@ export default function Header({
           <GlobalSearchDropdown />
         </div>
         <Button variant="ghost" size="compact" iconLeft="Sparkle" onClick={onAskAi}>
-          Ask AI
+          {aiOpen ? 'Hide AI' : 'Ask AI'}
         </Button>
         <Button variant="primary" size="compact" iconLeft="Add" onClick={onCreateNew}>
           Create new
         </Button>
         <button
+          ref={notifTriggerRef}
           type="button"
-          onClick={onNotifications}
+          onClick={() => {
+            if (notifRect) {
+              setNotifRect(null)
+              return
+            }
+            setNotifRect(
+              notifTriggerRef.current?.getBoundingClientRect() ?? null
+            )
+            onNotifications?.()
+          }}
           style={noDrag}
           className="relative inline-flex items-center justify-center text-primary-light p-1 rounded-md hover:bg-white/10 transition-colors"
           aria-label="Notifications"
@@ -223,8 +295,18 @@ export default function Header({
           )}
         </button>
         <button
+          ref={avatarTriggerRef}
           type="button"
-          onClick={onAvatarClick}
+          onClick={() => {
+            if (avatarRect) {
+              setAvatarRect(null)
+              return
+            }
+            setAvatarRect(
+              avatarTriggerRef.current?.getBoundingClientRect() ?? null
+            )
+            onAvatarClick?.()
+          }}
           style={noDrag}
           className="bg-primary-main text-white rounded-full w-[28px] h-[28px] inline-flex items-center justify-center text-[12px] font-semibold uppercase shrink-0"
         >
@@ -253,6 +335,30 @@ export default function Header({
           </CaptionButton>
         </div>
       )}
+
+      {/* Floating: org switcher + notification panel + profile dropdown */}
+      <OrgSwitcherDropdown
+        anchorRect={orgRect}
+        onClose={() => setOrgRect(null)}
+      />
+      <NotificationPanel
+        anchorRect={notifRect}
+        onClose={() => setNotifRect(null)}
+      />
+      <ProfileDropdown
+        anchorRect={avatarRect}
+        placement="bottom"
+        userInitials={userInitials}
+        userName={headerUserName}
+        userEmail={currentUser?.email}
+        presence={presence}
+        onPresenceChange={(next) => setPresence(next)}
+        onMyPage={() => {
+          setAvatarRect(null)
+          router.push('/my/overview')
+        }}
+        onClose={() => setAvatarRect(null)}
+      />
     </header>
   )
 }

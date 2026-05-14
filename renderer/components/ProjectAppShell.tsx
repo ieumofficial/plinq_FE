@@ -19,7 +19,11 @@ import {
   useProjectCounts,
   useUserProjects,
 } from '../lib/hooks'
-import { useSidebarPref, useSpaceTransition } from '../lib/sidebarPref'
+import {
+  useSidebarPref,
+  useSpaceTransition,
+  useStackedSidebarPref,
+} from '../lib/sidebarPref'
 import { dbStatusToUi } from '../lib/types'
 
 // ─── Create New context ─────────────────────────────────────────────────────
@@ -56,13 +60,11 @@ const PERSONAL_RAIL_ITEMS: NavItem[] = [
   { key: 'projects', icon: 'Folder', label: 'Projects' },
   { key: 'messages', icon: 'Chat', label: 'Messages' },
   { key: 'calendar', icon: 'Calendar', label: 'Calendar' },
-  { key: 'tasks', icon: 'Task', label: 'Action Items' },
+  { key: 'tasks', icon: 'Task', label: 'Tasks' },
   { key: 'organization', icon: 'Organization', label: 'Organization' },
 ]
 
-const PERSONAL_FOOTER: NavItem[] = [
-  { key: 'settings', icon: 'Settings', label: 'Settings' },
-]
+const PERSONAL_FOOTER: NavItem[] = []
 
 function personalRoute(key: string, orgId: string | null): string | null {
   switch (key) {
@@ -102,6 +104,10 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
     ? PERSONAL_RAIL_ITEMS
     : PERSONAL_RAIL_ITEMS.filter((it) => it.key !== 'organization')
   const { collapsed: stackedSidebar, toggle: toggleSidebar } = useSidebarPref()
+  const {
+    collapsed: secondaryCollapsed,
+    toggle: toggleSecondary,
+  } = useStackedSidebarPref()
   useSpaceTransition(`project:${projectId}`)
   const [switcherOpen, setSwitcherOpen] = useState(false)
   // Close the switcher whenever we navigate to a new project.
@@ -180,6 +186,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
             title=""
             userInitials={initials}
             hasNotifications={false}
+            aiOpen={askAiOpen}
             onBack={() => router.back()}
             onForward={() => window.history.forward()}
             onCreateNew={openMenu}
@@ -207,6 +214,8 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
           <StackedSideMenu
             key={`project:${projectId}`}
             spaceId={`project:${projectId}`}
+            collapsed={secondaryCollapsed}
+            onToggle={toggleSecondary}
             header={{
               kind: 'project',
               initial: projectInitial,

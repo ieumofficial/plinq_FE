@@ -1,14 +1,15 @@
 /**
- * Persistent user preference for the sidebar's collapsed state.
+ * Persistent user preferences for the two sidebars' collapsed states.
  *
- * The choice is stored in localStorage so it survives navigation and page
- * reloads. Additionally, `useSpaceTransition` auto-expands the main sidebar
- * when the user transitions out of a stacked space (Project / Organization,
- * which render a secondary panel) back into Personal space.
+ * Choices are stored in localStorage so they survive navigation and reloads.
+ * `useSpaceTransition` additionally auto-expands the main sidebar when the
+ * user transitions out of a stacked space (Project / Organization, which
+ * render a secondary panel) back into Personal space.
  */
 import { useEffect, useState } from 'react'
 
 const KEY = 'plinq.sidebar.collapsed'
+const STACKED_KEY = 'plinq.stackedSidebar.collapsed'
 
 function readInitial(): boolean {
   if (typeof window === 'undefined') return false
@@ -19,7 +20,17 @@ function readInitial(): boolean {
   }
 }
 
+function readStackedInitial(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(STACKED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 const listeners = new Set<(v: boolean) => void>()
+const stackedListeners = new Set<(v: boolean) => void>()
 
 function writeAndNotify(next: boolean) {
   try {
@@ -28,6 +39,15 @@ function writeAndNotify(next: boolean) {
     // ignore storage failures (private mode, quota)
   }
   listeners.forEach((cb) => cb(next))
+}
+
+function writeStackedAndNotify(next: boolean) {
+  try {
+    window.localStorage.setItem(STACKED_KEY, next ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+  stackedListeners.forEach((cb) => cb(next))
 }
 
 export function useSidebarPref(): {
@@ -49,6 +69,31 @@ export function useSidebarPref(): {
     collapsed,
     toggle: () => writeAndNotify(!collapsed),
     setCollapsed: (v: boolean) => writeAndNotify(v),
+  }
+}
+
+/** Persistent toggle for the secondary (stacked) sidebar shown in Project +
+ *  Organization spaces. Independent from the main sidebar so users can
+ *  collapse one without the other. */
+export function useStackedSidebarPref(): {
+  collapsed: boolean
+  toggle: () => void
+  setCollapsed: (v: boolean) => void
+} {
+  const [collapsed, setCollapsedState] = useState<boolean>(readStackedInitial)
+
+  useEffect(() => {
+    const onChange = (v: boolean) => setCollapsedState(v)
+    stackedListeners.add(onChange)
+    return () => {
+      stackedListeners.delete(onChange)
+    }
+  }, [])
+
+  return {
+    collapsed,
+    toggle: () => writeStackedAndNotify(!collapsed),
+    setCollapsed: (v: boolean) => writeStackedAndNotify(v),
   }
 }
 

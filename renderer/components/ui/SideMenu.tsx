@@ -4,6 +4,7 @@ import MenuItem from './MenuItem'
 import Button from './Button'
 import type { IconName } from './Icon'
 import ProfileDropdown from '../ProfileDropdown'
+import { useCurrentUser } from '../../lib/hooks'
 import { usePresence } from '../../lib/presencePref'
 
 export type NavItem = {
@@ -55,6 +56,7 @@ export default function SideMenu({
   const router = useRouter()
   const [presence, setPresence] = usePresence()
   const [profileRect, setProfileRect] = useState<DOMRect | null>(null)
+  const { data: currentUser } = useCurrentUser()
 
   const widthClass = stacked ? 'w-[59px]' : 'w-[200px]'
   // Less top padding now that the org block lives in the header above.
@@ -157,11 +159,12 @@ export default function SideMenu({
       </div>
       <ProfileDropdown
         anchorRect={profileRect}
+        placement="right"
+        userInitials={userInitials}
+        userName={userName}
+        userEmail={currentUser?.email}
         presence={presence}
-        onPresenceChange={(next) => {
-          setPresence(next)
-          setProfileRect(null)
-        }}
+        onPresenceChange={(next) => setPresence(next)}
         onMyPage={() => {
           setProfileRect(null)
           router.push('/my/overview')

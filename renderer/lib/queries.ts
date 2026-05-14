@@ -1173,16 +1173,19 @@ export async function getUserUpcomingMeetings(
 // ─── Project (single) ───────────────────────────────────────────────────────
 
 export async function getProject(projectId: string): Promise<ProjectRow | null> {
+  // maybeSingle so a missing row is just `null` (not the "0 rows" error
+  // that triggers TanStack Query retry storms when an URL points at a
+  // deleted / RLS-hidden project).
   const { data, error } = await supabase
     .from('projects')
     .select('id, name, description, org_id, lead_id, status, color, budget, created_at')
     .eq('id', projectId)
-    .single()
+    .maybeSingle()
   if (error) {
     console.error('[queries] getProject', error)
     return null
   }
-  return data as ProjectRow
+  return data as ProjectRow | null
 }
 
 /** Counts shown in the StackedSideMenu nav for a single project. */

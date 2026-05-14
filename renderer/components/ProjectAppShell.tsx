@@ -13,6 +13,7 @@ import CreateMeetingModal from './CreateMeetingModal'
 import {
   useCurrentUser,
   useMyOrg,
+  useMyOrgRole,
   useProject,
   useProjectCounts,
   useUserProjects,
@@ -91,9 +92,14 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
   const router = useRouter()
   const { data: user, isFetched: userFetched } = useCurrentUser()
   const { data: org } = useMyOrg(user?.id)
+  const { data: myOrgRole } = useMyOrgRole(user?.id)
   const { data: project } = useProject(projectId)
   const { data: counts } = useProjectCounts(projectId)
   const { data: userProjects = [] } = useUserProjects(user?.id)
+  const isOrgOwner = myOrgRole === 'owner'
+  const railItems = isOrgOwner
+    ? PERSONAL_RAIL_ITEMS
+    : PERSONAL_RAIL_ITEMS.filter((it) => it.key !== 'organization')
   const { collapsed: stackedSidebar, toggle: toggleSidebar } = useSidebarPref()
   useSpaceTransition(`project:${projectId}`)
   const [switcherOpen, setSwitcherOpen] = useState(false)
@@ -182,7 +188,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
         sidebar={
           <SideMenu
             sectionLabel={stackedSidebar ? undefined : 'Personal Space'}
-            items={PERSONAL_RAIL_ITEMS}
+            items={railItems}
             footerItems={PERSONAL_FOOTER}
             activeKey="projects"
             userInitials={initials}

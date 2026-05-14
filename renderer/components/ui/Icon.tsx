@@ -31,6 +31,8 @@ const ICON_NAMES = [
   'Sidebar',
   'Sparkle',
   'Task',
+  'Trash',
+  'Warning',
 ] as const
 
 export type IconName = (typeof ICON_NAMES)[number]

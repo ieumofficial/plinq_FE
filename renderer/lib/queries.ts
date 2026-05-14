@@ -644,6 +644,65 @@ export async function getOrgMembers(orgId: string): Promise<UserRow[]> {
   return out
 }
 
+export type OrgMemberWithRole = UserRow & { role: import('./types').OrgRoleDb }
+
+/** Org members with their `organization_members.role` joined in. */
+export async function getOrgMembersWithRoles(
+  orgId: string
+): Promise<OrgMemberWithRole[]> {
+  const { data, error } = await supabase
+    .from('organization_members')
+    .select('role, users(id, email, first_name, last_name, nickname, job_title)')
+    .eq('org_id', orgId)
+  if (error) {
+    console.error('[queries] getOrgMembersWithRoles', error)
+    return []
+  }
+  const out: OrgMemberWithRole[] = []
+  for (const row of data ?? []) {
+    const r = row as unknown as {
+      role: import('./types').OrgRoleDb
+      users: UserRow | UserRow[] | null
+    }
+    if (!r.users) continue
+    const users = Array.isArray(r.users) ? r.users : [r.users]
+    for (const u of users) out.push({ ...u, role: r.role })
+  }
+  return out
+}
+
+/** Add an already-registered user to an organization by email. The caller
+ *  must hold admin/owner permission (RLS enforces). Returns `not_found` if
+ *  no `public.users` row exists for the address, `already_member` if the
+ *  user is already in the org. */
+export async function inviteToOrganization(input: {
+  org_id: string
+  email: string
+  role: import('./types').OrgRoleDb
+}): Promise<
+  | { ok: true }
+  | { error: 'not_found' | 'already_member' | string }
+> {
+  const email = input.email.trim().toLowerCase()
+  const { data: userRow, error: userErr } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle()
+  if (userErr) return { error: userErr.message }
+  if (!userRow) return { error: 'not_found' }
+  const { error: insertErr } = await supabase.from('organization_members').insert({
+    org_id: input.org_id,
+    user_id: userRow.id,
+    role: input.role,
+  })
+  if (insertErr) {
+    if (insertErr.code === '23505') return { error: 'already_member' }
+    return { error: insertErr.message }
+  }
+  return { ok: true }
+}
+
 export async function getProjectMembers(projectId: string): Promise<UserRow[]> {
   const { data, error } = await supabase
     .from('project_members')

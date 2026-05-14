@@ -16,6 +16,8 @@ import {
   getChatSessions,
   getCurrentUser,
   getOrgMembers,
+  getOrgMembersWithRoles,
+  inviteToOrganization,
   getProject,
   getProjectCounts,
   getProjectDocs,
@@ -35,7 +37,7 @@ import {
 } from './queries'
 import { supabase } from './supabase'
 import { queryKeys } from './queryKeys'
-import type { ProjectRow, TaskStatusDb } from './types'
+import type { OrgRoleDb, ProjectRow, TaskStatusDb } from './types'
 
 // ─── User / org ─────────────────────────────────────────────────────────────
 
@@ -187,6 +189,82 @@ export function useOrgMembers(orgId: string | null | undefined) {
     queryFn: () => getOrgMembers(orgId!),
     enabled: !!orgId,
     staleTime: 60 * 1000,
+  })
+}
+
+export function useOrgMembersWithRoles(orgId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.members.orgWithRoles(orgId ?? ''),
+    queryFn: () => getOrgMembersWithRoles(orgId!),
+    enabled: !!orgId,
+    staleTime: 60 * 1000,
+  })
+}
+
+/** Add an existing user to the org by email. */
+export function useInviteToOrg(orgId: string | null | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { email: string; role: OrgRoleDb }) => {
+      if (!orgId) throw new Error('orgId required')
+      const result = await inviteToOrganization({
+        org_id: orgId,
+        email: input.email,
+        role: input.role,
+      })
+      if ('error' in result) {
+        if (result.error === 'not_found') {
+          throw new Error(
+            "We couldn't find a registered user with that email. Ask them to sign up first."
+          )
+        }
+        if (result.error === 'already_member') {
+          throw new Error('That user is already in this organization.')
+        }
+        throw new Error(result.error)
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.members.all })
+    },
+  })
+}
+
+/** Update a member's org role (owner/admin/member). */
+export function useUpdateOrgMemberRole(orgId: string | null | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { userId: string; role: OrgRoleDb }) => {
+      if (!orgId) throw new Error('orgId required')
+      const { error } = await supabase
+        .from('organization_members')
+        .update({ role: input.role })
+        .eq('org_id', orgId)
+        .eq('user_id', input.userId)
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.members.all })
+    },
+  })
+}
+
+/** Remove a user from an organization's membership. Invalidates member caches. */
+export function useRemoveOrgMember(orgId: string | null | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      if (!orgId) throw new Error('orgId required')
+      const { error } = await supabase
+        .from('organization_members')
+        .delete()
+        .eq('org_id', orgId)
+        .eq('user_id', userId)
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.members.all })
+    },
   })
 }
 

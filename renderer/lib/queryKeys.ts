@@ -47,6 +47,8 @@ export const queryKeys = {
   members: {
     all: ['members'] as const,
     org: (orgId: string) => ['members', 'org', orgId] as const,
+    orgWithRoles: (orgId: string) =>
+      ['members', 'org', orgId, 'roles'] as const,
     project: (projectId: string) => ['members', 'project', projectId] as const,
     projectWithRoles: (projectId: string) =>
       ['members', 'project', projectId, 'roles'] as const,

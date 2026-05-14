@@ -16,6 +16,7 @@ import Table, {
 } from '../../../components/ui/Table'
 import {
   useCurrentUser,
+  useDeleteProject,
   useMyOrg,
   useOrgMembers,
   useOrgProjects,
@@ -23,6 +24,7 @@ import {
 import { usePinnedProjects } from '../../../lib/pinPref'
 import { userToMember, type ProjectStatusDb } from '../../../lib/types'
 import type { ProjectWithStats } from '../../../lib/queries'
+import DeleteConfirmModal from '../../../components/DeleteConfirmModal'
 
 type Health = 'on-track' | 'at-risk' | 'delayed' | 'healthy'
 
@@ -194,10 +196,12 @@ function StatusFilter({
   projects,
   selected,
   onToggle,
+  onToggleAll,
 }: {
   projects: ProjectWithStats[]
   selected: Set<FilterKey>
   onToggle: (key: FilterKey) => void
+  onToggleAll: (next: boolean) => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -242,6 +246,14 @@ function StatusFilter({
       </Button>
       {open && (
         <div className="absolute top-[40px] right-0 z-20 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md p-[10px] flex flex-col gap-[2px] min-w-[240px]">
+          <FilterChecklist
+            label="All"
+            count={projects.length}
+            color="#16242E"
+            checked={allOn}
+            onChange={(next) => onToggleAll(next)}
+          />
+          <div className="border-t border-solid border-gray-border-light my-[3px]" />
           {FILTER_OPTIONS.map((opt) => (
             <FilterChecklist
               key={opt.key}
@@ -254,100 +266,6 @@ function StatusFilter({
           ))}
         </div>
       )}
-    </div>
-  )
-}
-
-// ─── Row menu ────────────────────────────────────────────────────────────────
-
-function ProjectRowMenu({
-  open,
-  isPinned,
-  anchorRect,
-  onClose,
-  onOpenProject,
-  onTogglePin,
-}: {
-  open: boolean
-  isPinned: boolean
-  /** Trigger button's bounding rect at the moment the menu was opened.
-   *  Rendered into a portal with `position: fixed` so it escapes the
-   *  table's `overflow-hidden` / scroll containers — hence viewport
-   *  coordinates rather than a positioned ancestor. Null when closed. */
-  anchorRect: DOMRect | null
-  onClose: () => void
-  onOpenProject: () => void
-  onTogglePin: () => void
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onDocClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
-    // Any scroll detaches the menu from its anchor — closing matches
-    // standard desktop popover behavior. Capture phase catches nested
-    // scroll containers (the table's overflow-y-auto) too.
-    function onScrollOrResize() {
-      onClose()
-    }
-    document.addEventListener('mousedown', onDocClick)
-    document.addEventListener('keydown', onKey)
-    window.addEventListener('scroll', onScrollOrResize, true)
-    window.addEventListener('resize', onScrollOrResize)
-    return () => {
-      document.removeEventListener('mousedown', onDocClick)
-      document.removeEventListener('keydown', onKey)
-      window.removeEventListener('scroll', onScrollOrResize, true)
-      window.removeEventListener('resize', onScrollOrResize)
-    }
-  }, [open, onClose])
-
-  if (!open || !anchorRect || typeof window === 'undefined') return null
-
-  // Fixed positioning escapes the table's overflow-hidden / scroll
-  // containers without needing a portal (none of the ancestors create a
-  // fixed-positioning containing block via transform/filter/perspective).
-  const style: React.CSSProperties = {
-    position: 'fixed',
-    top: anchorRect.bottom + 4,
-    right: Math.max(8, window.innerWidth - anchorRect.right),
-    minWidth: 180,
-  }
-
-  return (
-    <div
-      ref={ref}
-      onClick={(e) => e.stopPropagation()}
-      style={style}
-      className="z-50 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md py-[5px]"
-    >
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          onOpenProject()
-        }}
-        className="w-full flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left text-black hover:bg-white-item transition-colors"
-      >
-        <Icon name="ArrowRight" size={13} className="text-gray-main" />
-        <span>Open project</span>
-      </button>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          onTogglePin()
-        }}
-        className="w-full flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left text-black hover:bg-white-item transition-colors"
-      >
-        <Icon name="Pin" size={13} className="text-gray-main" />
-        <span>{isPinned ? 'Unpin' : 'Pin'}</span>
-      </button>
     </div>
   )
 }
@@ -381,7 +299,7 @@ function StatCard({
   pillTextColor: string
 }) {
   return (
-    <div className="flex-1 min-w-0 bg-white-white border border-gray-border-light rounded-[10px] px-[15px] py-[15px] flex items-center justify-between gap-[10px]">
+    <div className="flex-1 min-w-0 bg-white-white border border-gray-border-light rounded-[10px] px-[15px] py-[15px] flex items-end justify-between gap-[10px]">
       <div className="flex flex-col gap-[5px] min-w-0">
         <p
           className="text-[10px] font-medium uppercase tracking-[1.5px] truncate"
@@ -460,7 +378,9 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
   const orgName = org?.name ?? 'Organization'
   const { data: members = [] } = useOrgMembers(orgId)
   const { data: allProjects = [] } = useOrgProjects(orgId)
-  const { isPinned, toggle: togglePin } = usePinnedProjects(orgId)
+  const { isPinned } = usePinnedProjects(orgId)
+  const deleteProject = useDeleteProject()
+  const [deleting, setDeleting] = useState<ProjectWithStats | null>(null)
 
   // Quarter picker — initialized to today's quarter.
   const today = useMemo(() => new Date(), [])
@@ -481,12 +401,8 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
       return next
     })
   }
-
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
-  const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null)
-  const closeRowMenu = () => {
-    setOpenMenuId(null)
-    setMenuAnchorRect(null)
+  const toggleAllFilters = (next: boolean) => {
+    setStatusFilter(next ? new Set(FILTER_OPTIONS.map((o) => o.key)) : new Set())
   }
 
   // Quarter scope — by `dueDate` (latest task due date = project end).
@@ -575,6 +491,7 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
             projects={quarterScoped}
             selected={statusFilter}
             onToggle={toggleFilter}
+            onToggleAll={toggleAllFilters}
           />
           <Button size="compact" iconLeft="Add" onClick={() => open('project')}>
             New project
@@ -707,37 +624,17 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
                     </span>
                   </TableCell>
                   <TableCell width="w-[30px]" align="right">
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          if (openMenuId === p.id) {
-                            closeRowMenu()
-                          } else {
-                            setMenuAnchorRect(e.currentTarget.getBoundingClientRect())
-                            setOpenMenuId(p.id)
-                          }
-                        }}
-                        className="text-gray-secondary hover:text-black inline-flex items-center justify-center w-[24px] h-[24px] rounded transition-colors"
-                        aria-label="More"
-                      >
-                        <Icon name="Dot-Menu" size={15} />
-                      </button>
-                      <ProjectRowMenu
-                        open={openMenuId === p.id}
-                        isPinned={pinned}
-                        anchorRect={openMenuId === p.id ? menuAnchorRect : null}
-                        onClose={closeRowMenu}
-                        onOpenProject={() => {
-                          closeRowMenu()
-                          router.push(`/p/${p.id}/dashboard`)
-                        }}
-                        onTogglePin={() => {
-                          togglePin(p.id)
-                          closeRowMenu()
-                        }}
-                      />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDeleting(p)
+                      }}
+                      className="text-red-main hover:bg-red-50 inline-flex items-center justify-center w-[24px] h-[24px] rounded transition-colors"
+                      aria-label="Delete project"
+                    >
+                      <Icon name="Trash" size={15} />
+                    </button>
                   </TableCell>
                 </TableRow>
               )
@@ -745,6 +642,63 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
           )}
         </div>
       </Table>
+
+      <DeleteConfirmModal
+        open={deleting !== null}
+        type="project"
+        title="Delete this project?"
+        body={
+          <>
+            This action is <strong className="font-bold">permanent</strong>. The
+            project will be removed for everyone in the workspace.
+          </>
+        }
+        subject={
+          deleting && (
+            <div className="flex items-center gap-[10px] min-w-0">
+              <ProjectLabel
+                name={deleting.name}
+                color={deleting.color ?? 'blue'}
+                size="md"
+              />
+              <div className="flex flex-col gap-[3px] min-w-0">
+                <p className="text-black text-[12px] font-semibold truncate">
+                  {deleting.name}
+                </p>
+                <p className="text-gray-main text-[8px] truncate">
+                  {deleting.members.length} member
+                  {deleting.members.length === 1 ? '' : 's'} ·{' '}
+                  {deleting.tasksTotal} task
+                  {deleting.tasksTotal === 1 ? '' : 's'}
+                  {deleting.dueDate ? ` · due ${formatDue(deleting.dueDate)}` : ''}
+                </p>
+              </div>
+            </div>
+          )
+        }
+        consequences={
+          deleting
+            ? [
+                `All ${deleting.tasksTotal} task${
+                  deleting.tasksTotal === 1 ? '' : 's'
+                }, meeting transcripts, recordings, and AI summaries will be deleted`,
+                'All files from the knowledge base will be deleted',
+                `Notifies all ${deleting.members.length} member${
+                  deleting.members.length === 1 ? '' : 's'
+                } · they will see the project removed from their end immediately`,
+              ]
+            : []
+        }
+        confirmLabel="Delete project"
+        submitting={deleteProject.isPending}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => {
+          if (!deleting) return
+          deleteProject.mutate(deleting.id, {
+            onSuccess: () => setDeleting(null),
+          })
+        }}
+      />
     </div>
   )
 }

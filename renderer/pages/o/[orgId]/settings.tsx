@@ -4,7 +4,6 @@ import { useRouter } from 'next/router'
 import OrganizationAppShell from '../../../components/OrganizationAppShell'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
-import ProjectLabel, { type ProjectColorKey } from '../../../components/ui/ProjectLabel'
 import UserGroup from '../../../components/ui/UserGroup'
 import Icon from '../../../components/ui/Icon'
 import {
@@ -14,16 +13,24 @@ import {
 } from '../../../lib/hooks'
 import { userToMember } from '../../../lib/types'
 
-const PALETTE: ProjectColorKey[] = [
-  'blue',
-  'green',
-  'amber',
-  'red',
-  'purple',
-  'turquoise',
+type OrgColorKey =
+  | 'blue'
+  | 'green'
+  | 'red'
+  | 'brown'
+  | 'purple'
+  | 'turquoise'
+
+const PALETTE: { key: OrgColorKey; hex: string }[] = [
+  { key: 'blue', hex: '#2D5A9E' },
+  { key: 'green', hex: '#2F6B45' },
+  { key: 'red', hex: '#9B3838' },
+  { key: 'brown', hex: '#8A5A1E' },
+  { key: 'purple', hex: '#5B3D8A' },
+  { key: 'turquoise', hex: '#558589' },
 ]
 
-function colorMatches(stored: string | null | undefined, key: ProjectColorKey) {
+function colorMatches(stored: string | null | undefined, key: OrgColorKey) {
   if (!stored) return key === 'blue'
   return stored === key
 }
@@ -110,7 +117,7 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
   const orgName = org?.name ?? 'Organization'
 
   return (
-    <div className="flex-1 min-h-0 p-[50px] flex flex-col gap-[15px] overflow-hidden">
+    <div className="flex-1 min-h-0 p-[50px] flex flex-col gap-[15px] overflow-y-auto">
       {/* TITLE */}
       <div className="shrink-0 flex flex-col gap-[5px]">
         <p className="text-[#9b3838] text-[10px] font-medium uppercase tracking-[1.5px]">
@@ -128,8 +135,8 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
       </div>
 
       {/* MAIN CARD */}
-      <div className="flex-1 min-h-0 flex flex-col gap-[10px] overflow-hidden">
-        <div className="flex-1 min-h-0 bg-white-white border border-gray-border-light rounded-[10px] p-[25px] flex flex-col gap-[25px] overflow-y-auto">
+      <div className="shrink-0 flex flex-col gap-[10px]">
+        <div className="bg-white-white border border-gray-border-light rounded-[15px] p-[25px] flex flex-col gap-[25px]">
           {/* Header — big avatar + name + joined */}
           <div className="flex items-center gap-[15px]">
             <span
@@ -161,6 +168,7 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
             label="Organization name"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            className="!max-w-none"
           />
 
           {/* Organization colour */}
@@ -170,21 +178,29 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
                 Organization colour
               </p>
               <div className="flex items-center gap-[5px]">
-                {PALETTE.map((c) => {
-                  const selected = colorMatches(color, c)
+                {PALETTE.map(({ key, hex }) => {
+                  const selected = colorMatches(color, key)
                   return (
                     <button
-                      key={c}
+                      key={key}
                       type="button"
-                      onClick={() => setColor(c)}
-                      className={`rounded-[5px] transition-shadow ${
-                        selected
-                          ? 'ring-2 ring-primary-main ring-offset-2'
-                          : 'hover:ring-1 hover:ring-gray-border'
-                      }`}
-                      aria-label={`Use ${c} palette`}
+                      onClick={() => setColor(key)}
+                      style={{
+                        backgroundColor: hex,
+                        borderColor: selected ? '#455E6A' : 'transparent',
+                      }}
+                      className="w-[30px] h-[30px] rounded-[5px] border-[1.5px] border-solid inline-flex items-center justify-center transition-colors"
+                      aria-label={`Use ${key} palette`}
+                      aria-pressed={selected}
                     >
-                      <ProjectLabel name={initialLetter} color={c} size="md" />
+                      <span
+                        className="text-white text-[14px] font-bold uppercase"
+                        style={{
+                          fontFamily: 'Geist Mono, ui-monospace, monospace',
+                        }}
+                      >
+                        {initialLetter}
+                      </span>
                     </button>
                   )
                 })}
@@ -217,14 +233,14 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
 
             <div className="border border-gray-border-light rounded-[5px] overflow-hidden">
               {/* Search */}
-              <div className="flex items-center gap-[10px] px-[10px] py-[10px] border-b border-solid border-gray-border-light">
-                <Icon name="Search" size={15} />
+              <div className="flex items-center gap-[10px] px-[10px] py-[10px] bg-white-item border-b border-solid border-gray-border-light">
+                <Icon name="Search" size={15} className="text-gray-main" />
                 <input
                   type="text"
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
                   placeholder="Add team or member · Start typing a name"
-                  className="flex-1 bg-transparent outline-none text-[12px] text-black placeholder:text-gray-secondary"
+                  className="flex-1 bg-transparent outline-none text-[12px] text-black placeholder:text-gray-main"
                 />
               </div>
 
@@ -307,7 +323,7 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
         </div>
 
         {/* SAVE BAR */}
-        <div className="shrink-0 bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[20px] flex items-center justify-end gap-[15px]">
+        <div className="shrink-0 bg-white-white border border-gray-border-light rounded-[15px] px-[20px] py-[20px] flex items-center justify-end gap-[15px]">
           <span className="text-gray-secondary text-[12px]">
             {pickedMembers.length} members
           </span>

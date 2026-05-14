@@ -45,6 +45,8 @@ export type MeetingRecurrence = 'once' | 'every_day' | 'every_week' | 'every_yea
 
 export type ProjectRoleDb = 'editor' | 'admin' | 'readonly'
 
+export type OrgRoleDb = 'owner' | 'admin' | 'member'
+
 // ─── Chat ───────────────────────────────────────────────────────────────────
 
 export type ChatSessionKind = 'channel' | 'dm'

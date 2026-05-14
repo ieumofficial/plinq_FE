@@ -41,6 +41,7 @@ import {
 import { supabase } from './supabase'
 import { queryKeys } from './queryKeys'
 import type { OrgRoleDb, ProjectRow, TaskStatusDb } from './types'
+import { aiFetch } from './aiClient'
 
 // ─── User / org ─────────────────────────────────────────────────────────────
 
@@ -542,6 +543,92 @@ export function useDeleteChatSession() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.chat.all })
+    },
+  })
+}
+
+// ─── AI agent conversations ────────────────────────────────────────────────
+
+export type AgentConversation = {
+  id: string
+  org_id: string | null
+  project_id: string | null
+  title: string | null
+  created_at: string
+}
+
+export type AgentMessage = {
+  id: string
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  content: string
+  created_at: string
+}
+
+/** List the user's recent AI conversations in (orgId, projectId) scope. */
+export function useAgentConversations(scope: {
+  orgId?: string | null
+  projectId?: string | null
+  enabled?: boolean
+}) {
+  const orgId = scope.orgId ?? null
+  const projectId = scope.projectId ?? null
+  return useQuery({
+    queryKey: queryKeys.agentChats.list(orgId, projectId),
+    enabled: scope.enabled !== false,
+    queryFn: async (): Promise<AgentConversation[]> => {
+      const params = new URLSearchParams({ limit: '50' })
+      if (orgId) params.set('org_id', orgId)
+      if (projectId) params.set('project_id', projectId)
+      const r = await aiFetch(`/agent/conversations?${params.toString()}`, {
+        method: 'GET',
+      })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const j = await r.json()
+      return j.conversations as AgentConversation[]
+    },
+  })
+}
+
+/** Fetch one conversation's messages. */
+export function useAgentMessages(conversationId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.agentChats.messages(conversationId ?? ''),
+    enabled: !!conversationId,
+    queryFn: async (): Promise<{
+      conversation: AgentConversation
+      messages: AgentMessage[]
+    }> => {
+      const r = await aiFetch(
+        `/agent/conversations/${conversationId}/messages?limit=200`,
+        { method: 'GET' },
+      )
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      return r.json()
+    },
+  })
+}
+
+/** Delete an AI conversation. Invalidates the list cache. */
+export function useDeleteAgentConversation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const r = await aiFetch(`/agent/conversations/${conversationId}`, {
+        method: 'DELETE',
+      })
+      if (!r.ok) {
+        let detail = `HTTP ${r.status}`
+        try {
+          const j = await r.json()
+          detail = typeof j.detail === 'string' ? j.detail : detail
+        } catch {
+          /* keep status */
+        }
+        throw new Error(detail)
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.agentChats.all })
     },
   })
 }

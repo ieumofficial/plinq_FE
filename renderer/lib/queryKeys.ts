@@ -69,4 +69,15 @@ export const queryKeys = {
     messages: (sessionId: string) => ['chat', 'messages', sessionId] as const,
     members: (sessionId: string) => ['chat', 'members', sessionId] as const,
   },
+
+  // AI agent conversations (separate from user-to-user `chat` above).
+  agentChats: {
+    all: ['agentChats'] as const,
+    list: (
+      orgId: string | null,
+      projectId: string | null,
+    ) => ['agentChats', 'list', orgId, projectId] as const,
+    messages: (conversationId: string) =>
+      ['agentChats', 'messages', conversationId] as const,
+  },
 }

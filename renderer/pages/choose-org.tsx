@@ -26,10 +26,22 @@ export default function ChooseOrgPage() {
 
   useEffect(() => {
     async function fetchData() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      // The login page does setSession() then router.replace() — depending
+      // on where supabase-js writes its storage, the new page can land
+      // here before the session is observable. Retry briefly before
+      // giving up and bouncing back to the landing page.
+      let user: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] = null
+      for (let i = 0; i < 6; i++) {
+        const { data } = await supabase.auth.getUser()
+        if (data.user) {
+          user = data.user
+          break
+        }
+        await new Promise((r) => setTimeout(r, 150))
+      }
       if (!user) {
+        // eslint-disable-next-line no-console
+        console.warn('[choose-org] no auth session after retries — sending back to /')
         router.push('/')
         return
       }

@@ -19,17 +19,23 @@ export default function LoginPage() {
     if (typeof window === 'undefined' || !window.ipc) return
     const cleanup = window.ipc.on(
       'auth-callback',
-      (tokens: { access_token: string; refresh_token: string }) => {
-        supabase.auth
-          .setSession({
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-          })
-          .then(({ error }) => {
-            if (!error) {
-              router.push('/choose-org')
-            }
-          })
+      async (tokens: { access_token: string; refresh_token: string }) => {
+        const { data, error } = await supabase.auth.setSession({
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+        })
+        if (error) {
+          // eslint-disable-next-line no-console
+          console.error('[auth] setSession failed:', error)
+          return
+        }
+        if (!data.session || !data.user) {
+          // eslint-disable-next-line no-console
+          console.error('[auth] setSession returned without a session/user', data)
+          return
+        }
+        // setSession committed — getUser will succeed on the next page now.
+        router.replace('/choose-org')
       }
     )
     return cleanup

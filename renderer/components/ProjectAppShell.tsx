@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/router'
 import AppLayout from './ui/AppLayout'
+import AskAiPanel from './ui/AskAiPanel'
 import SideMenu, { type NavItem } from './ui/SideMenu'
 import StackedSideMenu, { type StackedNavItem } from './ui/StackedSideMenu'
 import Header from './ui/Header'
@@ -99,6 +100,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [createType, setCreateType] = useState<CreateType | null>(null)
+  const [askAiOpen, setAskAiOpen] = useState(false)
 
   const initials = user
     ? `${user.first_name[0] ?? ''}${user.last_name[0] ?? ''}`.toUpperCase()
@@ -158,6 +160,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
             onBack={() => router.back()}
             onForward={() => window.history.forward()}
             onCreateNew={openMenu}
+            onAskAi={() => setAskAiOpen((v) => !v)}
           />
         }
         sidebar={
@@ -248,6 +251,15 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
               )
             }
           />
+        }
+        aiPanel={
+          askAiOpen ? (
+            <AskAiPanel
+              onClose={() => setAskAiOpen(false)}
+              projectId={projectId}
+              scopeLabel={projectName}
+            />
+          ) : undefined
         }
       >
         {children}

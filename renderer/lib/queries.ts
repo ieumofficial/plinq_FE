@@ -605,6 +605,44 @@ export async function createMeeting(
   return { id: firstId, instances: meetingIds.length }
 }
 
+/**
+ * Delete a meeting plus its dependent rows. We clear children explicitly
+ * because we don't rely on `ON DELETE CASCADE` being set for every FK in
+ * this schema — tasks that originated from this meeting keep existing,
+ * we just null out their `source_meeting_id` so the tasks live on.
+ */
+export async function deleteMeeting(
+  meetingId: string,
+): Promise<{ ok: true } | { error: string }> {
+  // Null out the task back-reference so tasks survive the meeting delete.
+  await supabase
+    .from('tasks')
+    .update({ source_meeting_id: null })
+    .eq('source_meeting_id', meetingId)
+
+  for (const table of [
+    'meeting_attendees',
+    'meeting_agendas',
+    'meeting_invites',
+    'meeting_minutes',
+    'transcript_segments',
+    'meeting_decisions',
+  ]) {
+    const { error: e } = await supabase
+      .from(table)
+      .delete()
+      .eq('meeting_id', meetingId)
+    if (e) console.warn(`[deleteMeeting] ${table}:`, e.message)
+  }
+
+  const { error } = await supabase
+    .from('meetings')
+    .delete()
+    .eq('id', meetingId)
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
 export async function addMeetingInvite(input: {
   meeting_id: string
   email: string

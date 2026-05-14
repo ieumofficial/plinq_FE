@@ -39,7 +39,7 @@ function OrgBlock({ orgName }: { orgName: string }) {
       <span className="bg-primary-main text-white rounded-[2px] w-[23px] h-[23px] inline-flex items-center justify-center text-[12px] font-semibold uppercase shrink-0">
         {orgName.charAt(0)}
       </span>
-      <span className="text-black text-[12px] font-semibold capitalize whitespace-nowrap truncate">
+      <span className="text-white text-[12px] font-semibold capitalize whitespace-nowrap truncate">
         {orgName}
       </span>
     </div>
@@ -63,8 +63,8 @@ function CaptionButton({
       onClick={onClick}
       style={noDrag}
       aria-label={ariaLabel}
-      className={`w-[46px] h-full inline-flex items-center justify-center text-black transition-colors ${
-        variant === 'close' ? 'hover:bg-red-med hover:text-white' : 'hover:bg-gray-extra-light'
+      className={`w-[46px] h-full inline-flex items-center justify-center text-white-white transition-colors ${
+        variant === 'close' ? 'hover:bg-red-med hover:text-white' : 'hover:bg-white/10'
       }`}
     >
       {children}
@@ -91,7 +91,7 @@ function RestoreIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
       <rect x="2.5" y="0.5" width="7" height="7" stroke="currentColor" strokeWidth="1" />
-      <rect x="0.5" y="2.5" width="7" height="7" stroke="currentColor" strokeWidth="1" fill="#F8F9FA" />
+      <rect x="0.5" y="2.5" width="7" height="7" stroke="currentColor" strokeWidth="1" fill="#2E434E" />
     </svg>
   )
 }
@@ -139,8 +139,12 @@ export default function Header({
 
   return (
     <header
-      className="h-[64px] w-full flex items-stretch shrink-0 border-b border-solid border-gray-border"
-      style={{ ...drag, backgroundColor: '#F8F9FA' }}
+      className="h-[64px] w-full flex items-stretch shrink-0 border-b border-solid border-gray-main"
+      style={{
+        ...drag,
+        // Figma 967:12202 — near-vertical primary-dark → primary-deep gradient.
+        backgroundImage: 'linear-gradient(179.32deg, #2E434E 0%, #1F2F38 100%)',
+      }}
     >
       {/* LEFT 200px — Mac: traffic lights (left) + Org block (right) via justify-between.
           Windows: org block left-aligned. macOS draws its own traffic lights via
@@ -166,7 +170,7 @@ export default function Header({
           <button
             type="button"
             onClick={onBack}
-            className="p-1 rounded text-primary-main hover:bg-gray-extra-light transition-colors"
+            className="p-1 rounded text-primary-light hover:bg-white/10 transition-colors"
             aria-label="Back"
           >
             <Icon name="ArrowLeft" size={15} />
@@ -174,7 +178,7 @@ export default function Header({
           <button
             type="button"
             onClick={onForward}
-            className="p-1 rounded text-primary-main hover:bg-gray-extra-light transition-colors"
+            className="p-1 rounded text-primary-light hover:bg-white/10 transition-colors"
             aria-label="Forward"
           >
             <Icon name="ArrowRight" size={15} />
@@ -183,11 +187,11 @@ export default function Header({
         {hasGreeting && (
           <div className="flex flex-col gap-[5px] min-w-0 flex-1" style={drag}>
             {eyebrow && (
-              <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px] truncate">
+              <p className="text-gray-secondary text-[10px] font-medium uppercase tracking-[1.5px] truncate">
                 {eyebrow}
               </p>
             )}
-            {title && <p className="text-black text-[14px] font-semibold truncate">{title}</p>}
+            {title && <p className="text-white text-[14px] font-semibold truncate">{title}</p>}
           </div>
         )}
       </div>
@@ -199,27 +203,27 @@ export default function Header({
       >
         <div className="w-[240px]" style={noDrag}>
           <Input
-            variant="search"
+            variant="search-dark"
             placeholder="Global Search"
             onChange={(e) => onSearchChange?.(e.target.value)}
           />
         </div>
-        <Button variant="secondary" size="compact" iconLeft="Sparkle" onClick={onAskAi}>
+        <Button variant="ghost" size="compact" iconLeft="Sparkle" onClick={onAskAi}>
           Ask AI
         </Button>
-        <Button size="compact" iconLeft="Add" onClick={onCreateNew}>
+        <Button variant="primary" size="compact" iconLeft="Add" onClick={onCreateNew}>
           Create new
         </Button>
         <button
           type="button"
           onClick={onNotifications}
           style={noDrag}
-          className="relative inline-flex items-center justify-center text-black p-1 rounded-md hover:bg-gray-extra-light transition-colors"
+          className="relative inline-flex items-center justify-center text-primary-light p-1 rounded-md hover:bg-white/10 transition-colors"
           aria-label="Notifications"
         >
           <Icon name="Notification" size={18} />
           {hasNotifications && (
-            <span className="absolute top-1 right-1 w-[5px] h-[5px] rounded-full bg-red-med" />
+            <span className="absolute top-1 right-1 w-[5px] h-[5px] rounded-full bg-red-notification" />
           )}
         </button>
         <button

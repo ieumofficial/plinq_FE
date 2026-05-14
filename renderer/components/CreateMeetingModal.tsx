@@ -9,6 +9,24 @@ import { useCurrentUser, useProjectMembers, useUserProjects } from '../lib/hooks
 import { queryKeys } from '../lib/queryKeys'
 import type { MeetingRecurrence, MeetingType, UserRow } from '../lib/types'
 import InviteByEmailModal from './InviteByEmailModal'
+import { zoomBackend } from '../lib/zoomBackend'
+import { supabase } from '../lib/supabase'
+
+type WhenMode = 'now' | 'later'
+
+/** YYYY-MM-DD in local time. */
+function localDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+/** HH:MM (24h) in local time. */
+function localTime(d: Date): string {
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
+}
 
 type Props = {
   open: boolean
@@ -36,9 +54,12 @@ const MEETING_TYPES: {
   },
 ]
 
-const LOCATIONS: { key: 'zoom' | 'in_person'; label: string }[] = [
-  { key: 'zoom', label: 'Zoom' },
+// `disabled: true` keeps the option visible (so future Zoom support
+// has a stable slot) but the toggle won't switch to it. Phase 3.5
+// flips this back on alongside the zoom-* endpoints in plinq_ai.
+const LOCATIONS: { key: 'zoom' | 'in_person'; label: string; disabled?: boolean }[] = [
   { key: 'in_person', label: 'In-person' },
+  { key: 'zoom', label: 'Zoom (soon)', disabled: true },
 ]
 
 const RECURRENCES: { key: MeetingRecurrence; label: string }[] = [
@@ -50,6 +71,22 @@ const RECURRENCES: { key: MeetingRecurrence; label: string }[] = [
 
 function memberLabel(u: UserRow) {
   return u.nickname || `${u.first_name} ${u.last_name}`.trim() || u.email
+}
+
+/** Strip everything but digits + colon and cap at 5 chars ("HH:MM"). */
+function filterTimeInput(s: string): string {
+  return s.replace(/[^0-9:]/g, '').slice(0, 5)
+}
+
+/** Normalize "9", "9:5", "14", "14:00" → "HH:MM" 24-hour. Used on blur
+ *  so the field renders identically to the Figma reference (no AM/PM
+ *  marker injected by the Korean locale native time picker). */
+function normalizeTime(s: string): string {
+  if (!s) return ''
+  const [rawH = '0', rawM = '0'] = s.split(':')
+  const h = Math.min(23, Math.max(0, parseInt(rawH, 10) || 0))
+  const m = Math.min(59, Math.max(0, parseInt(rawM, 10) || 0))
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
 function combineDateTime(date: string, time: string): string {
@@ -89,7 +126,8 @@ export default function CreateMeetingModal({
   const queryClient = useQueryClient()
 
   const [title, setTitle] = useState('')
-  const [location, setLocation] = useState<'zoom' | 'in_person'>('zoom')
+  const [when, setWhen] = useState<WhenMode>('later')
+  const [location, setLocation] = useState<'zoom' | 'in_person'>('in_person')
   const [projectId, setProjectId] = useState<string | null>(defaultProjectId ?? null)
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
   const [meetingType, setMeetingType] = useState<MeetingType>('planning')
@@ -112,7 +150,8 @@ export default function CreateMeetingModal({
   useEffect(() => {
     if (!open) return
     setTitle('')
-    setLocation('zoom')
+    setWhen('later')
+    setLocation('in_person')
     setProjectId(defaultProjectId ?? null)
     setMeetingType('planning')
     setDate('')
@@ -169,6 +208,7 @@ export default function CreateMeetingModal({
   }, [
     open,
     title,
+    when,
     location,
     projectId,
     meetingType,
@@ -232,11 +272,24 @@ export default function CreateMeetingModal({
       setError('Project is required.')
       return
     }
-    if (!date) {
+
+    // Resolve effective date/time. "Now" mode auto-fills with current
+    // wall-clock time + 30min duration so the user doesn't have to pick.
+    let effDate = date
+    let effStart = startTime
+    let effEnd = endTime
+    if (when === 'now') {
+      const now = new Date()
+      effDate = localDate(now)
+      effStart = localTime(now)
+      effEnd = localTime(new Date(now.getTime() + 30 * 60 * 1000))
+    } else if (!effDate) {
       setError('Date is required.')
       return
     }
-    if (totalMin <= 0) {
+
+    const effDuration = durationMinutes(effStart, effEnd)
+    if (effDuration <= 0) {
       setError('End time must be after start time.')
       return
     }
@@ -246,12 +299,39 @@ export default function CreateMeetingModal({
     }
     setError('')
     setSubmitting(true)
+
+    // For Zoom meetings we ask Zoom to create the meeting first so we can
+    // store the real join_url in `meetings.location_or_url` and (for "Now")
+    // launch the host start_url immediately after the row lands.
+    let zoomJoinUrl: string | null = null
+    let zoomStartUrl: string | null = null
+    if (location === 'zoom') {
+      try {
+        const z = await zoomBackend.createMeeting(
+          when === 'now'
+            ? { topic: title.trim(), type: 1 }
+            : {
+                topic: title.trim(),
+                type: 2,
+                start_time: combineDateTime(effDate, effStart),
+                duration: effDuration,
+              },
+        )
+        zoomJoinUrl = z.join_url
+        zoomStartUrl = z.start_url
+      } catch (e) {
+        setError(`Zoom 회의 생성 실패: ${(e as Error).message}`)
+        setSubmitting(false)
+        return
+      }
+    }
+
     const result = await createMeeting({
       name: title,
       project_id: projectId,
-      scheduled_at: combineDateTime(date, startTime),
-      duration_min: totalMin,
-      location_or_url: location === 'zoom' ? 'Zoom' : 'In-person',
+      scheduled_at: combineDateTime(effDate, effStart),
+      duration_min: effDuration,
+      location_or_url: zoomJoinUrl, // null for in-person
       meeting_type: meetingType,
       recurrence,
       recurrence_until: recurrence !== 'once' ? recurrenceUntil : null,
@@ -264,6 +344,27 @@ export default function CreateMeetingModal({
       setError(result.error)
       return
     }
+
+    // Right now + Zoom → launch the host (start_url) in the system browser
+    // so the Zoom desktop app comes up and recording starts.
+    if (when === 'now' && zoomStartUrl) {
+      if (typeof window !== 'undefined' && window.ipc) {
+        window.ipc.send('open-external', zoomStartUrl)
+      } else {
+        window.open(zoomStartUrl, '_blank')
+      }
+    }
+
+    // For "Right now" meetings, flip status to `recording` immediately so
+    // the card lands in live mode (Open Zoom + End meeting buttons) instead
+    // of looking like a stale `planned` row.
+    if (when === 'now') {
+      await supabase
+        .from('meetings')
+        .update({ status: 'recording' })
+        .eq('id', result.id)
+    }
+
     queryClient.invalidateQueries({ queryKey: queryKeys.meetings.all })
     queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all })
     onCreated?.(result.id)
@@ -314,15 +415,20 @@ export default function CreateMeetingModal({
               <div className="bg-white-item flex items-start gap-[5px] p-[5px] rounded-[5px] h-[39px]">
                 {LOCATIONS.map((l) => {
                   const selected = location === l.key
+                  const disabled = !!l.disabled
                   return (
                     <button
                       key={l.key}
                       type="button"
-                      onClick={() => setLocation(l.key)}
+                      onClick={() => !disabled && setLocation(l.key)}
+                      disabled={disabled}
+                      title={disabled ? 'Coming in a future release' : undefined}
                       className={`flex items-center justify-center px-[10px] py-[5px] rounded-[5px] text-[12px] font-semibold whitespace-nowrap transition-colors ${
                         selected
                           ? 'bg-[#E6ECEF] text-primary-main'
-                          : 'bg-white-item text-black hover:bg-white-white'
+                          : disabled
+                            ? 'bg-white-item text-gray-secondary cursor-not-allowed opacity-60'
+                            : 'bg-white-item text-black hover:bg-white-white'
                       }`}
                     >
                       {l.label}
@@ -415,8 +521,44 @@ export default function CreateMeetingModal({
             </div>
           </div>
 
-          {/* Date / Start / End / Repeat / Repeat Until — fits in 677px interior */}
-          <div className="grid grid-cols-[210px_85px_85px_105px_150px] gap-[8px]">
+          {/* When: Right now (instant Zoom + autostart) vs Schedule for later */}
+          <div className="flex items-center gap-3">
+            <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
+              When *
+            </label>
+            <div className="bg-white-item flex items-start gap-[5px] p-[5px] rounded-[5px]">
+              {(['now', 'later'] as const).map((w) => {
+                const selected = when === w
+                return (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() => setWhen(w)}
+                    className={`flex items-center justify-center px-[10px] py-[5px] rounded-[5px] text-[12px] font-semibold whitespace-nowrap transition-colors ${
+                      selected
+                        ? 'bg-[#E6ECEF] text-primary-main'
+                        : 'bg-white-item text-black hover:bg-white-white'
+                    }`}
+                  >
+                    {w === 'now' ? 'Right now' : 'Schedule for later'}
+                  </button>
+                )
+              })}
+            </div>
+            {when === 'now' && (
+              <span className="text-gray-secondary text-[11px]">
+                {location === 'zoom'
+                  ? 'Zoom will open immediately · 30 min default'
+                  : 'Starts now · 30 min default'}
+              </span>
+            )}
+          </div>
+
+          {/* Date / Start / End / Repeat / Repeat Until — only when scheduling.
+              Wider START/END columns so Korean locale "오후 02:00" fits
+              without truncating the AM/PM marker. */}
+          {when === 'later' && (
+          <div className="grid grid-cols-[180px_110px_110px_100px_130px] gap-[8px]">
             {/* Date */}
             <div className="flex flex-col gap-1">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
@@ -442,17 +584,23 @@ export default function CreateMeetingModal({
                 )}
               </div>
             </div>
-            {/* Start */}
+            {/* Start — text input so we render "14:00" verbatim regardless
+                of OS locale. Native <input type="time"> on Korean Chrome
+                injects "오전/오후" markers that overflow the column. */}
             <div className="flex flex-col gap-1">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
                 Start *
               </label>
               <input
-                type="time"
+                type="text"
+                inputMode="numeric"
+                placeholder="14:00"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={(e) =>
+                  setStartTime(filterTimeInput(e.target.value))
+                }
+                onBlur={() => setStartTime(normalizeTime(startTime))}
                 className="bg-white-white border border-gray-border rounded-lg px-3 py-2 text-[12px] text-black outline-none focus:border-primary-main h-[39px]"
-                style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
               />
             </div>
             {/* End */}
@@ -461,11 +609,15 @@ export default function CreateMeetingModal({
                 End *
               </label>
               <input
-                type="time"
+                type="text"
+                inputMode="numeric"
+                placeholder="14:40"
                 value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
+                onChange={(e) =>
+                  setEndTime(filterTimeInput(e.target.value))
+                }
+                onBlur={() => setEndTime(normalizeTime(endTime))}
                 className="bg-white-white border border-gray-border rounded-lg px-3 py-2 text-[12px] text-black outline-none focus:border-primary-main h-[39px]"
-                style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
               />
             </div>
             {/* Repeat */}
@@ -529,6 +681,7 @@ export default function CreateMeetingModal({
               </div>
             </div>
           </div>
+          )}
 
           {/* Conflict warning placeholder */}
           {addedAttendees.length > 0 && (
@@ -716,9 +869,22 @@ export default function CreateMeetingModal({
             </Button>
             <Button
               onClick={submit}
-              disabled={submitting || !title.trim() || !projectId || !date}
+              disabled={
+                submitting ||
+                !title.trim() ||
+                !projectId ||
+                (when === 'later' && !date)
+              }
             >
-              {submitting ? 'Scheduling…' : 'Schedule Meeting'}
+              {submitting
+                ? when === 'now'
+                  ? 'Starting…'
+                  : 'Scheduling…'
+                : when === 'now'
+                  ? location === 'zoom'
+                    ? 'Start Zoom'
+                    : 'Start Meeting'
+                  : 'Schedule Meeting'}
             </Button>
           </div>
         </div>

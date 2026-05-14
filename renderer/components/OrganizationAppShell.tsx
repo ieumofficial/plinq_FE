@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/router'
 import AppLayout from './ui/AppLayout'
+import AskAiPanel from './ui/AskAiPanel'
 import SideMenu, { type NavItem } from './ui/SideMenu'
 import StackedSideMenu, { type StackedNavItem } from './ui/StackedSideMenu'
 import Header from './ui/Header'
@@ -89,6 +90,7 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [createType, setCreateType] = useState<CreateType | null>(null)
+  const [askAiOpen, setAskAiOpen] = useState(false)
 
   const initials = user
     ? `${user.first_name[0] ?? ''}${user.last_name[0] ?? ''}`.toUpperCase()
@@ -143,6 +145,7 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
             onBack={() => router.back()}
             onForward={() => window.history.forward()}
             onCreateNew={openMenu}
+            onAskAi={() => setAskAiOpen((v) => !v)}
           />
         }
         sidebar={
@@ -179,6 +182,15 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
             onBack={() => router.push('/personal-dashboard')}
           />
         }
+        aiPanel={
+          askAiOpen ? (
+            <AskAiPanel
+              onClose={() => setAskAiOpen(false)}
+              orgId={orgId}
+              scopeLabel={orgName}
+            />
+          ) : undefined
+        }
       >
         {children}
       </AppLayout>
@@ -186,7 +198,7 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
       <CreateNewMenu open={menuOpen} onClose={closeAll} onPick={pickType} />
       <CreateProjectModal
         open={createType === 'project'}
-        orgId={org?.id ?? null}
+        orgId={orgId}
         orgName={org?.name ?? null}
         onClose={closeAll}
         onCreated={onCreated}

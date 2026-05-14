@@ -62,12 +62,18 @@ export default function SideMenu({
 
   return (
     <aside
-      className={`bg-[#F8F9FA] border-r border-solid border-gray-border h-full flex flex-col ${stacked ? 'items-center' : 'items-start'} justify-between ${padding} ${widthClass} shrink-0 transition-[width] duration-200 ease-in-out overflow-hidden`}
+      className={`border-r border-solid border-gray-border h-full flex flex-col ${stacked ? 'items-center' : 'items-start'} justify-between ${padding} ${widthClass} shrink-0 transition-[width] duration-200 ease-in-out overflow-hidden`}
+      style={{
+        // Figma 856:316 (expanded, 131deg) vs 857:5428 (rail, 104deg)
+        backgroundImage: stacked
+          ? 'linear-gradient(104.6deg, #2E434E 0%, #1F2F38 100%)'
+          : 'linear-gradient(131.45deg, #2E434E 0%, #1F2F38 100%)',
+      }}
     >
       {/* Top: Section + Nav */}
       <div className={`flex flex-col gap-[10px] w-full ${stacked ? 'items-center' : 'items-start'}`}>
         {!stacked && sectionLabel && (
-          <p className="text-primary-main text-[10px] font-medium uppercase tracking-[1.5px] w-full">
+          <p className="text-gray-secondary text-[10px] font-medium uppercase tracking-[1.5px] w-full">
             {sectionLabel}
           </p>
         )}
@@ -87,10 +93,10 @@ export default function SideMenu({
         </nav>
         {onCreateNew && (
           stacked ? (
-            <Button size="compact" variant="secondary" iconOnly="Add" onClick={onCreateNew} />
+            <Button size="compact" variant="ghost" iconOnly="Add" onClick={onCreateNew} />
           ) : (
             <Button
-              variant="secondary"
+              variant="ghost"
               size="compact"
               iconLeft="Add"
               onClick={onCreateNew}
@@ -123,7 +129,7 @@ export default function SideMenu({
             onClick={() => onItemClick?.(it.key)}
           />
         ))}
-        <div className="h-px bg-gray-border-light w-full" />
+        <div className="h-px bg-white/10 w-full" />
         <button
           type="button"
           onClick={(e) => {
@@ -131,7 +137,7 @@ export default function SideMenu({
               profileRect ? null : e.currentTarget.getBoundingClientRect()
             )
           }}
-          className={`flex items-center px-[5px] py-[10px] w-full rounded-[5px] hover:bg-gray-extra-light transition-colors ${
+          className={`flex items-center px-[5px] py-[10px] w-full rounded-[5px] hover:bg-white/10 transition-colors ${
             stacked ? 'justify-center' : 'gap-[10px]'
           }`}
           aria-label="Open profile menu"
@@ -141,7 +147,7 @@ export default function SideMenu({
           </span>
           {!stacked && (
             <span
-              className="text-black text-[14px] font-semibold whitespace-nowrap truncate"
+              className="text-primary-light text-[14px] font-semibold whitespace-nowrap truncate"
               style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
             >
               {userName}

@@ -14,8 +14,20 @@ import Table, {
   TableCell,
   type Column,
 } from '../../../components/ui/Table'
-import { useProject, useProjectMembersWithRoles } from '../../../lib/hooks'
-import { userToMember } from '../../../lib/types'
+import PermissionDropdown, {
+  type PermissionOption,
+} from '../../../components/PermissionDropdown'
+import DeleteConfirmModal from '../../../components/DeleteConfirmModal'
+import InviteByEmailModal from '../../../components/InviteByEmailModal'
+import {
+  useCurrentUser,
+  useInviteToProject,
+  useProject,
+  useProjectMembersWithRoles,
+  useRemoveProjectMember,
+  useUpdateProjectMemberRole,
+} from '../../../lib/hooks'
+import { userToMember, type ProjectRoleDb } from '../../../lib/types'
 import type { ProjectMember } from '../../../lib/queries'
 
 const COLS: Column[] = [
@@ -24,7 +36,30 @@ const COLS: Column[] = [
   { key: 'email', label: 'Email', width: 'flex-1' },
   { key: 'permission', label: 'Permission', width: 'w-[120px]' },
   { key: 'status', label: 'Status', width: 'w-[140px]' },
-  { key: 'more', label: '', width: 'w-[40px]' },
+  { key: 'delete', label: '', width: 'w-[40px]' },
+]
+
+/** Project-level roles the PermissionDropdown can grant. Order matches the
+ *  Figma "Set Permission" panel (admin → editor → read-only). */
+const PROJECT_PERMISSION_OPTIONS: PermissionOption[] = [
+  {
+    key: 'admin',
+    label: 'Admin',
+    bg: 'bg-gray-main',
+    desc: 'Full access to project configuration — members, settings.',
+  },
+  {
+    key: 'editor',
+    label: 'Editor',
+    bg: 'bg-gray-secondary',
+    desc: 'Default — limited access to project data, no project settings.',
+  },
+  {
+    key: 'readonly',
+    label: 'Read-only',
+    bg: 'bg-gray-light',
+    desc: 'Read-only access all tasks within this project.',
+  },
 ]
 
 const PRESENCE_OPTIONS: { key: Presence; label: string; color: string }[] = [
@@ -124,8 +159,12 @@ export default function MembersPage() {
 }
 
 function MembersBody({ projectId }: { projectId: string }) {
+  const { data: user } = useCurrentUser()
   const { data: project } = useProject(projectId)
   const { data: members = [] } = useProjectMembersWithRoles(projectId)
+  const updateRole = useUpdateProjectMemberRole(projectId)
+  const removeMember = useRemoveProjectMember(projectId)
+  const inviteMember = useInviteToProject(projectId)
 
   const [search, setSearch] = useState('')
 
@@ -138,11 +177,12 @@ function MembersBody({ projectId }: { projectId: string }) {
 
   // Modals / panels
   const [detailMember, setDetailMember] = useState<ProjectMember | null>(null)
-
-  // Row "..." popover — only tracks which member's menu is open. The actions
-  // inside are disabled placeholders until the SECURITY DEFINER RPCs ship.
-  const [rowMenuMember, setRowMenuMember] = useState<ProjectMember | null>(null)
-  const rowMenuRef = useClickOutside(!!rowMenuMember, () => setRowMenuMember(null))
+  const [permEditor, setPermEditor] = useState<{
+    member: ProjectMember
+    rect: DOMRect
+  } | null>(null)
+  const [deletingMember, setDeletingMember] = useState<ProjectMember | null>(null)
+  const [inviteOpen, setInviteOpen] = useState(false)
 
   const filtered = useMemo(() => {
     let arr = members
@@ -255,14 +295,10 @@ function MembersBody({ projectId }: { projectId: string }) {
               </div>
             )}
           </div>
-          {/* Invite is disabled until the SECURITY DEFINER RPCs land — see
-              `add_project_members_as_admin` / `process_pending_invites_for_user`.
-              The button stays visible to preserve the toolbar layout. */}
           <Button
             size="compact"
             iconLeft="Invite"
-            disabled
-            title="Inviting members is not available yet"
+            onClick={() => setInviteOpen(true)}
           >
             Invite
           </Button>
@@ -335,53 +371,38 @@ function MembersBody({ projectId }: { projectId: string }) {
                   <span className="text-[14px] text-gray-main">{m.email}</span>
                 </TableCell>
                 <TableCell width="w-[120px]">
-                  <MemberStatus variant="permission" status={m.role} />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPermEditor({
+                        member: m,
+                        rect: e.currentTarget.getBoundingClientRect(),
+                      })
+                    }}
+                    className="inline-flex items-center hover:opacity-90 cursor-pointer"
+                    aria-label="Change permission"
+                  >
+                    <MemberStatus variant="permission" status={m.role} />
+                  </button>
                 </TableCell>
                 <TableCell width="w-[140px]">
                   <MemberStatus variant="presence" status={presence} />
                 </TableCell>
                 <TableCell width="w-[40px]">
-                  <div
-                    className="relative"
-                    ref={rowMenuMember?.id === m.id ? rowMenuRef : undefined}
-                  >
+                  {user && m.id !== user.id ? (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        setRowMenuMember((prev) => (prev?.id === m.id ? null : m))
+                        setDeletingMember(m)
                       }}
-                      className="text-gray-main hover:bg-gray-extra-light p-1 rounded transition-colors w-[28px] h-[28px] inline-flex items-center justify-center"
-                      aria-label="Member actions"
+                      className="text-red-main hover:bg-red-50 inline-flex items-center justify-center w-[24px] h-[24px] rounded transition-colors"
+                      aria-label="Remove member"
                     >
-                      <Icon name="Dot-Menu" size={15} />
+                      <Icon name="Trash" size={15} />
                     </button>
-
-                    {rowMenuMember?.id === m.id && (
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        className="absolute z-30 top-[32px] right-0 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md min-w-[200px] py-[5px]"
-                      >
-                        <button
-                          type="button"
-                          disabled
-                          title="Not available yet"
-                          className="w-full flex items-center justify-between gap-[8px] px-[10px] py-[7px] text-[12px] text-left text-gray-secondary cursor-not-allowed"
-                        >
-                          <span>Change permission</span>
-                          <Icon name="ArrowRight" size={11} />
-                        </button>
-                        <button
-                          type="button"
-                          disabled
-                          title="Not available yet"
-                          className="w-full flex items-center gap-[8px] px-[10px] py-[7px] text-[12px] text-left text-gray-secondary cursor-not-allowed"
-                        >
-                          <span>Remove from project</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  ) : null}
                 </TableCell>
               </TableRow>
             )
@@ -398,6 +419,83 @@ function MembersBody({ projectId }: { projectId: string }) {
           onClose={() => setDetailMember(null)}
         />
       )}
+
+      {/* Permission dropdown */}
+      {permEditor && (
+        <PermissionDropdown
+          anchorRect={permEditor.rect}
+          current={permEditor.member.role}
+          options={PROJECT_PERMISSION_OPTIONS}
+          onClose={() => setPermEditor(null)}
+          onSave={(next) => {
+            updateRole.mutate(
+              { userId: permEditor.member.id, role: next as ProjectRoleDb },
+              {
+                onSuccess: () => setPermEditor(null),
+                onError: (err) => window.alert(err.message),
+              }
+            )
+          }}
+        />
+      )}
+
+      {/* Invite modal */}
+      <InviteByEmailModal
+        open={inviteOpen}
+        variant="project"
+        onClose={() => setInviteOpen(false)}
+        onSubmit={async ({ email, role }) => {
+          await inviteMember.mutateAsync({ email, role: role ?? 'editor' })
+        }}
+      />
+
+      {/* Delete confirmation */}
+      <DeleteConfirmModal
+        open={deletingMember !== null}
+        type="member"
+        title="Delete this member?"
+        body={
+          <>
+            This action is <strong className="font-bold">permanent</strong>. The
+            member will be removed for everyone in the workspace.
+          </>
+        }
+        subject={
+          deletingMember && (
+            <div className="flex items-center gap-[10px] min-w-0">
+              <UserGroup members={[userToMember(deletingMember)]} size={28} />
+              <div className="flex flex-col gap-[3px] min-w-0">
+                <p className="text-black text-[12px] font-semibold truncate">
+                  {memberDisplayName(deletingMember)}
+                </p>
+                <p className="text-gray-main text-[8px] truncate">
+                  {deletingMember.job_title ?? 'Member'}
+                  {deletingMember.email ? ` · ${deletingMember.email}` : ''}
+                </p>
+              </div>
+            </div>
+          )
+        }
+        consequences={
+          deletingMember
+            ? [
+                `Removed from ${project?.name ?? 'this project'}`,
+                `Tasks assigned to ${memberDisplayName(deletingMember)} become unassigned`,
+                'Loses access to project pages and channels',
+              ]
+            : []
+        }
+        confirmLabel="Delete member"
+        submitting={removeMember.isPending}
+        onClose={() => setDeletingMember(null)}
+        onConfirm={() => {
+          if (!deletingMember) return
+          removeMember.mutate(deletingMember.id, {
+            onSuccess: () => setDeletingMember(null),
+            onError: (err) => window.alert(err.message),
+          })
+        }}
+      />
     </div>
   )
 }

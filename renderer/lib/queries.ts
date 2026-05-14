@@ -481,6 +481,56 @@ export async function addProjectInvite(input: {
   return { ok: true }
 }
 
+/**
+ * Invite a user to a project by email. Two-step: look up the email in
+ * `public.users` (via the SECURITY DEFINER RPC so RLS doesn't hide the row),
+ * and if a registered user exists, add them to `project_members` directly.
+ * Otherwise create a pending row in `project_invites` so the join happens
+ * once they sign up.
+ */
+export async function inviteToProject(input: {
+  project_id: string
+  email: string
+  role: import('./types').ProjectRoleDb
+}): Promise<
+  | { ok: true; mode: 'added' | 'invited' }
+  | { error: 'already_member' | string }
+> {
+  const email = input.email.trim().toLowerCase()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in' }
+
+  const { data: userId, error: lookupErr } = await supabase.rpc(
+    'lookup_user_id_by_email',
+    { p_email: email }
+  )
+  if (lookupErr) return { error: lookupErr.message }
+
+  if (userId) {
+    const { error } = await supabase.from('project_members').insert({
+      project_id: input.project_id,
+      user_id: userId,
+      role: input.role,
+    })
+    if (error) {
+      if (error.code === '23505') return { error: 'already_member' }
+      return { error: error.message }
+    }
+    return { ok: true, mode: 'added' }
+  }
+
+  const { error } = await supabase.from('project_invites').insert({
+    project_id: input.project_id,
+    email,
+    role: input.role,
+    invited_by: user.id,
+  })
+  if (error) return { error: error.message }
+  return { ok: true, mode: 'invited' }
+}
+
 // ─── Project mutations ──────────────────────────────────────────────────────
 
 export type ProjectPatch = Partial<{
@@ -814,16 +864,20 @@ export async function inviteToOrganization(input: {
   | { error: 'not_found' | 'already_member' | string }
 > {
   const email = input.email.trim().toLowerCase()
-  const { data: userRow, error: userErr } = await supabase
-    .from('users')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle()
+  // `public.users` RLS only exposes the caller themselves and users in the
+  // same org, so a direct `from('users').select(...)` returns null for an
+  // external invitee even when the row exists. Look up via a SECURITY
+  // DEFINER RPC that returns just the id on exact-email match — this
+  // unblocks invite without opening up the user directory.
+  const { data: userId, error: userErr } = await supabase.rpc(
+    'lookup_user_id_by_email',
+    { p_email: email }
+  )
   if (userErr) return { error: userErr.message }
-  if (!userRow) return { error: 'not_found' }
+  if (!userId) return { error: 'not_found' }
   const { error: insertErr } = await supabase.from('organization_members').insert({
     org_id: input.org_id,
-    user_id: userRow.id,
+    user_id: userId,
     role: input.role,
   })
   if (insertErr) {

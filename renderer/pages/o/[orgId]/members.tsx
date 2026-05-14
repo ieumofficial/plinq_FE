@@ -9,7 +9,9 @@ import Icon from '../../../components/ui/Icon'
 import FilterChecklist from '../../../components/ui/FilterChecklist'
 import InviteToOrgModal from '../../../components/InviteToOrgModal'
 import DeleteConfirmModal from '../../../components/DeleteConfirmModal'
-import PermissionDropdown from '../../../components/PermissionDropdown'
+import PermissionDropdown, {
+  type PermissionOption,
+} from '../../../components/PermissionDropdown'
 import Table, {
   TableHeader,
   TableRow,
@@ -56,6 +58,23 @@ const PERMISSION_FILTER_COLOR: Record<OrgRoleDb, string> = {
 }
 
 const PERMISSION_KEYS: OrgRoleDb[] = ['owner', 'admin', 'member']
+
+/** Roles the PermissionDropdown can grant on an org member. Owner is never
+ *  reassigned through this UI — ownership transfer is a separate flow. */
+const ORG_PERMISSION_OPTIONS: PermissionOption[] = [
+  {
+    key: 'admin',
+    label: 'Admin',
+    bg: 'bg-gray-main',
+    desc: 'Full access to the organization — members, settings.',
+  },
+  {
+    key: 'member',
+    label: 'Member',
+    bg: 'bg-gray-light',
+    desc: 'Standard access to projects shared with them.',
+  },
+]
 
 function StatCard({
   eyebrow,
@@ -435,6 +454,10 @@ function OrgMembersBody({ orgId }: { orgId: string }) {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
+                        if (user && m.id === user.id) {
+                          window.alert("You can't remove yourself from the organization.")
+                          return
+                        }
                         setDeleting(m)
                       }}
                       className="text-red-main hover:bg-red-50 inline-flex items-center justify-center w-[24px] h-[24px] rounded transition-colors"
@@ -499,13 +522,12 @@ function OrgMembersBody({ orgId }: { orgId: string }) {
         }
         confirmLabel="Delete member"
         submitting={removeMember.isPending}
-        confirmDisabled
-        disabledHint="Member deletion isn't enabled yet."
         onClose={() => setDeleting(null)}
         onConfirm={() => {
           if (!deleting) return
           removeMember.mutate(deleting.id, {
             onSuccess: () => setDeleting(null),
+            onError: (err) => window.alert(err.message),
           })
         }}
       />
@@ -514,10 +536,11 @@ function OrgMembersBody({ orgId }: { orgId: string }) {
         <PermissionDropdown
           anchorRect={permEditor.rect}
           current={permEditor.member.role}
+          options={ORG_PERMISSION_OPTIONS}
           onClose={() => setPermEditor(null)}
           onSave={(next) => {
             updateRole.mutate(
-              { userId: permEditor.member.id, role: next },
+              { userId: permEditor.member.id, role: next as OrgRoleDb },
               { onSuccess: () => setPermEditor(null) }
             )
           }}

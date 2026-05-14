@@ -20,6 +20,7 @@ import {
   getOrgMembers,
   getOrgMembersWithRoles,
   inviteToOrganization,
+  inviteToProject,
   updateCurrentUser,
   getProject,
   getProjectCounts,
@@ -41,7 +42,7 @@ import {
 } from './queries'
 import { supabase } from './supabase'
 import { queryKeys } from './queryKeys'
-import type { OrgRoleDb, ProjectRow, TaskStatusDb } from './types'
+import type { OrgRoleDb, ProjectRoleDb, ProjectRow, TaskStatusDb } from './types'
 
 // ─── User / org ─────────────────────────────────────────────────────────────
 
@@ -265,12 +266,20 @@ export function useUpdateOrgMemberRole(orgId: string | null | undefined) {
   return useMutation({
     mutationFn: async (input: { userId: string; role: OrgRoleDb }) => {
       if (!orgId) throw new Error('orgId required')
-      const { error } = await supabase
+      // `.select()` so an RLS-filtered update (caller is not admin/owner)
+      // is surfaced as 0 returned rows instead of a silent no-op.
+      const { data, error } = await supabase
         .from('organization_members')
         .update({ role: input.role })
         .eq('org_id', orgId)
         .eq('user_id', input.userId)
+        .select('user_id')
       if (error) throw new Error(error.message)
+      if (!data || data.length === 0) {
+        throw new Error(
+          "Couldn't change the role — you may not have permission. Only an admin or owner can change member roles."
+        )
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.members.all })
@@ -347,6 +356,83 @@ export function useProjectMembersWithRoles(projectId: string | null | undefined)
     queryFn: () => getProjectMembersWithRoles(projectId!),
     enabled: !!projectId,
     staleTime: 60 * 1000,
+  })
+}
+
+/** Update a member's role on a project (editor/admin/readonly). */
+export function useUpdateProjectMemberRole(projectId: string | null | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { userId: string; role: ProjectRoleDb }) => {
+      if (!projectId) throw new Error('projectId required')
+      const { data, error } = await supabase
+        .from('project_members')
+        .update({ role: input.role })
+        .eq('project_id', projectId)
+        .eq('user_id', input.userId)
+        .select('user_id')
+      if (error) throw new Error(error.message)
+      if (!data || data.length === 0) {
+        throw new Error(
+          "Couldn't change the role — you may not have permission. Only the project lead or an admin can change member roles."
+        )
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.members.all })
+    },
+  })
+}
+
+/** Invite a user to a project by email. Adds them directly to
+ *  `project_members` if their email is already registered, otherwise creates
+ *  a pending row in `project_invites`. */
+export function useInviteToProject(projectId: string | null | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { email: string; role: ProjectRoleDb }) => {
+      if (!projectId) throw new Error('projectId required')
+      const result = await inviteToProject({
+        project_id: projectId,
+        email: input.email,
+        role: input.role,
+      })
+      if ('error' in result) {
+        if (result.error === 'already_member') {
+          throw new Error('That user is already a member of this project.')
+        }
+        throw new Error(result.error)
+      }
+      return result
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.members.all })
+    },
+  })
+}
+
+/** Remove a member from a project. */
+export function useRemoveProjectMember(projectId: string | null | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      if (!projectId) throw new Error('projectId required')
+      const { data, error } = await supabase
+        .from('project_members')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .select('user_id')
+      if (error) throw new Error(error.message)
+      if (!data || data.length === 0) {
+        throw new Error(
+          "Couldn't remove the member — you may not have permission. Only the project lead or an admin can remove members."
+        )
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.members.all })
+    },
   })
 }
 

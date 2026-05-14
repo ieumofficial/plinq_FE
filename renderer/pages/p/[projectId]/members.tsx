@@ -30,7 +30,6 @@ import {
 import { userToMember, type ProjectRoleDb } from '../../../lib/types'
 import type { ProjectMember } from '../../../lib/queries'
 import { resolveProjectColor } from '../../../lib/projectColors'
-import DeleteConfirmModal from '../../../components/DeleteConfirmModal'
 import ProjectPermissionDropdown from '../../../components/ProjectPermissionDropdown'
 
 const COLS: Column[] = [

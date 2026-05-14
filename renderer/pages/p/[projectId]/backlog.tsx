@@ -33,7 +33,6 @@ import {
   type TaskStatusDb,
   type UserRow,
 } from '../../../lib/types'
-import type { ProjectTask } from '../../../lib/queries'
 import { resolveProjectColor } from '../../../lib/projectColors'
 
 const PROGRESS_FILTERS: { key: TaskStatusDb; label: string; chipClass: string }[] = [

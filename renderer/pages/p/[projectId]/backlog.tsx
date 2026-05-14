@@ -26,6 +26,7 @@ import {
   type UserRow,
 } from '../../../lib/types'
 import type { ProjectTask } from '../../../lib/queries'
+import { resolveProjectColor } from '../../../lib/projectColors'
 
 const PROGRESS_FILTERS: { key: TaskStatusDb; label: string; chipClass: string }[] = [
   { key: 'planned', label: 'Planned', chipClass: 'bg-[#E6ECEF] text-black' },
@@ -294,7 +295,10 @@ function BacklogBody({ projectId }: { projectId: string }) {
       {/* Toolbar */}
       <div className="shrink-0 flex items-end justify-between gap-4">
         <div className="flex flex-col gap-[5px]">
-          <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
+          <p
+            className="text-[10px] font-medium uppercase tracking-[1.5px]"
+            style={{ color: resolveProjectColor(project?.color) }}
+          >
             {(project?.name ?? '').toUpperCase()} · BACKLOG
           </p>
           <h1 className="text-black text-[35px] font-semibold leading-tight">

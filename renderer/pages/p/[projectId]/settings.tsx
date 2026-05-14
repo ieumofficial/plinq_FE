@@ -19,6 +19,7 @@ import {
   type ProjectStatusDb,
   type UserRow,
 } from '../../../lib/types'
+import { resolveProjectColor } from '../../../lib/projectColors'
 
 type ColorKey = 'blue' | 'green' | 'amber' | 'red' | 'purple' | 'turquoise'
 
@@ -183,7 +184,10 @@ function SettingsBody({ projectId }: { projectId: string }) {
     <div className="flex-1 min-h-0 flex flex-col p-6 gap-6">
       {/* Toolbar */}
       <div className="shrink-0 flex flex-col gap-[5px]">
-        <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
+        <p
+          className="text-[10px] font-medium uppercase tracking-[1.5px]"
+          style={{ color: resolveProjectColor(project?.color) }}
+        >
           {(project?.name ?? '').toUpperCase()} · SETTINGS
         </p>
         <h1 className="text-black text-[35px] font-semibold leading-tight">

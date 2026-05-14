@@ -7,8 +7,9 @@ import Button from '../../../components/ui/Button'
 import Icon from '../../../components/ui/Icon'
 import FilterChecklist from '../../../components/ui/FilterChecklist'
 import TaskDetailModal from '../../../components/TaskDetailModal'
-import { useProject, useProjectTasks } from '../../../lib/hooks'
+import { useProject, useProjectTasks, useUpdateTaskStatus } from '../../../lib/hooks'
 import type { ProjectTask } from '../../../lib/queries'
+import { resolveProjectColor } from '../../../lib/projectColors'
 import {
   dbPriorityToUi,
   formatShortDate,
@@ -88,8 +89,18 @@ function KanbanBody({ projectId }: { projectId: string }) {
   const { open } = useCreateNew()
   const { data: project } = useProject(projectId)
   const { data: tasks = [] } = useProjectTasks(projectId)
+  const { mutate: updateTaskStatus } = useUpdateTaskStatus()
   const [openTask, setOpenTask] = useState<{ task: ProjectTask; idx: number } | null>(
     null
+  )
+  // Active drag state — we track the task id and the column it's currently
+  // hovering so we can highlight the drop zone and ignore drops back onto the
+  // source column (no-op).
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null)
+  const [dragOverCol, setDragOverCol] = useState<TaskStatusDb | null>(null)
+  const draggingFromCol = useMemo(
+    () => tasks.find((t) => t.id === draggingTaskId)?.status ?? null,
+    [tasks, draggingTaskId]
   )
 
   // Filters — default to "all checked" so the user sees everything until they
@@ -171,7 +182,10 @@ function KanbanBody({ projectId }: { projectId: string }) {
       {/* Title row */}
       <div className="flex items-end justify-between gap-4">
         <div className="flex flex-col gap-[5px]">
-          <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
+          <p
+            className="text-[10px] font-medium uppercase tracking-[1.5px]"
+            style={{ color: resolveProjectColor(project?.color) }}
+          >
             {(project?.name ?? '').toUpperCase()} · KANBAN BOARD
           </p>
           <h1 className="text-black text-[35px] font-semibold leading-tight">
@@ -261,62 +275,127 @@ function KanbanBody({ projectId }: { projectId: string }) {
             No columns match the current filter.
           </p>
         ) : (
-          columns.map((c) => (
-            <div
-              key={c.key}
-              className="flex-1 min-w-0 flex flex-col gap-[10px] bg-white-main rounded-[10px] p-[10px]"
-            >
-              {/* Column header */}
-              <div className="flex items-center justify-between px-[3px] h-[28px]">
-                <div className="flex items-center gap-[10px]">
-                  <span className="inline-flex items-center gap-[8px]">
-                    <span
-                      className="w-[9px] h-[9px] rounded-full shrink-0"
-                      style={{ backgroundColor: c.dot }}
-                    />
-                    <span className="text-[12px] font-semibold text-black">
-                      {c.label}
+          columns.map((c) => {
+            const isDragOver = dragOverCol === c.key
+            const isSourceCol = draggingFromCol === c.key
+            // Show the "slot" placeholder only when we'd actually accept the
+            // drop (different column). Hovering back over the source is a
+            // no-op so we don't want to mislead the user with a slot.
+            const showSlot = isDragOver && !isSourceCol
+            return (
+              <div
+                key={c.key}
+                onDragOver={(e) => {
+                  if (!draggingTaskId) return
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                  if (dragOverCol !== c.key) setDragOverCol(c.key)
+                }}
+                onDragLeave={(e) => {
+                  // Only clear when the cursor leaves the column entirely —
+                  // crossing into a child element fires dragleave on the
+                  // parent, so we check that the related target is outside.
+                  if (
+                    e.currentTarget.contains(e.relatedTarget as Node | null)
+                  )
+                    return
+                  if (dragOverCol === c.key) setDragOverCol(null)
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const id = e.dataTransfer.getData('text/plain') || draggingTaskId
+                  setDragOverCol(null)
+                  setDraggingTaskId(null)
+                  if (!id) return
+                  const dropped = tasks.find((t) => t.id === id)
+                  if (!dropped || dropped.status === c.key) return
+                  updateTaskStatus({ taskId: id, status: c.key })
+                }}
+                className={`flex-1 min-w-0 flex flex-col gap-[10px] rounded-[10px] p-[10px] transition-colors ${
+                  showSlot ? 'bg-primary-light' : 'bg-white-main'
+                }`}
+              >
+                {/* Column header */}
+                <div className="flex items-center justify-between px-[3px] h-[28px]">
+                  <div className="flex items-center gap-[10px]">
+                    <span className="inline-flex items-center gap-[8px]">
+                      <span
+                        className="w-[9px] h-[9px] rounded-full shrink-0"
+                        style={{ backgroundColor: c.dot }}
+                      />
+                      <span className="text-[12px] font-semibold text-black">
+                        {c.label}
+                      </span>
                     </span>
-                  </span>
-                  <span
-                    className="text-gray-secondary text-[12px] font-medium"
-                    style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+                    <span
+                      className="text-gray-secondary text-[12px] font-medium"
+                      style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+                    >
+                      {c.items.length}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => open('task')}
+                    aria-label={`Add task to ${c.label}`}
+                    className="text-gray-main hover:bg-gray-extra-light rounded transition-colors inline-flex items-center justify-center w-[20px] h-[20px]"
                   >
-                    {c.items.length}
-                  </span>
+                    <Icon name="Add" size={13} />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => open('task')}
-                  aria-label={`Add task to ${c.label}`}
-                  className="text-gray-main hover:bg-gray-extra-light rounded transition-colors inline-flex items-center justify-center w-[20px] h-[20px]"
-                >
-                  <Icon name="Add" size={13} />
-                </button>
-              </div>
 
-              {/* Cards */}
-              <div className="flex flex-col gap-[10px] overflow-y-auto">
-                {c.items.map((t) => (
-                  <Task
-                    key={t.id}
-                    id={ticketId(project?.name ?? 'TSK', t._idx)}
-                    title={t.title}
-                    status={c.status}
-                    priority={dbPriorityToUi(t.priority)}
-                    dueDate={formatShortDate(t.due_date) ?? undefined}
-                    assignees={t.assignees.map(userToMember)}
-                    onClick={() => setOpenTask({ task: t, idx: t._idx })}
-                  />
-                ))}
-                {c.items.length === 0 && (
-                  <p className="text-gray-secondary text-[11px] px-[5px] py-[15px] text-center">
-                    No tasks here.
-                  </p>
-                )}
+                {/* Cards */}
+                <div className="flex flex-col gap-[10px] overflow-y-auto">
+                  {c.items.map((t) => {
+                    const isThisDragging = draggingTaskId === t.id
+                    return (
+                      <div
+                        key={t.id}
+                        draggable
+                        onClick={() => setOpenTask({ task: t, idx: t._idx })}
+                        onDragStart={(e) => {
+                          setDraggingTaskId(t.id)
+                          e.dataTransfer.effectAllowed = 'move'
+                          e.dataTransfer.setData('text/plain', t.id)
+                        }}
+                        onDragEnd={() => {
+                          setDraggingTaskId(null)
+                          setDragOverCol(null)
+                        }}
+                        className={`rounded-[5px] transition-all hover:shadow-sm ${
+                          isThisDragging
+                            ? 'opacity-30 cursor-grabbing'
+                            : 'cursor-grab active:cursor-grabbing'
+                        }`}
+                      >
+                        <Task
+                          id={ticketId(project?.name ?? 'TSK', t._idx)}
+                          title={t.title}
+                          status={c.status}
+                          priority={dbPriorityToUi(t.priority)}
+                          dueDate={formatShortDate(t.due_date) ?? undefined}
+                          assignees={t.assignees.map(userToMember)}
+                        />
+                      </div>
+                    )
+                  })}
+                  {showSlot && (
+                    <div
+                      aria-hidden
+                      className="rounded-[5px] border-2 border-dashed border-primary-main/60 bg-white-white/60 min-h-[78px] flex items-center justify-center text-primary-main text-[11px] font-semibold tracking-[1px] uppercase transition-all"
+                    >
+                      Drop here
+                    </div>
+                  )}
+                  {c.items.length === 0 && !showSlot && (
+                    <p className="text-gray-secondary text-[11px] px-[5px] py-[15px] text-center">
+                      No tasks here.
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
 

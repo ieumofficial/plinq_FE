@@ -186,7 +186,7 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
       <CreateNewMenu open={menuOpen} onClose={closeAll} onPick={pickType} />
       <CreateProjectModal
         open={createType === 'project'}
-        orgId={org?.id ?? null}
+        orgId={orgId}
         orgName={org?.name ?? null}
         onClose={closeAll}
         onCreated={onCreated}

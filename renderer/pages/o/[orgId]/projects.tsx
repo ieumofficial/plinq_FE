@@ -405,16 +405,17 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
     setStatusFilter(next ? new Set(FILTER_OPTIONS.map((o) => o.key)) : new Set())
   }
 
-  // Quarter scope — by `dueDate` (latest task due date = project end).
-  // Projects without any dated tasks are not surfaced; they need at least
-  // one task with a due date to be placed on the calendar.
+  // A project's quarter is its end (latest task `due_date`) or, when no
+  // task has a date yet, its creation date — so a freshly created project
+  // is visible in the quarter it was created in.
   const quarterScoped = useMemo(() => {
     const qIndex = QUARTERS.indexOf(selectedQuarter)
     const start = new Date(selectedYear, qIndex * 3, 1).getTime()
     const end = new Date(selectedYear, qIndex * 3 + 3, 0, 23, 59, 59, 999).getTime()
     return allProjects.filter((p) => {
-      if (!p.dueDate) return false
-      const t = new Date(p.dueDate).getTime()
+      const ref = p.dueDate ?? p.created_at
+      if (!ref) return false
+      const t = new Date(ref).getTime()
       return t >= start && t <= end
     })
   }, [allProjects, selectedYear, selectedQuarter])

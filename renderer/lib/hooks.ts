@@ -342,6 +342,60 @@ export function useRemoveOrgMember(orgId: string | null | undefined) {
   })
 }
 
+/** Update a project member's role (editor / admin / readonly). Use `.select()`
+ *  so RLS-filtered rows surface as "0 affected" → caller can show a perm error. */
+export function useUpdateProjectMemberRole(projectId: string | null | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      userId: string
+      role: import('./types').ProjectRoleDb
+    }) => {
+      if (!projectId) throw new Error('projectId required')
+      const { data, error } = await supabase
+        .from('project_members')
+        .update({ role: input.role })
+        .eq('project_id', projectId)
+        .eq('user_id', input.userId)
+        .select('user_id')
+      if (error) throw new Error(error.message)
+      if (!data || data.length === 0) {
+        throw new Error(
+          "Couldn't update permission — you may not have access. Only the project lead or an admin can change roles."
+        )
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.members.all })
+    },
+  })
+}
+
+/** Remove a user from a project. Same RLS caveat as useUpdateProjectMemberRole. */
+export function useRemoveProjectMember(projectId: string | null | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      if (!projectId) throw new Error('projectId required')
+      const { data, error } = await supabase
+        .from('project_members')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .select('user_id')
+      if (error) throw new Error(error.message)
+      if (!data || data.length === 0) {
+        throw new Error(
+          "Couldn't remove member — you may not have access. Only the project lead or an admin can remove members."
+        )
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.members.all })
+    },
+  })
+}
+
 export function useProjectMembers(projectId: string | null | undefined) {
   return useQuery({
     queryKey: queryKeys.members.project(projectId ?? ''),

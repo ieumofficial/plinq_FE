@@ -16,6 +16,8 @@ type Props = {
   defaultProjectId?: string | null
   /** When true, project picker is locked to defaultProjectId (cannot be changed). */
   lockProject?: boolean
+  /** Optional pre-selected status. Defaults to 'planned'. Still editable. */
+  defaultStatus?: TaskStatusDb
   onClose: () => void
   onCreated?: (id: string) => void
 }
@@ -72,6 +74,7 @@ export default function CreateTaskModal({
   open,
   defaultProjectId,
   lockProject = false,
+  defaultStatus,
   onClose,
   onCreated,
 }: Props) {
@@ -84,7 +87,7 @@ export default function CreateTaskModal({
   const [description, setDescription] = useState('')
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false)
-  const [status, setStatus] = useState<TaskStatusDb>('planned')
+  const [status, setStatus] = useState<TaskStatusDb>(defaultStatus ?? 'planned')
   const [dueDate, setDueDate] = useState('')
   const [priority, setPriority] = useState<Priority>('medium')
 
@@ -98,12 +101,12 @@ export default function CreateTaskModal({
     setProjectId(defaultProjectId ?? null)
     setDescription('')
     setAssigneeIds([])
-    setStatus('planned')
+    setStatus(defaultStatus ?? 'planned')
     setDueDate('')
     setPriority('medium')
     setError('')
     setSubmitting(false)
-  }, [open, defaultProjectId])
+  }, [open, defaultProjectId, defaultStatus])
 
   // Default project = first one when opening
   useEffect(() => {

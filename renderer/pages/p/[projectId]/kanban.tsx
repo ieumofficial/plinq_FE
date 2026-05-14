@@ -336,7 +336,7 @@ function KanbanBody({ projectId }: { projectId: string }) {
                   </div>
                   <button
                     type="button"
-                    onClick={() => open('task')}
+                    onClick={() => open('task', { status: c.key })}
                     aria-label={`Add task to ${c.label}`}
                     className="text-gray-main hover:bg-gray-extra-light rounded transition-colors inline-flex items-center justify-center w-[20px] h-[20px]"
                   >

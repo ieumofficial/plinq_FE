@@ -22,9 +22,15 @@ import { dbStatusToUi } from '../lib/types'
 
 // ─── Create New context ─────────────────────────────────────────────────────
 
+/** Prefilled fields the caller can hand to the create modals. Only `status`
+ *  is wired through today (used by the kanban column "+ Add" buttons). */
+export type CreateOpts = {
+  status?: import('../lib/types').TaskStatusDb
+}
+
 type CreateNewApi = {
   openMenu: () => void
-  open: (type: CreateType) => void
+  open: (type: CreateType, opts?: CreateOpts) => void
 }
 
 const CreateNewContext = createContext<CreateNewApi | null>(null)
@@ -100,6 +106,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [createType, setCreateType] = useState<CreateType | null>(null)
+  const [createOpts, setCreateOpts] = useState<CreateOpts>({})
   const [askAiOpen, setAskAiOpen] = useState(false)
 
   const initials = user
@@ -111,21 +118,30 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
 
   const openMenu = () => {
     setCreateType(null)
+    setCreateOpts({})
     setMenuOpen(true)
   }
   const pickType = (t: CreateType) => {
     setMenuOpen(false)
+    setCreateOpts({})
     setCreateType(t)
   }
   const closeAll = () => {
     setMenuOpen(false)
     setCreateType(null)
+    setCreateOpts({})
   }
   // Stay on current page; TanStack Query invalidation in the create modals
   // refreshes the data automatically.
   const onCreated = () => closeAll()
 
-  const api: CreateNewApi = { openMenu, open: (t) => setCreateType(t) }
+  const api: CreateNewApi = {
+    openMenu,
+    open: (t, opts) => {
+      setCreateOpts(opts ?? {})
+      setCreateType(t)
+    },
+  }
 
   const projectName = project?.name ?? 'Project'
   const projectInitial = projectName.charAt(0).toUpperCase()
@@ -276,6 +292,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
       <CreateTaskModal
         open={createType === 'task'}
         defaultProjectId={projectId}
+        defaultStatus={createOpts.status}
         lockProject
         onClose={closeAll}
         onCreated={onCreated}

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import OrganizationAppShell, { useCreateNew } from '../../../components/OrganizationAppShell'
@@ -7,6 +7,7 @@ import Tag from '../../../components/ui/Tag'
 import ProjectLabel from '../../../components/ui/ProjectLabel'
 import UserGroup from '../../../components/ui/UserGroup'
 import Icon from '../../../components/ui/Icon'
+import FilterChecklist from '../../../components/ui/FilterChecklist'
 import Table, {
   TableHeader,
   TableRow,
@@ -17,32 +18,13 @@ import {
   useCurrentUser,
   useMyOrg,
   useOrgMembers,
-  useUserProjects,
+  useOrgProjects,
 } from '../../../lib/hooks'
+import { usePinnedProjects } from '../../../lib/pinPref'
 import { userToMember, type ProjectStatusDb } from '../../../lib/types'
+import type { ProjectWithStats } from '../../../lib/queries'
 
 type Health = 'on-track' | 'at-risk' | 'delayed' | 'healthy'
-
-const HEALTH_LABEL: Record<Health, string> = {
-  'on-track': 'On track',
-  'at-risk': 'At risk',
-  delayed: 'Delayed',
-  healthy: 'Healthy',
-}
-
-const HEALTH_COLOR: Record<Health, 'green' | 'amber' | 'red'> = {
-  'on-track': 'green',
-  'at-risk': 'amber',
-  delayed: 'red',
-  healthy: 'green',
-}
-
-const HEALTH_BAR: Record<Health, string> = {
-  'on-track': '#2F6B45',
-  'at-risk': '#B68A48',
-  delayed: '#9B3838',
-  healthy: '#2F6B45',
-}
 
 function projectHealth(p: {
   status: ProjectStatusDb
@@ -59,6 +41,319 @@ function projectHealth(p: {
   return 'on-track'
 }
 
+// ─── Quarter picker ──────────────────────────────────────────────────────────
+
+const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'] as const
+type Quarter = (typeof QUARTERS)[number]
+
+function QuarterPicker({
+  year,
+  quarter,
+  years,
+  onChange,
+}: {
+  year: number
+  quarter: Quarter
+  years: number[]
+  onChange: (next: { year: number; quarter: Quarter }) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="h-[32px] px-[12px] inline-flex items-center gap-[6px] rounded-[5px] border border-solid border-gray-border-light bg-white-white hover:bg-white-item text-black text-[12px]"
+      >
+        <span>
+          {quarter} {year}
+        </span>
+        <Icon name="ArrowRight" size={13} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-[36px] z-20 w-[200px] bg-white-white border border-gray-border-light rounded-[8px] shadow-[0_8px_24px_rgba(22,36,46,0.12)] overflow-hidden">
+          <ul className="flex flex-col py-[5px]">
+            {years.map((y) => {
+              const active = y === year
+              return (
+                <li key={y}>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ year: y, quarter })}
+                    className={`w-full px-[15px] py-[6px] text-left text-[12px] hover:bg-white-item ${
+                      active ? 'text-black font-semibold' : 'text-gray-main'
+                    }`}
+                  >
+                    {y}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="border-t border-solid border-gray-border-light grid grid-cols-4 p-[5px] gap-[3px]">
+            {QUARTERS.map((q) => {
+              const active = q === quarter
+              return (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => {
+                    onChange({ year, quarter: q })
+                    setOpen(false)
+                  }}
+                  className={`py-[6px] text-[12px] rounded-[5px] ${
+                    active
+                      ? 'bg-white-item text-black font-semibold'
+                      : 'text-gray-main hover:bg-white-item'
+                  }`}
+                >
+                  {q}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Status filter ───────────────────────────────────────────────────────────
+
+type FilterKey = 'active' | 'on-track' | 'at-risk' | 'blocked' | 'planned'
+
+const FILTER_OPTIONS: { key: FilterKey; label: string; color: string }[] = [
+  { key: 'active', label: 'Active', color: '#2D5A9E' },
+  { key: 'on-track', label: 'On track', color: '#2F6B45' },
+  { key: 'at-risk', label: 'At risk', color: '#B68A48' },
+  { key: 'blocked', label: 'Blocked', color: '#9B3838' },
+  { key: 'planned', label: 'Planned', color: '#455E6A' },
+]
+
+/** Each project falls into exactly one of the 5 filter categories — same
+ *  precedence as the Health column tag (Blocked → At risk → Planned →
+ *  Active → On track). Using the single-category logic for both the
+ *  filter counts AND the filtering predicate guarantees that the sum of
+ *  filter-row counts equals the total project count, so the numbers on
+ *  the dropdown line up with what's shown in the title / table. */
+function matchFilter(p: ProjectWithStats, key: FilterKey): boolean {
+  return projectCategory(p) === key
+}
+
+/** Single category to display in the Health column — the most informative
+ *  filter label for the project. Precedence: Blocked → At risk → Planned
+ *  → Active (in-progress) → On track (review/done/healthy). */
+function projectCategory(p: ProjectWithStats): FilterKey {
+  if (p.status === 'blocked') return 'blocked'
+  const h = projectHealth(p)
+  if (h === 'at-risk' || h === 'delayed') return 'at-risk'
+  if (p.status === 'planned') return 'planned'
+  if (p.status === 'in_progress') return 'active'
+  return 'on-track'
+}
+
+const CATEGORY_LABEL: Record<FilterKey, string> = {
+  active: 'Active',
+  'on-track': 'On track',
+  'at-risk': 'At risk',
+  blocked: 'Blocked',
+  planned: 'Planned',
+}
+
+const CATEGORY_TAG_COLOR: Record<
+  FilterKey,
+  'blue' | 'green' | 'amber' | 'red' | 'gray'
+> = {
+  active: 'blue',
+  'on-track': 'green',
+  'at-risk': 'amber',
+  blocked: 'red',
+  planned: 'gray',
+}
+
+const CATEGORY_BAR_COLOR: Record<FilterKey, string> = {
+  active: '#2D5A9E',
+  'on-track': '#2F6B45',
+  'at-risk': '#B68A48',
+  blocked: '#9B3838',
+  planned: '#455E6A',
+}
+
+function StatusFilter({
+  projects,
+  selected,
+  onToggle,
+}: {
+  projects: ProjectWithStats[]
+  selected: Set<FilterKey>
+  onToggle: (key: FilterKey) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const counts = useMemo(() => {
+    const m = new Map<FilterKey, number>()
+    for (const opt of FILTER_OPTIONS) {
+      m.set(opt.key, projects.filter((p) => matchFilter(p, opt.key)).length)
+    }
+    return m
+  }, [projects])
+
+  const allOn = selected.size === FILTER_OPTIONS.length
+  const label =
+    allOn || selected.size === 0 ? 'Filter' : `Filter · ${selected.size}`
+
+  return (
+    <div ref={ref} className="relative">
+      <Button
+        size="compact"
+        variant="secondary"
+        iconLeft="Filter"
+        onClick={() => setOpen((s) => !s)}
+      >
+        {label}
+      </Button>
+      {open && (
+        <div className="absolute top-[40px] right-0 z-20 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md p-[10px] flex flex-col gap-[2px] min-w-[240px]">
+          {FILTER_OPTIONS.map((opt) => (
+            <FilterChecklist
+              key={opt.key}
+              label={opt.label}
+              count={counts.get(opt.key) ?? 0}
+              color={opt.color}
+              checked={selected.has(opt.key)}
+              onChange={() => onToggle(opt.key)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Row menu ────────────────────────────────────────────────────────────────
+
+function ProjectRowMenu({
+  open,
+  isPinned,
+  anchorRect,
+  onClose,
+  onOpenProject,
+  onTogglePin,
+}: {
+  open: boolean
+  isPinned: boolean
+  /** Trigger button's bounding rect at the moment the menu was opened.
+   *  Rendered into a portal with `position: fixed` so it escapes the
+   *  table's `overflow-hidden` / scroll containers — hence viewport
+   *  coordinates rather than a positioned ancestor. Null when closed. */
+  anchorRect: DOMRect | null
+  onClose: () => void
+  onOpenProject: () => void
+  onTogglePin: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    // Any scroll detaches the menu from its anchor — closing matches
+    // standard desktop popover behavior. Capture phase catches nested
+    // scroll containers (the table's overflow-y-auto) too.
+    function onScrollOrResize() {
+      onClose()
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
+    }
+  }, [open, onClose])
+
+  if (!open || !anchorRect || typeof window === 'undefined') return null
+
+  // Fixed positioning escapes the table's overflow-hidden / scroll
+  // containers without needing a portal (none of the ancestors create a
+  // fixed-positioning containing block via transform/filter/perspective).
+  const style: React.CSSProperties = {
+    position: 'fixed',
+    top: anchorRect.bottom + 4,
+    right: Math.max(8, window.innerWidth - anchorRect.right),
+    minWidth: 180,
+  }
+
+  return (
+    <div
+      ref={ref}
+      onClick={(e) => e.stopPropagation()}
+      style={style}
+      className="z-50 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md py-[5px]"
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onOpenProject()
+        }}
+        className="w-full flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left text-black hover:bg-white-item transition-colors"
+      >
+        <Icon name="ArrowRight" size={13} className="text-gray-main" />
+        <span>Open project</span>
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onTogglePin()
+        }}
+        className="w-full flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left text-black hover:bg-white-item transition-colors"
+      >
+        <Icon name="Pin" size={13} className="text-gray-main" />
+        <span>{isPinned ? 'Unpin' : 'Pin'}</span>
+      </button>
+    </div>
+  )
+}
+
+// ─── Stat card ───────────────────────────────────────────────────────────────
+
 const COLS: Column[] = [
   { key: 'project', label: 'Project', width: 'flex-[2]' },
   { key: 'lead', label: 'Lead', width: 'flex-1' },
@@ -70,6 +365,7 @@ const COLS: Column[] = [
 
 function StatCard({
   eyebrow,
+  eyebrowColor,
   value,
   pillDotColor,
   pillText,
@@ -77,6 +373,7 @@ function StatCard({
   pillTextColor,
 }: {
   eyebrow: string
+  eyebrowColor: string
   value: number | string
   pillDotColor: string
   pillText: string
@@ -86,7 +383,10 @@ function StatCard({
   return (
     <div className="flex-1 min-w-0 bg-white-white border border-gray-border-light rounded-[10px] px-[15px] py-[15px] flex items-center justify-between gap-[10px]">
       <div className="flex flex-col gap-[5px] min-w-0">
-        <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px] truncate">
+        <p
+          className="text-[10px] font-medium uppercase tracking-[1.5px] truncate"
+          style={{ color: eyebrowColor }}
+        >
           {eyebrow}
         </p>
         <p
@@ -97,7 +397,7 @@ function StatCard({
         </p>
       </div>
       <span
-        className="shrink-0 inline-flex items-center gap-[5px] rounded-[20px] px-[8px] py-[3px]"
+        className="shrink-0 inline-flex items-center gap-[5px] rounded-[2px] px-[8px] py-[3px]"
         style={{ backgroundColor: pillBg }}
       >
         <span
@@ -159,7 +459,67 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
   const { data: org } = useMyOrg(user?.id)
   const orgName = org?.name ?? 'Organization'
   const { data: members = [] } = useOrgMembers(orgId)
-  const { data: allProjects = [] } = useUserProjects(user?.id)
+  const { data: allProjects = [] } = useOrgProjects(orgId)
+  const { isPinned, toggle: togglePin } = usePinnedProjects(orgId)
+
+  // Quarter picker — initialized to today's quarter.
+  const today = useMemo(() => new Date(), [])
+  const currentYear = today.getFullYear()
+  const currentQuarter: Quarter = (`Q${Math.floor(today.getMonth() / 3) + 1}` as Quarter)
+  const [selectedYear, setSelectedYear] = useState(currentYear)
+  const [selectedQuarter, setSelectedQuarter] = useState<Quarter>(currentQuarter)
+
+  // Category filter — all selected by default.
+  const [statusFilter, setStatusFilter] = useState<Set<FilterKey>>(
+    () => new Set(FILTER_OPTIONS.map((opt) => opt.key))
+  )
+  const toggleFilter = (key: FilterKey) => {
+    setStatusFilter((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null)
+  const closeRowMenu = () => {
+    setOpenMenuId(null)
+    setMenuAnchorRect(null)
+  }
+
+  // Quarter scope — by `dueDate` (latest task due date = project end).
+  // Projects without any dated tasks are not surfaced; they need at least
+  // one task with a due date to be placed on the calendar.
+  const quarterScoped = useMemo(() => {
+    const qIndex = QUARTERS.indexOf(selectedQuarter)
+    const start = new Date(selectedYear, qIndex * 3, 1).getTime()
+    const end = new Date(selectedYear, qIndex * 3 + 3, 0, 23, 59, 59, 999).getTime()
+    return allProjects.filter((p) => {
+      if (!p.dueDate) return false
+      const t = new Date(p.dueDate).getTime()
+      return t >= start && t <= end
+    })
+  }, [allProjects, selectedYear, selectedQuarter])
+
+  const filteredProjects = useMemo(() => {
+    if (statusFilter.size === 0 || statusFilter.size === FILTER_OPTIONS.length) {
+      return quarterScoped
+    }
+    return quarterScoped.filter((p) =>
+      Array.from(statusFilter).some((k) => matchFilter(p, k))
+    )
+  }, [quarterScoped, statusFilter])
+
+  const sortedProjects = useMemo(() => {
+    return [...filteredProjects].sort((a, b) => {
+      const ap = isPinned(a.id) ? 1 : 0
+      const bp = isPinned(b.id) ? 1 : 0
+      if (ap !== bp) return bp - ap
+      return 0
+    })
+  }, [filteredProjects, isPinned])
 
   const counts = useMemo(() => {
     let active = 0
@@ -167,22 +527,15 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
     let atRisk = 0
     let blocked = 0
     let planned = 0
-    for (const p of allProjects) {
-      if (
-        (['planned', 'in_progress', 'review'] as ProjectStatusDb[]).includes(
-          p.status
-        )
-      ) {
-        active++
-      }
-      if (p.status === 'planned') planned++
-      if (p.status === 'blocked') blocked++
-      const h = projectHealth(p)
-      if (h === 'on-track' || h === 'healthy') onTrack++
-      if (h === 'at-risk') atRisk++
+    for (const p of quarterScoped) {
+      if (matchFilter(p, 'active')) active++
+      if (matchFilter(p, 'on-track')) onTrack++
+      if (matchFilter(p, 'at-risk')) atRisk++
+      if (matchFilter(p, 'blocked')) blocked++
+      if (matchFilter(p, 'planned')) planned++
     }
     return { active, onTrack, atRisk, blocked, planned }
-  }, [allProjects])
+  }, [quarterScoped])
 
   const memberById = useMemo(() => {
     const map = new Map<string, (typeof members)[number]>()
@@ -196,10 +549,10 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
       <div className="shrink-0 flex items-end justify-between gap-[10px]">
         <div className="flex flex-col gap-[5px]">
           <p className="text-[#8a5a1e] text-[10px] font-medium uppercase tracking-[1.5px]">
-            {orgName} · Projects
+            {orgName} · {selectedQuarter} {selectedYear}
           </p>
           <h1 className="text-black text-[35px] font-semibold leading-tight">
-            {allProjects.length} active projects{' '}
+            {quarterScoped.length} projects{' '}
             <em
               className="italic font-semibold text-gray-main"
               style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
@@ -209,12 +562,20 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
           </h1>
         </div>
         <div className="flex items-center gap-[10px]">
-          <Button size="compact" variant="secondary" iconRight="ArrowRight">
-            Q2 {new Date().getFullYear()}
-          </Button>
-          <Button size="compact" variant="secondary" iconLeft="Filter">
-            Filter
-          </Button>
+          <QuarterPicker
+            year={selectedYear}
+            quarter={selectedQuarter}
+            years={[currentYear - 1, currentYear, currentYear + 1]}
+            onChange={({ year, quarter }) => {
+              setSelectedYear(year)
+              setSelectedQuarter(quarter)
+            }}
+          />
+          <StatusFilter
+            projects={quarterScoped}
+            selected={statusFilter}
+            onToggle={toggleFilter}
+          />
           <Button size="compact" iconLeft="Add" onClick={() => open('project')}>
             New project
           </Button>
@@ -225,6 +586,7 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
       <div className="shrink-0 flex gap-[10px]">
         <StatCard
           eyebrow="Active"
+          eyebrowColor="#2D5A9E"
           value={counts.active}
           pillBg="#DDE7F4"
           pillDotColor="#2D5A9E"
@@ -233,6 +595,7 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
         />
         <StatCard
           eyebrow="On track"
+          eyebrowColor="#2F6B45"
           value={counts.onTrack}
           pillBg="#DCEBE0"
           pillDotColor="#2F6B45"
@@ -245,6 +608,7 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
         />
         <StatCard
           eyebrow="At risk"
+          eyebrowColor="#B68A48"
           value={counts.atRisk}
           pillBg="#F4E6CD"
           pillDotColor="#B68A48"
@@ -253,6 +617,7 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
         />
         <StatCard
           eyebrow="Blocked"
+          eyebrowColor="#9B3838"
           value={counts.blocked}
           pillBg="#F2DEDE"
           pillDotColor="#9B3838"
@@ -261,6 +626,7 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
         />
         <StatCard
           eyebrow="Planned"
+          eyebrowColor="#455E6A"
           value={counts.planned}
           pillBg="#E6ECEF"
           pillDotColor="#455E6A"
@@ -269,23 +635,26 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
         />
       </div>
 
-      {/* TABLE */}
-      <Table className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      {/* TABLE — hugs content when short, scrolls internally when overflowing */}
+      <Table className="min-h-0 flex flex-col overflow-hidden">
         <TableHeader className="shrink-0" columns={COLS} />
         <div className="min-h-0 overflow-y-auto">
-          {allProjects.length === 0 ? (
+          {sortedProjects.length === 0 ? (
             <div className="px-[25px] py-[20px] text-gray-secondary text-[12px]">
-              No projects yet.
+              {allProjects.length === 0
+                ? 'No projects yet.'
+                : 'No projects match the filter.'}
             </div>
           ) : (
-            allProjects.map((p, i) => {
-              const h = projectHealth(p)
+            sortedProjects.map((p, i) => {
+              const cat = projectCategory(p)
               const pct = Math.max(0, Math.min(100, p.progressPct ?? 0))
               const lead = p.lead_id ? memberById.get(p.lead_id) : null
+              const pinned = isPinned(p.id)
               return (
                 <TableRow
                   key={p.id}
-                  isLast={i === allProjects.length - 1}
+                  isLast={i === sortedProjects.length - 1}
                   onClick={() => router.push(`/p/${p.id}/dashboard`)}
                 >
                   <TableCell width="flex-[2]">
@@ -293,6 +662,9 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
                     <span className="text-black text-[14px] font-semibold truncate">
                       {p.name}
                     </span>
+                    {pinned && (
+                      <Icon name="Pin" size={12} className="text-gray-main shrink-0" />
+                    )}
                   </TableCell>
                   <TableCell width="flex-1">
                     {lead ? (
@@ -308,15 +680,15 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
                     )}
                   </TableCell>
                   <TableCell width="w-[120px]">
-                    <Tag color={HEALTH_COLOR[h]} size="md">
-                      {HEALTH_LABEL[h]}
+                    <Tag color={CATEGORY_TAG_COLOR[cat]} size="md">
+                      {CATEGORY_LABEL[cat]}
                     </Tag>
                   </TableCell>
                   <TableCell width="flex-1">
                     <span className="flex-1 h-[6px] bg-gray-extra-light rounded-full overflow-hidden">
                       <span
                         className="block h-full rounded-full"
-                        style={{ width: `${pct}%`, backgroundColor: HEALTH_BAR[h] }}
+                        style={{ width: `${pct}%`, backgroundColor: CATEGORY_BAR_COLOR[cat] }}
                       />
                     </span>
                     <span
@@ -327,19 +699,45 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
                     </span>
                   </TableCell>
                   <TableCell width="w-[100px]">
-                    <span className="text-black text-[12px]">
-                      {formatDue(p.nextDueDate)}
+                    <span
+                      className="text-gray-main text-[12px]"
+                      style={{ fontFamily: 'Wanted Sans, ui-sans-serif, sans-serif' }}
+                    >
+                      {formatDue(p.dueDate)}
                     </span>
                   </TableCell>
                   <TableCell width="w-[30px]" align="right">
-                    <button
-                      type="button"
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-gray-secondary hover:text-black"
-                      aria-label="More"
-                    >
-                      <Icon name="Dot-Menu" size={15} />
-                    </button>
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          if (openMenuId === p.id) {
+                            closeRowMenu()
+                          } else {
+                            setMenuAnchorRect(e.currentTarget.getBoundingClientRect())
+                            setOpenMenuId(p.id)
+                          }
+                        }}
+                        className="text-gray-secondary hover:text-black inline-flex items-center justify-center w-[24px] h-[24px] rounded transition-colors"
+                        aria-label="More"
+                      >
+                        <Icon name="Dot-Menu" size={15} />
+                      </button>
+                      <ProjectRowMenu
+                        open={openMenuId === p.id}
+                        isPinned={pinned}
+                        anchorRect={openMenuId === p.id ? menuAnchorRect : null}
+                        onClose={closeRowMenu}
+                        onOpenProject={() => {
+                          closeRowMenu()
+                          router.push(`/p/${p.id}/dashboard`)
+                        }}
+                        onTogglePin={() => {
+                          togglePin(p.id)
+                          closeRowMenu()
+                        }}
+                      />
+                    </div>
                   </TableCell>
                 </TableRow>
               )

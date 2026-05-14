@@ -474,7 +474,7 @@ export default function CalendarPage() {
     [rawEvents, selectedYmd]
   )
   const dayProjectDues = useMemo(
-    () => allProjects.filter((p) => p.nextDueDate === selectedYmd),
+    () => allProjects.filter((p) => p.dueDate === selectedYmd),
     [allProjects, selectedYmd]
   )
 
@@ -517,10 +517,10 @@ export default function CalendarPage() {
       }
     }
     for (const p of allProjects) {
-      if (!p.nextDueDate) continue
+      if (!p.dueDate) continue
       events.push({
         id: `p-${p.id}`,
-        date: p.nextDueDate,
+        date: p.dueDate,
         title: `${p.name} due`,
         type: 'project',
       })
@@ -648,7 +648,7 @@ export default function CalendarPage() {
                             title: `${p.name} due`,
                             projectName: p.name,
                             projectColor: p.color ?? null,
-                            dueDate: p.nextDueDate ?? '',
+                            dueDate: p.dueDate ?? '',
                             lead: leadUser
                               ? leadUser.nickname ||
                                 `${leadUser.first_name} ${leadUser.last_name}`.trim()

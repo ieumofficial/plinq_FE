@@ -43,8 +43,13 @@ export type ProjectWithStats = ProjectRow & {
   progressPct: number | null
   tasksTotal: number
   tasksDone: number
-  /** Latest due_date among the project's tasks (YYYY-MM-DD), or null. */
+  /** Earliest task due_date — the next upcoming deadline (YYYY-MM-DD), or null.
+   *  Used by health logic ("at-risk if a deadline is within 7 days"); do
+   *  not surface as the project's "Due" — that's `dueDate` below. */
   nextDueDate: string | null
+  /** Latest task due_date — used as a proxy for "project end date" since
+   *  the schema has no dedicated project.due_date column (YYYY-MM-DD), or null. */
+  dueDate: string | null
 }
 
 /**
@@ -114,7 +119,7 @@ export async function getUserProjects(
 
   const taskStatsByProject = new Map<
     string,
-    { total: number; done: number; nextDueDate: string | null }
+    { total: number; done: number; nextDueDate: string | null; dueDate: string | null }
   >()
   for (const t of (tasksRes.data ?? []) as {
     project_id: string
@@ -125,11 +130,15 @@ export async function getUserProjects(
       total: 0,
       done: 0,
       nextDueDate: null,
+      dueDate: null,
     }
     c.total += 1
     if (t.status === 'done') c.done += 1
     if (t.due_date && (!c.nextDueDate || t.due_date < c.nextDueDate)) {
       c.nextDueDate = t.due_date
+    }
+    if (t.due_date && (!c.dueDate || t.due_date > c.dueDate)) {
+      c.dueDate = t.due_date
     }
     taskStatsByProject.set(t.project_id, c)
   }
@@ -146,6 +155,113 @@ export async function getUserProjects(
       tasksTotal: total,
       tasksDone: done,
       nextDueDate: counts?.nextDueDate ?? null,
+      dueDate: counts?.dueDate ?? null,
+    }
+  })
+}
+
+/**
+ * All projects in an org, regardless of the viewer's project_members
+ * membership. Used by Organization Space pages (leadership/portfolio
+ * view): the CEO can see every project the org runs, not only ones they
+ * personally joined.
+ */
+export async function getOrgProjects(
+  orgId: string,
+  opts?: { statuses?: ProjectRow['status'][]; limit?: number }
+): Promise<ProjectWithStats[]> {
+  let q = supabase
+    .from('projects')
+    .select(
+      'id, name, description, org_id, lead_id, status, color, budget, created_at'
+    )
+    .eq('org_id', orgId)
+  if (opts?.statuses && opts.statuses.length > 0) {
+    q = q.in('status', opts.statuses)
+  }
+  q = q.order('created_at', { ascending: false })
+  if (opts?.limit) q = q.limit(opts.limit)
+
+  const { data: projects, error: pErr } = await q
+  if (pErr) {
+    console.error('[queries] org projects', pErr)
+    return []
+  }
+  const projectRows = (projects ?? []) as ProjectRow[]
+  if (projectRows.length === 0) return []
+
+  const ids = projectRows.map((p) => p.id)
+  const [membersRes, tasksRes] = await Promise.all([
+    supabase
+      .from('project_members')
+      .select(
+        'project_id, users(id, email, first_name, last_name, nickname, job_title)'
+      )
+      .in('project_id', ids),
+    supabase
+      .from('tasks')
+      .select('project_id, status, due_date')
+      .in('project_id', ids),
+  ])
+  if (membersRes.error)
+    console.error('[queries] members for org projects', membersRes.error)
+  if (tasksRes.error)
+    console.error('[queries] tasks for org projects', tasksRes.error)
+
+  const membersByProject = new Map<string, UserRow[]>()
+  for (const row of membersRes.data ?? []) {
+    const r = row as unknown as {
+      project_id: string
+      users: UserRow | UserRow[] | null
+    }
+    const pid = r.project_id
+    const u = r.users
+    if (!u) continue
+    const users = Array.isArray(u) ? u : [u]
+    const arr = membersByProject.get(pid) ?? []
+    arr.push(...users)
+    membersByProject.set(pid, arr)
+  }
+
+  const taskStatsByProject = new Map<
+    string,
+    { total: number; done: number; nextDueDate: string | null; dueDate: string | null }
+  >()
+  for (const t of (tasksRes.data ?? []) as {
+    project_id: string
+    status: TaskStatusDb
+    due_date: string | null
+  }[]) {
+    const c = taskStatsByProject.get(t.project_id) ?? {
+      total: 0,
+      done: 0,
+      nextDueDate: null,
+      dueDate: null,
+    }
+    c.total += 1
+    if (t.status === 'done') c.done += 1
+    if (t.due_date && (!c.nextDueDate || t.due_date < c.nextDueDate)) {
+      c.nextDueDate = t.due_date
+    }
+    if (t.due_date && (!c.dueDate || t.due_date > c.dueDate)) {
+      c.dueDate = t.due_date
+    }
+    taskStatsByProject.set(t.project_id, c)
+  }
+
+  return projectRows.map((p) => {
+    const counts = taskStatsByProject.get(p.id)
+    const total = counts?.total ?? 0
+    const done = counts?.done ?? 0
+    const progressPct = total > 0 ? Math.round((done / total) * 100) : null
+    return {
+      ...p,
+      members: membersByProject.get(p.id) ?? [],
+      progressPct,
+      tasksTotal: total,
+      tasksDone: done,
+      nextDueDate: counts?.nextDueDate ?? null,
+      dueDate: counts?.dueDate ?? null,
     }
   })
 }

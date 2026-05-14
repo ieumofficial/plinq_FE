@@ -341,7 +341,7 @@ function ProjectsPageBody() {
                 progress={p.progressPct ?? 0}
                 tasksDone={p.tasksDone}
                 tasksTotal={p.tasksTotal}
-                due={formatDueDate(p.nextDueDate)}
+                due={formatDueDate(p.dueDate)}
                 lead={lead ? userToMember(lead) : undefined}
                 members={others.map(userToMember)}
                 canDelete={!!user && p.lead_id === user.id}

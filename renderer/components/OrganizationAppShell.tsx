@@ -12,7 +12,7 @@ import {
   useCurrentUser,
   useMyOrg,
   useOrgMembers,
-  useUserProjects,
+  useOrgProjects,
 } from '../lib/hooks'
 import { useSidebarPref, useSpaceTransition } from '../lib/sidebarPref'
 
@@ -79,7 +79,7 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
   const { data: user, isFetched: userFetched } = useCurrentUser()
   const { data: org } = useMyOrg(user?.id)
   const { data: members = [] } = useOrgMembers(orgId)
-  const { data: orgProjects = [] } = useUserProjects(user?.id)
+  const { data: orgProjects = [] } = useOrgProjects(orgId)
   const { collapsed: stackedSidebar, toggle: toggleSidebar } = useSidebarPref()
   useSpaceTransition(`org:${orgId}`)
 
@@ -150,6 +150,7 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
             sectionLabel={stackedSidebar ? undefined : 'Personal Space'}
             items={PERSONAL_RAIL_ITEMS}
             footerItems={PERSONAL_FOOTER}
+            activeKey="organization"
             userInitials={initials}
             userName={userName}
             stacked={stackedSidebar}

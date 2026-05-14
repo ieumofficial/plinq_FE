@@ -167,6 +167,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
             sectionLabel={stackedSidebar ? undefined : 'Personal Space'}
             items={PERSONAL_RAIL_ITEMS}
             footerItems={PERSONAL_FOOTER}
+            activeKey="projects"
             userInitials={initials}
             userName={userName}
             stacked={stackedSidebar}

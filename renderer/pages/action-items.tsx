@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Head from 'next/head'
+import { useRouter } from 'next/router'
 import PersonalAppShell, { useCreateNew } from '../components/PersonalAppShell'
 import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
@@ -41,11 +42,15 @@ function resolveProjectColor(color: string | null | undefined): string {
 type FilterKey = 'all' | 'today' | 'overdue'
 
 const COLS: Column[] = [
-  { key: 'task', label: 'Action', width: 'w-[580px]' },
+  // Action stretches to fill the row; the right-side columns are fixed
+  // widths so Source/Status/Priority/Due/⋯ hug the right edge regardless
+  // of viewport width.
+  { key: 'task', label: 'Action', width: 'flex-1' },
   { key: 'source', label: 'Source', width: 'w-[150px]' },
   { key: 'status', label: 'Status', width: 'w-[102px]' },
   { key: 'priority', label: 'Priority', width: 'w-[76px]' },
   { key: 'due', label: 'Due', width: 'w-[70px]' },
+  { key: 'more', label: '', width: 'w-[30px]' },
 ]
 
 function startOfToday() {
@@ -113,6 +118,7 @@ export default function ActionItemsPage() {
 }
 
 function ActionItemsBody() {
+  const router = useRouter()
   const createNew = useCreateNew()
   const { data: user } = useCurrentUser()
   const { data: tasks = [], isLoading } = useUserActionItems(user?.id, { includeDone: true })
@@ -120,6 +126,12 @@ function ActionItemsBody() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterKey>('all')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null)
+  const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null)
+  const closeRowMenu = () => {
+    setOpenMenuTaskId(null)
+    setMenuAnchorRect(null)
+  }
   const [priorityFilter, setPriorityFilter] = useState<Set<TaskPriorityDb>>(
     () => new Set(PRIORITY_OPTIONS.map((p) => p.key))
   )
@@ -353,7 +365,7 @@ function ActionItemsBody() {
                       const source = formatSource(t)
                       return (
                         <TableRow key={t.id} isLast={i === rows.length - 1}>
-                          <TableCell width="w-[580px]">
+                          <TableCell width="flex-1">
                             <Checkbox
                               checked={isDone}
                               onChange={(next) =>
@@ -401,6 +413,49 @@ function ActionItemsBody() {
                             >
                               {dueLabel}
                             </span>
+                          </TableCell>
+                          <TableCell width="w-[30px]" align="right">
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  if (openMenuTaskId === t.id) {
+                                    closeRowMenu()
+                                  } else {
+                                    setMenuAnchorRect(
+                                      e.currentTarget.getBoundingClientRect()
+                                    )
+                                    setOpenMenuTaskId(t.id)
+                                  }
+                                }}
+                                className="text-gray-secondary hover:text-black inline-flex items-center justify-center w-[24px] h-[24px] rounded transition-colors"
+                                aria-label="More"
+                              >
+                                <Icon name="Dot-Menu" size={15} />
+                              </button>
+                              <TaskRowMenu
+                                open={openMenuTaskId === t.id}
+                                anchorRect={
+                                  openMenuTaskId === t.id ? menuAnchorRect : null
+                                }
+                                isDone={isDone}
+                                hasProject={!!t.project_id}
+                                onClose={closeRowMenu}
+                                onOpenProject={() => {
+                                  closeRowMenu()
+                                  if (t.project_id) {
+                                    router.push(`/p/${t.project_id}/backlog`)
+                                  }
+                                }}
+                                onToggleDone={() => {
+                                  updateTaskStatus({
+                                    taskId: t.id,
+                                    status: isDone ? 'in_progress' : 'done',
+                                  })
+                                  closeRowMenu()
+                                }}
+                              />
+                            </div>
                           </TableCell>
                         </TableRow>
                       )
@@ -563,6 +618,95 @@ function ProjectFilterButton({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function TaskRowMenu({
+  open,
+  anchorRect,
+  isDone,
+  hasProject,
+  onClose,
+  onOpenProject,
+  onToggleDone,
+}: {
+  open: boolean
+  /** Trigger button's bounding rect — used so the menu can render with
+   *  `position: fixed` and escape the page's `overflow-y-auto` scroll
+   *  container without needing a portal. Null when closed. */
+  anchorRect: DOMRect | null
+  isDone: boolean
+  hasProject: boolean
+  onClose: () => void
+  onOpenProject: () => void
+  onToggleDone: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    function onScrollOrResize() {
+      onClose()
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
+    }
+  }, [open, onClose])
+
+  if (!open || !anchorRect || typeof window === 'undefined') return null
+
+  const style: React.CSSProperties = {
+    position: 'fixed',
+    top: anchorRect.bottom + 4,
+    right: Math.max(8, window.innerWidth - anchorRect.right),
+    minWidth: 180,
+  }
+
+  return (
+    <div
+      ref={ref}
+      onClick={(e) => e.stopPropagation()}
+      style={style}
+      className="z-50 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md py-[5px]"
+    >
+      <button
+        type="button"
+        disabled={!hasProject}
+        title={hasProject ? undefined : 'This task is not attached to a project'}
+        onClick={(e) => {
+          e.stopPropagation()
+          onOpenProject()
+        }}
+        className="w-full flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left text-black hover:bg-white-item transition-colors disabled:text-gray-secondary disabled:cursor-not-allowed disabled:hover:bg-transparent"
+      >
+        <Icon name="ArrowRight" size={13} className="text-gray-main" />
+        <span>Open in project</span>
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleDone()
+        }}
+        className="w-full flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left text-black hover:bg-white-item transition-colors"
+      >
+        <Icon name="Task" size={13} className="text-gray-main" />
+        <span>{isDone ? 'Mark as not done' : 'Mark as done'}</span>
+      </button>
     </div>
   )
 }

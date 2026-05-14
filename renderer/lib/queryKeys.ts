@@ -16,6 +16,10 @@ export const queryKeys = {
       userId: string,
       opts?: { statuses?: string[]; limit?: number }
     ) => ['projects', 'list', userId, opts ?? null] as const,
+    orgList: (
+      orgId: string,
+      opts?: { statuses?: string[]; limit?: number }
+    ) => ['projects', 'orgList', orgId, opts ?? null] as const,
   },
 
   tasks: {

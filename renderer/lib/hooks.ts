@@ -23,6 +23,7 @@ import {
   getProjectMembers,
   getProjectMembersWithRoles,
   getProjectTasks,
+  getOrgProjects,
   getUserActionItems,
   getUserCalendarEvents,
   getUserProjects,
@@ -78,6 +79,18 @@ export function useUserProjects(
     queryKey: queryKeys.projects.list(userId ?? '', opts),
     queryFn: () => getUserProjects(userId!, opts),
     enabled: !!userId,
+  })
+}
+
+/** All projects in an org (Organization Space view, ignores membership). */
+export function useOrgProjects(
+  orgId: string | null | undefined,
+  opts?: { statuses?: ProjectRow['status'][]; limit?: number }
+) {
+  return useQuery<ProjectWithStats[]>({
+    queryKey: queryKeys.projects.orgList(orgId ?? '', opts),
+    queryFn: () => getOrgProjects(orgId!, opts),
+    enabled: !!orgId,
   })
 }
 

@@ -11,7 +11,7 @@ import {
   useCurrentUser,
   useMyOrg,
   useOrgMembers,
-  useUserProjects,
+  useOrgProjects,
 } from '../../../lib/hooks'
 import { userToMember } from '../../../lib/types'
 import type { ProjectStatusDb } from '../../../lib/types'
@@ -229,6 +229,7 @@ function ProjectMiniCard({
   members,
   progress,
   health,
+  pinned,
   onOpen,
 }: {
   name: string
@@ -237,6 +238,7 @@ function ProjectMiniCard({
   members: Member[]
   progress: number
   health: Health
+  pinned?: boolean
   onOpen?: () => void
 }) {
   const pct = Math.max(0, Math.min(100, progress))
@@ -245,7 +247,7 @@ function ProjectMiniCard({
     <button
       type="button"
       onClick={onOpen}
-      className="bg-[#f8fafb] rounded-[10px] p-[15px] flex flex-col justify-between min-h-[115px] gap-[12px] text-left hover:bg-[#eef3f5] transition-colors"
+      className="bg-[#f8fafb] rounded-[10px] p-[15px] flex flex-col justify-between min-h-[95px] gap-[10px] text-left hover:bg-[#eef3f5] transition-colors"
     >
       {/* Top — name + description tight together. */}
       <div className="flex flex-col gap-[4px] w-full min-w-0">
@@ -260,7 +262,9 @@ function ProjectMiniCard({
             <Tag color={healthColor} size="md">
               {HEALTH_LABEL[health]}
             </Tag>
-            <Icon name="ArrowRight" size={15} />
+            {pinned && (
+              <Icon name="Pin" size={13} className="text-gray-main shrink-0" />
+            )}
           </div>
         </div>
         <p className="text-gray-main text-[10px] leading-[1.4] line-clamp-1 pl-[38px]">
@@ -384,13 +388,13 @@ const STAGES: Stage[] = [
 function WorkByStage({ counts }: { counts: Record<Stage['key'], number> }) {
   const total = Object.values(counts).reduce((a, b) => a + b, 0)
   return (
-    <div className="bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[10px] w-[509px] max-w-[45%] shrink min-w-0 overflow-hidden">
+    <div className="flex-1 min-w-[420px] bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[10px] overflow-hidden">
       <SectionEyebrow
         eyebrow="Pipeline · total tasks"
         title="Work by stage"
         colorClass="text-[#8a5a1e]"
       />
-      <div className="flex h-[35px] rounded-[8px] overflow-hidden shadow-[0px_2px_2px_0px_rgba(22,36,46,0.03)] w-full">
+      <div className="shrink-0 flex h-[40px] rounded-[8px] overflow-hidden shadow-[0px_2px_2px_0px_rgba(22,36,46,0.03)] w-full">
         {STAGES.map((s) => {
           const c = counts[s.key]
           const pct = total > 0 ? Math.round((c / total) * 100) : 0
@@ -463,7 +467,7 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
   const orgName = org?.name ?? 'Your organization'
 
   const { data: members = [] } = useOrgMembers(orgId)
-  const { data: allProjects = [] } = useUserProjects(userId)
+  const { data: allProjects = [] } = useOrgProjects(orgId)
   const { pinned: pinnedProjectIds } = usePinnedProjects(orgId)
 
   // Quarter picker — initialized to today's quarter; user can rewind a
@@ -474,32 +478,33 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [selectedQuarter, setSelectedQuarter] = useState<Quarter>(currentQuarter)
 
-  // Projects whose next-due date sits inside the selected quarter. If a
-  // project has no due date yet we fall back to "include only when the
-  // selected quarter is the current one" so the dashboard isn't blank for
-  // an org that has only just-started projects.
+  // Projects whose end (`dueDate` = latest task due_date) sits inside the
+  // selected quarter. Projects without any dated tasks are not placeable
+  // on the calendar and are excluded.
   const quarterProjects = useMemo(() => {
     const qIndex = QUARTERS.indexOf(selectedQuarter)
     const start = new Date(selectedYear, qIndex * 3, 1).getTime()
     const end = new Date(selectedYear, qIndex * 3 + 3, 0, 23, 59, 59, 999).getTime()
-    const isCurrent =
-      selectedYear === currentYear && selectedQuarter === currentQuarter
     return allProjects.filter((p) => {
-      if (p.nextDueDate) {
-        const t = new Date(p.nextDueDate).getTime()
-        return t >= start && t <= end
-      }
-      return isCurrent
+      if (!p.dueDate) return false
+      const t = new Date(p.dueDate).getTime()
+      return t >= start && t <= end
     })
-  }, [allProjects, selectedYear, selectedQuarter, currentYear, currentQuarter])
+  }, [allProjects, selectedYear, selectedQuarter])
 
-  const activeProjects = useMemo(
-    () =>
-      quarterProjects.filter((p) =>
-        (['planned', 'in_progress', 'review'] as ProjectStatusDb[]).includes(p.status)
-      ),
-    [quarterProjects]
-  )
+  const activeProjects = useMemo(() => {
+    const filtered = quarterProjects.filter((p) =>
+      (['planned', 'in_progress', 'review'] as ProjectStatusDb[]).includes(p.status)
+    )
+    // Pinned projects float to the top so they're guaranteed a slot in
+    // the 6-card grid below; relative order within pinned/unpinned is
+    // preserved (already sorted by `getOrgProjects`).
+    return [...filtered].sort((a, b) => {
+      const ap = pinnedProjectIds.has(a.id) ? 1 : 0
+      const bp = pinnedProjectIds.has(b.id) ? 1 : 0
+      return bp - ap
+    })
+  }, [quarterProjects, pinnedProjectIds])
 
   const onTrackCount = useMemo(
     () => activeProjects.filter((p) => projectHealth(p) === 'on-track').length,
@@ -633,7 +638,7 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
       {/* ACTIVE PROJECTS — the Portfolio is the centerpiece, so it gets
           the heavier share of the leftover space. The bottom strip clips
           overflowing rows rather than scrolls. */}
-      <section className="flex-[1.6] min-h-0 bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[10px] overflow-hidden">
+      <section className="flex-[1.2] min-h-0 bg-white-white border border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[10px] overflow-hidden">
         <div className="shrink-0 flex items-center justify-between">
           <SectionEyebrow eyebrow="Portfolio" title="Active projects" />
           <div className="flex items-center gap-[10px]">
@@ -668,6 +673,7 @@ function OrgDashboardBody({ orgId }: { orgId: string }) {
                 members={p.members.map(userToMember)}
                 progress={p.progressPct ?? 0}
                 health={projectHealth(p)}
+                pinned={pinnedProjectIds.has(p.id)}
                 onOpen={() => router.push(`/p/${p.id}/dashboard`)}
               />
             ))}

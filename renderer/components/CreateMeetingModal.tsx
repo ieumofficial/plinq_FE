@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Input from './ui/Input'
 import Button from './ui/Button'
 import Icon from './ui/Icon'
 import ProjectLabel from './ui/ProjectLabel'
+import DatePicker from './ui/DatePicker'
+import TimePicker from './ui/TimePicker'
 import { useQueryClient } from '@tanstack/react-query'
 import { createMeeting } from '../lib/queries'
 import { useCurrentUser, useProjectMembers, useUserProjects } from '../lib/hooks'
@@ -130,13 +132,25 @@ export default function CreateMeetingModal({
   const [location, setLocation] = useState<'zoom' | 'in_person'>('in_person')
   const [projectId, setProjectId] = useState<string | null>(defaultProjectId ?? null)
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
+  const [projectAnchor, setProjectAnchor] = useState<DOMRect | null>(null)
+  const projectTriggerRef = useRef<HTMLButtonElement>(null)
   const [meetingType, setMeetingType] = useState<MeetingType>('planning')
   const [date, setDate] = useState('')
+  const [datePickerAnchor, setDatePickerAnchor] = useState<DOMRect | null>(null)
+  const dateTriggerRef = useRef<HTMLButtonElement>(null)
   const [startTime, setStartTime] = useState('14:00')
+  const [startPickerAnchor, setStartPickerAnchor] = useState<DOMRect | null>(null)
+  const startTriggerRef = useRef<HTMLButtonElement>(null)
   const [endTime, setEndTime] = useState('14:30')
+  const [endPickerAnchor, setEndPickerAnchor] = useState<DOMRect | null>(null)
+  const endTriggerRef = useRef<HTMLButtonElement>(null)
   const [recurrence, setRecurrence] = useState<MeetingRecurrence>('once')
   const [recurrencePickerOpen, setRecurrencePickerOpen] = useState(false)
+  const [recurrenceAnchor, setRecurrenceAnchor] = useState<DOMRect | null>(null)
+  const recurrenceTriggerRef = useRef<HTMLButtonElement>(null)
   const [recurrenceUntil, setRecurrenceUntil] = useState('')
+  const [untilPickerAnchor, setUntilPickerAnchor] = useState<DOMRect | null>(null)
+  const untilTriggerRef = useRef<HTMLButtonElement>(null)
   const [attendeeIds, setAttendeeIds] = useState<string[]>([])
   const [attendeeSearch, setAttendeeSearch] = useState('')
   const [emailInvites, setEmailInvites] = useState<string[]>([])
@@ -188,10 +202,12 @@ export default function CreateMeetingModal({
       if (e.key === 'Escape') {
         if (projectPickerOpen) {
           setProjectPickerOpen(false)
+          setProjectAnchor(null)
           return
         }
         if (recurrencePickerOpen) {
           setRecurrencePickerOpen(false)
+          setRecurrenceAnchor(null)
           return
         }
         onClose()
@@ -398,21 +414,26 @@ export default function CreateMeetingModal({
 
         {/* Body */}
         <div className="px-[20px] py-[20px] flex flex-col gap-[15px]">
-          {/* Title + Location — Figma: 519 + 15gap + 143 = 677 */}
-          <div className="grid grid-cols-[519px_143px] gap-[15px]">
+          {/* Title + Location — Location now takes the room it needs so the
+              "Zoom (soon)" disabled pill no longer overflows the column. */}
+          <div className="grid grid-cols-[1fr_auto] gap-[15px]">
             <Input
-              label="MEETING TITLE *"
+              label={
+                <>
+                  MEETING TITLE <span className="text-red-main">*</span>
+                </>
+              }
               placeholder="Cutover dry-run"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               autoFocus
               className="!max-w-none"
             />
-            <div className="flex flex-col gap-1 w-[143px]">
+            <div className="flex flex-col gap-1">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                Location *
+                Location <span className="text-red-main">*</span>
               </label>
-              <div className="bg-white-item flex items-start gap-[5px] p-[5px] rounded-[5px] h-[39px]">
+              <div className="bg-white-item flex items-center gap-[5px] p-[5px] rounded-[5px] h-[39px]">
                 {LOCATIONS.map((l) => {
                   const selected = location === l.key
                   const disabled = !!l.disabled
@@ -423,7 +444,7 @@ export default function CreateMeetingModal({
                       onClick={() => !disabled && setLocation(l.key)}
                       disabled={disabled}
                       title={disabled ? 'Coming in a future release' : undefined}
-                      className={`flex items-center justify-center px-[10px] py-[5px] rounded-[5px] text-[12px] font-semibold whitespace-nowrap transition-colors ${
+                      className={`flex items-center justify-center px-[8px] py-[4px] rounded-[5px] text-[11px] font-semibold whitespace-nowrap transition-colors ${
                         selected
                           ? 'bg-[#E6ECEF] text-primary-main'
                           : disabled
@@ -441,13 +462,25 @@ export default function CreateMeetingModal({
 
           {/* Project + Meeting Type — Figma: 337px + 15gap + 325px = 677px */}
           <div className="grid grid-cols-[337px_1fr] gap-[15px]">
-            <div className="flex flex-col gap-1 relative">
+            <div className="flex flex-col gap-1">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                Project *
+                Project <span className="text-red-main">*</span>
               </label>
               <button
+                ref={projectTriggerRef}
                 type="button"
-                onClick={() => !lockProject && setProjectPickerOpen((v) => !v)}
+                onClick={() => {
+                  if (lockProject) return
+                  if (projectPickerOpen) {
+                    setProjectPickerOpen(false)
+                    setProjectAnchor(null)
+                  } else {
+                    setProjectAnchor(
+                      projectTriggerRef.current?.getBoundingClientRect() ?? null
+                    )
+                    setProjectPickerOpen(true)
+                  }
+                }}
                 disabled={lockProject}
                 className={`bg-white-white border border-gray-border rounded-lg px-3 py-2 text-left flex items-center gap-2 h-[39px] ${
                   lockProject ? 'cursor-not-allowed opacity-90' : 'hover:border-primary-main'
@@ -462,7 +495,13 @@ export default function CreateMeetingModal({
                     <span className="text-[12px] text-gray-secondary truncate">· Org name</span>
                     {!lockProject && (
                       <span className="ml-auto text-gray-secondary shrink-0">
-                        <Icon name="ArrowRight" size={12} />
+                        <Icon
+                          name="ArrowRight"
+                          size={12}
+                          className={`transition-transform ${
+                            projectPickerOpen ? 'rotate-90' : ''
+                          }`}
+                        />
                       </span>
                     )}
                   </>
@@ -470,34 +509,10 @@ export default function CreateMeetingModal({
                   <span className="text-gray-secondary text-[12px]">— select project —</span>
                 )}
               </button>
-              {projectPickerOpen && !lockProject && (
-                <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white-white border border-gray-border rounded-lg shadow-lg z-10 max-h-[200px] overflow-y-auto">
-                  {projects.length === 0 ? (
-                    <p className="px-3 py-2 text-gray-secondary text-[11px]">No projects yet</p>
-                  ) : (
-                    projects.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          setProjectId(p.id)
-                          setProjectPickerOpen(false)
-                        }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-white-item text-left ${
-                          projectId === p.id ? 'bg-blue-light/30' : ''
-                        }`}
-                      >
-                        <ProjectLabel name={p.name} color={p.color} size="sm" />
-                        <span className="text-[12px] text-black">{p.name}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                Meeting Type *
+                Meeting Type <span className="text-red-main">*</span>
               </label>
               <div className="bg-white-item flex items-start gap-[5px] p-[5px] rounded-[5px] h-[39px]">
                 {MEETING_TYPES.map((t) => {
@@ -524,7 +539,7 @@ export default function CreateMeetingModal({
           {/* When: Right now (instant Zoom + autostart) vs Schedule for later */}
           <div className="flex items-center gap-3">
             <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-              When *
+              When <span className="text-red-main">*</span>
             </label>
             <div className="bg-white-item flex items-start gap-[5px] p-[5px] rounded-[5px]">
               {(['now', 'later'] as const).map((w) => {
@@ -562,98 +577,143 @@ export default function CreateMeetingModal({
             {/* Date */}
             <div className="flex flex-col gap-1">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                Date *
+                Date <span className="text-red-main">*</span>
               </label>
-              <div className="relative">
+              <button
+                ref={dateTriggerRef}
+                type="button"
+                onClick={() => {
+                  if (datePickerAnchor) {
+                    setDatePickerAnchor(null)
+                  } else {
+                    setDatePickerAnchor(
+                      dateTriggerRef.current?.getBoundingClientRect() ?? null
+                    )
+                  }
+                }}
+                className="bg-white-white border border-gray-border rounded-lg pl-3 pr-3 h-[39px] flex items-center gap-[8px] text-left hover:border-primary-main"
+              >
                 <Icon
                   name="Calendar"
                   size={13}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                  style={{ color: '#94A0AA' }}
+                  className="text-gray-secondary shrink-0"
                 />
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full bg-white-white border border-gray-border rounded-lg pl-9 pr-12 py-2 text-[12px] text-black outline-none focus:border-primary-main h-[39px]"
-                />
+                <span
+                  className={`flex-1 text-[12px] truncate ${
+                    date ? 'text-black font-semibold' : 'text-gray-secondary'
+                  }`}
+                >
+                  {date
+                    ? new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                    : 'Pick a date'}
+                </span>
                 {date && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-secondary text-[10px]">
+                  <span
+                    className="text-gray-secondary text-[10px] shrink-0"
+                    style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
+                  >
                     {dayDiffFromToday(date)}
                   </span>
                 )}
-              </div>
+              </button>
             </div>
-            {/* Start — text input so we render "14:00" verbatim regardless
-                of OS locale. Native <input type="time"> on Korean Chrome
-                injects "오전/오후" markers that overflow the column. */}
+            {/* Start — TimePicker dropdown, 24-hour. */}
             <div className="flex flex-col gap-1">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                Start *
+                Start <span className="text-red-main">*</span>
               </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="14:00"
-                value={startTime}
-                onChange={(e) =>
-                  setStartTime(filterTimeInput(e.target.value))
-                }
-                onBlur={() => setStartTime(normalizeTime(startTime))}
-                className="bg-white-white border border-gray-border rounded-lg px-3 py-2 text-[12px] text-black outline-none focus:border-primary-main h-[39px]"
-              />
+              <button
+                ref={startTriggerRef}
+                type="button"
+                onClick={() => {
+                  if (startPickerAnchor) {
+                    setStartPickerAnchor(null)
+                  } else {
+                    setStartPickerAnchor(
+                      startTriggerRef.current?.getBoundingClientRect() ?? null
+                    )
+                  }
+                }}
+                className="bg-white-white border border-gray-border rounded-lg px-3 h-[39px] flex items-center justify-between gap-[8px] text-left hover:border-primary-main text-[12px] text-black"
+              >
+                <span>{startTime}</span>
+                <Icon
+                  name="ArrowRight"
+                  size={12}
+                  style={{ color: '#94A0AA' }}
+                  className={`transition-transform ${
+                    startPickerAnchor ? 'rotate-90' : ''
+                  }`}
+                />
+              </button>
             </div>
             {/* End */}
             <div className="flex flex-col gap-1">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                End *
+                End <span className="text-red-main">*</span>
               </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="14:40"
-                value={endTime}
-                onChange={(e) =>
-                  setEndTime(filterTimeInput(e.target.value))
-                }
-                onBlur={() => setEndTime(normalizeTime(endTime))}
-                className="bg-white-white border border-gray-border rounded-lg px-3 py-2 text-[12px] text-black outline-none focus:border-primary-main h-[39px]"
-              />
+              <button
+                ref={endTriggerRef}
+                type="button"
+                onClick={() => {
+                  if (endPickerAnchor) {
+                    setEndPickerAnchor(null)
+                  } else {
+                    setEndPickerAnchor(
+                      endTriggerRef.current?.getBoundingClientRect() ?? null
+                    )
+                  }
+                }}
+                className="bg-white-white border border-gray-border rounded-lg px-3 h-[39px] flex items-center justify-between gap-[8px] text-left hover:border-primary-main text-[12px] text-black"
+              >
+                <span>{endTime}</span>
+                <Icon
+                  name="ArrowRight"
+                  size={12}
+                  style={{ color: '#94A0AA' }}
+                  className={`transition-transform ${
+                    endPickerAnchor ? 'rotate-90' : ''
+                  }`}
+                />
+              </button>
             </div>
             {/* Repeat */}
-            <div className="flex flex-col gap-1 relative">
+            <div className="flex flex-col gap-1">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
                 Repeat
               </label>
               <button
+                ref={recurrenceTriggerRef}
                 type="button"
-                onClick={() => setRecurrencePickerOpen((v) => !v)}
+                onClick={() => {
+                  if (recurrencePickerOpen) {
+                    setRecurrencePickerOpen(false)
+                    setRecurrenceAnchor(null)
+                  } else {
+                    setRecurrenceAnchor(
+                      recurrenceTriggerRef.current?.getBoundingClientRect() ??
+                        null
+                    )
+                    setRecurrencePickerOpen(true)
+                  }
+                }}
                 className="bg-white-white border border-gray-border rounded-lg px-3 py-2 text-left flex items-center justify-between h-[39px] hover:border-primary-main"
               >
                 <span className="text-[12px] text-black">
                   {RECURRENCES.find((r) => r.key === recurrence)?.label ?? 'Once'}
                 </span>
-                <Icon name="ArrowRight" size={12} style={{ color: '#94A0AA' }} />
+                <Icon
+                  name="ArrowRight"
+                  size={12}
+                  style={{ color: '#94A0AA' }}
+                  className={`transition-transform ${
+                    recurrencePickerOpen ? 'rotate-90' : ''
+                  }`}
+                />
               </button>
-              {recurrencePickerOpen && (
-                <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white-white border border-gray-border rounded-lg shadow-lg z-10">
-                  {RECURRENCES.map((r) => (
-                    <button
-                      key={r.key}
-                      type="button"
-                      onClick={() => {
-                        setRecurrence(r.key)
-                        setRecurrencePickerOpen(false)
-                      }}
-                      className={`w-full text-left px-3 py-2 text-[12px] hover:bg-white-item ${
-                        recurrence === r.key ? 'bg-blue-light/30 text-black font-semibold' : 'text-black'
-                      }`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
             {/* Repeat Until */}
             <div className="flex flex-col gap-1">
@@ -664,21 +724,45 @@ export default function CreateMeetingModal({
               >
                 Repeat Until
               </label>
-              <div className="relative">
+              <button
+                ref={untilTriggerRef}
+                type="button"
+                disabled={recurrence === 'once'}
+                onClick={() => {
+                  if (untilPickerAnchor) {
+                    setUntilPickerAnchor(null)
+                  } else {
+                    setUntilPickerAnchor(
+                      untilTriggerRef.current?.getBoundingClientRect() ?? null
+                    )
+                  }
+                }}
+                className="bg-white-white border border-gray-border rounded-lg pl-3 pr-3 h-[39px] flex items-center gap-[8px] text-left hover:border-primary-main disabled:bg-white-item disabled:cursor-not-allowed"
+              >
                 <Icon
                   name="Calendar"
                   size={13}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                  style={{ color: '#94A0AA' }}
+                  className={`shrink-0 ${
+                    recurrence === 'once'
+                      ? 'text-gray-secondary'
+                      : 'text-gray-secondary'
+                  }`}
                 />
-                <input
-                  type="date"
-                  value={recurrenceUntil}
-                  onChange={(e) => setRecurrenceUntil(e.target.value)}
-                  disabled={recurrence === 'once'}
-                  className="w-full bg-white-white border border-gray-border rounded-lg pl-9 pr-3 py-2 text-[12px] text-black outline-none focus:border-primary-main h-[39px] disabled:bg-white-item disabled:text-gray-secondary"
-                />
-              </div>
+                <span
+                  className={`flex-1 text-[12px] truncate ${
+                    recurrenceUntil && recurrence !== 'once'
+                      ? 'text-black font-semibold'
+                      : 'text-gray-secondary'
+                  }`}
+                >
+                  {recurrenceUntil
+                    ? new Date(recurrenceUntil + 'T00:00:00').toLocaleDateString(
+                        'en-US',
+                        { month: 'short', day: 'numeric' }
+                      )
+                    : 'Pick a date'}
+                </span>
+              </button>
             </div>
           </div>
           )}
@@ -706,14 +790,17 @@ export default function CreateMeetingModal({
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                Attendees * <span className="text-gray-secondary normal-case tracking-normal">{addedAttendees.length + emailInvites.length} added</span>
+                Attendees <span className="text-red-main">*</span>{' '}
+                <span className="text-gray-secondary normal-case tracking-normal">
+                  {addedAttendees.length + emailInvites.length} added
+                </span>
               </label>
               <button
                 type="button"
                 onClick={() => setInviteOpen(true)}
                 className="text-gray-main text-[11px] inline-flex items-center gap-1 hover:text-black"
               >
-                <Icon name="Email" size={12} />
+                <Icon name="Add" size={12} />
                 Invite by email
               </button>
             </div>
@@ -900,6 +987,112 @@ export default function CreateMeetingModal({
           }
           setEmailInvites((prev) => [...prev, email])
         }}
+      />
+
+      {/* Floating project picker — sibling so it escapes the modal's
+       *  overflow-y-auto clipping. Anchor rect captured on toggle. */}
+      {projectPickerOpen && !lockProject && projectAnchor && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            top: projectAnchor.bottom + 4,
+            left: projectAnchor.left,
+            width: projectAnchor.width,
+            zIndex: 100,
+          }}
+          className="bg-white-white border border-gray-border rounded-lg shadow-lg max-h-[200px] overflow-y-auto"
+        >
+          {projects.length === 0 ? (
+            <p className="px-3 py-2 text-gray-secondary text-[11px]">
+              No projects yet
+            </p>
+          ) : (
+            projects.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => {
+                  setProjectId(p.id)
+                  setProjectPickerOpen(false)
+                  setProjectAnchor(null)
+                }}
+                className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-white-item text-left ${
+                  projectId === p.id ? 'bg-blue-light/30' : ''
+                }`}
+              >
+                <ProjectLabel name={p.name} color={p.color} size="sm" />
+                <span className="text-[12px] text-black">{p.name}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Floating recurrence picker */}
+      {recurrencePickerOpen && recurrenceAnchor && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            top: recurrenceAnchor.bottom + 4,
+            left: recurrenceAnchor.left,
+            width: recurrenceAnchor.width,
+            zIndex: 100,
+          }}
+          className="bg-white-white border border-gray-border rounded-lg shadow-lg"
+        >
+          {RECURRENCES.map((r) => (
+            <button
+              key={r.key}
+              type="button"
+              onClick={() => {
+                setRecurrence(r.key)
+                setRecurrencePickerOpen(false)
+                setRecurrenceAnchor(null)
+              }}
+              className={`w-full text-left px-3 py-2 text-[12px] hover:bg-white-item ${
+                recurrence === r.key
+                  ? 'bg-blue-light/30 text-black font-semibold'
+                  : 'text-black'
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Floating date picker for the meeting date */}
+      <DatePicker
+        anchorRect={datePickerAnchor}
+        value={date || null}
+        onChange={(next) => setDate(next ?? '')}
+        onClose={() => setDatePickerAnchor(null)}
+      />
+
+      {/* Floating date picker for "Repeat until" */}
+      <DatePicker
+        anchorRect={untilPickerAnchor}
+        value={recurrenceUntil || null}
+        onChange={(next) => setRecurrenceUntil(next ?? '')}
+        onClose={() => setUntilPickerAnchor(null)}
+      />
+
+      {/* Floating time pickers for Start / End */}
+      <TimePicker
+        anchorRect={startPickerAnchor}
+        value={startTime}
+        onChange={(next) => setStartTime(next)}
+        onClose={() => setStartPickerAnchor(null)}
+      />
+      <TimePicker
+        anchorRect={endPickerAnchor}
+        value={endTime}
+        onChange={(next) => setEndTime(next)}
+        onClose={() => setEndPickerAnchor(null)}
       />
     </div>
   )

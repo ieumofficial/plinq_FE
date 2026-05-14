@@ -10,6 +10,7 @@ import CreateNewMenu, { type CreateType } from './CreateNewMenu'
 import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
+import CreateChatSessionModal from './CreateChatSessionModal'
 import {
   useCurrentUser,
   useMyOrg,
@@ -310,6 +311,12 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
         lockProject
         onClose={closeAll}
         onCreated={onCreated}
+      />
+      <CreateChatSessionModal
+        open={createType === 'chat'}
+        orgId={org?.id ?? null}
+        onClose={closeAll}
+        onCreated={() => closeAll()}
       />
     </CreateNewContext.Provider>
   )

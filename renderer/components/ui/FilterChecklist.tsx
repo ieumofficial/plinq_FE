@@ -5,6 +5,9 @@ type Props = {
   color?: string
   checked?: boolean
   onChange?: (next: boolean) => void
+  /** Extra classes appended to the row — e.g. `!w-full` to override the
+   *  default 225px when used inside a narrower container. */
+  className?: string
 }
 
 /**
@@ -17,12 +20,13 @@ export default function FilterChecklist({
   color = '#5B7FB6',
   checked = true,
   onChange,
+  className,
 }: Props) {
   return (
     <button
       type="button"
       onClick={() => onChange?.(!checked)}
-      className="flex items-center justify-between w-[225px] h-[27px] py-[5px] hover:bg-white-item/60 transition-colors rounded-[3px] px-[2px]"
+      className={`flex items-center justify-between w-[225px] h-[27px] py-[5px] hover:bg-white-item/60 transition-colors rounded-[3px] px-[2px] ${className ?? ''}`}
     >
       <span className="flex items-center gap-[10px]">
         <span

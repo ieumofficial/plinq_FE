@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 
-export type CreateType = 'project' | 'task' | 'meeting'
+export type CreateType = 'project' | 'task' | 'meeting' | 'chat'
 
 type Props = {
   open: boolean
@@ -50,6 +50,16 @@ const CARDS: CardSpec[] = [
     blurb: 'A scheduled session with agenda and attendees.',
     bullets: ['Title + time', 'Agenda + attendees', 'Auto AI minutes + action items'],
   },
+  {
+    type: 'chat',
+    letter: 'C',
+    badgeBg: 'bg-[#F4E6CD]',
+    badgeFg: 'text-[#8A5A1E]',
+    shortcut: '⌘ K',
+    title: 'Chat',
+    blurb: 'A session for messages — channel or DM.',
+    bullets: ['Project / member group / DM', 'Auto-synced members', 'Realtime + search'],
+  },
 ]
 
 export default function CreateNewMenu({ open, onClose, onPick }: Props) {
@@ -70,6 +80,10 @@ export default function CreateNewMenu({ open, onClose, onPick }: Props) {
           e.preventDefault()
           onPick('meeting')
         }
+        if (e.key.toLowerCase() === 'k') {
+          e.preventDefault()
+          onPick('chat')
+        }
       }
     }
     window.addEventListener('keydown', handler)
@@ -85,7 +99,7 @@ export default function CreateNewMenu({ open, onClose, onPick }: Props) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white-white rounded-[10px] shadow-2xl w-[780px] max-w-[95vw] flex flex-col"
+        className="bg-white-white rounded-[10px] shadow-2xl w-[1020px] max-w-[95vw] flex flex-col"
       >
         {/* Header */}
         <div className="px-[30px] pt-[30px] pb-[25px] flex flex-col gap-[10px]">
@@ -102,7 +116,7 @@ export default function CreateNewMenu({ open, onClose, onPick }: Props) {
 
         {/* Cards */}
         <div className="px-[30px] pb-[20px]">
-          <div className="grid grid-cols-3 gap-[15px]">
+          <div className="grid grid-cols-4 gap-[15px]">
             {CARDS.map((c) => (
               <button
                 key={c.type}

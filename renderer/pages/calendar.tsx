@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Head from 'next/head'
-import PersonalAppShell, { useCreateNew } from '../components/PersonalAppShell'
+import PersonalAppShell from '../components/PersonalAppShell'
 import Calendar, { type CalendarEvent } from '../components/ui/Calendar'
 import FilterChecklist from '../components/ui/FilterChecklist'
 import ProjectLabel from '../components/ui/ProjectLabel'
@@ -204,9 +204,6 @@ function DetailModal({ item, onClose }: { item: DetailItem; onClose: () => void 
         onClick={(e) => e.stopPropagation()}
         className="bg-white-white rounded-[14px] shadow-2xl w-[480px] max-w-[92vw] max-h-[85vh] overflow-hidden flex flex-col"
       >
-        {/* Color accent strip */}
-        <div className="h-[4px] w-full" style={{ backgroundColor: accent.color }} />
-
         {/* Header */}
         <div className="px-[24px] pt-[20px] pb-[18px] flex items-start gap-[14px]">
           <ProjectLabel
@@ -433,11 +430,6 @@ function DetailRow({
   )
 }
 
-function CalendarWithNew(props: React.ComponentProps<typeof Calendar>) {
-  const { openMenu } = useCreateNew()
-  return <Calendar {...props} onCreateNew={openMenu} />
-}
-
 export default function CalendarPage() {
   const { data: user } = useCurrentUser()
   const userId = user?.id
@@ -554,7 +546,7 @@ export default function CalendarPage() {
         <div className="p-6 flex gap-[10px] h-full overflow-hidden">
           {/* Calendar */}
           <section className="flex-1 min-w-0 flex flex-col">
-            <CalendarWithNew
+            <Calendar
               view="monthly"
               month={calMonth}
               events={visibleEvents}

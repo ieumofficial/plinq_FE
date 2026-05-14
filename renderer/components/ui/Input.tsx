@@ -1,7 +1,13 @@
 import { type ChangeEvent, type InputHTMLAttributes, useState } from 'react'
 import Icon from './Icon'
 
-type Variant = 'default' | 'translucent' | 'search' | 'error' | 'disabled'
+type Variant =
+  | 'default'
+  | 'translucent'
+  | 'search'
+  | 'search-dark'
+  | 'error'
+  | 'disabled'
 
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> & {
   label?: string
@@ -18,6 +24,7 @@ const labelColor: Record<Variant, string> = {
   default: 'text-gray-main',
   translucent: 'text-gray-secondary',
   search: 'text-gray-main',
+  'search-dark': 'text-gray-secondary',
   error: 'text-red-main',
   disabled: 'text-gray-main',
 }
@@ -30,6 +37,8 @@ const fieldByVariant: Record<Variant, string> = {
   translucent:
     'bg-white/10 border-gray-border text-white placeholder:text-gray-main backdrop-blur-[10px] focus:border-white/50',
   search: 'bg-white-white border-gray-border text-black focus:border-primary-main',
+  'search-dark':
+    'bg-white/10 border-gray-main text-white-white focus:border-white/40',
   error: 'bg-white-white border-red-main text-black',
   disabled: 'bg-gray-disabled border-gray-border text-gray-main cursor-not-allowed',
 }
@@ -47,7 +56,7 @@ export default function Input({
   const isControlled = value !== undefined
   const currentValue = isControlled ? value : internal
 
-  const isSearch = variant === 'search'
+  const isSearch = variant === 'search' || variant === 'search-dark'
   const isDisabled = variant === 'disabled' || rest.disabled
 
   return (

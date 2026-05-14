@@ -1,9 +1,12 @@
 import StatusLabelBig, { type Status } from './StatusLabelBig'
+import ProjectLabel from './ProjectLabel'
 import UserGroup, { type Member } from './UserGroup'
 import Icon from './Icon'
 
 type Props = {
   name: string
+  /** Project color palette key ('blue' | 'green' | ...) or '#rrggbb'. Defaults to blue. */
+  color?: string | null
   description?: string
   status?: Status
   /** 0–100. */
@@ -26,6 +29,7 @@ type Props = {
  */
 export default function ProjectListCard({
   name,
+  color,
   description,
   status,
   progress,
@@ -64,20 +68,15 @@ export default function ProjectListCard({
 
         {/* Title row: avatar + name */}
         <div className="flex items-center gap-[10px]">
-          <span
-            className="bg-blue-light text-blue-main rounded-[2px] w-[28px] h-[28px] inline-flex items-center justify-center text-[14px] font-bold uppercase shrink-0"
-            style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
-          >
-            {name.charAt(0)}
-          </span>
+          <ProjectLabel name={name} color={color ?? 'blue'} size="md" />
           <span className="text-black text-[20px] font-semibold truncate">{name}</span>
         </div>
 
-        {description && (
-          <p className="text-gray-main text-[12px] font-normal w-full leading-snug line-clamp-2">
-            {description}
-          </p>
-        )}
+        {/* Always reserve two lines of space so cards without a description
+            stay the same height as cards with one. */}
+        <p className="text-gray-main text-[12px] font-normal w-full leading-snug line-clamp-2 min-h-[33px]">
+          {description ?? ''}
+        </p>
       </div>
 
       {/* BOTTOM: progress + stats + lead/members */}

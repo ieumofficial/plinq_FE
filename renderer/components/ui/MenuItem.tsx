@@ -24,9 +24,12 @@ export default function MenuItem({
 }: Props) {
   const padding = thin ? 'px-[10px] py-[7px]' : 'p-[10px]'
   const width = stacked ? '' : 'w-[175px] justify-between'
+  // Selected outline is brighter in the rail/stacked variant (Primary/Light)
+  // than in the expanded variant (Gray/Main) — matches Figma 856:316 vs 857:5428.
+  const selectedBorder = stacked ? 'border-primary-light' : 'border-gray-main'
   const surface = selected
-    ? 'bg-white-white border border-solid border-gray-border text-black'
-    : 'text-primary-main hover:bg-white-white/60'
+    ? `bg-white/10 border border-solid ${selectedBorder} text-primary-light`
+    : 'text-primary-light hover:bg-white/10'
 
   return (
     <button

@@ -15,6 +15,7 @@ import ChatComposer, {
   ComposerIcons,
 } from '../components/ui/ChatComposer'
 import CreateChatSessionModal from '../components/CreateChatSessionModal'
+import ChatSearchPanel from '../components/ChatSearchPanel'
 import {
   useChatMessages,
   useChatSessionMembers,
@@ -174,6 +175,41 @@ function MessagesBody() {
   const [filter, setFilter] = useState<ChatFilterKey>('all')
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
+  const [dmCreateOpen, setDmCreateOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  /** When a search result is picked, we jump to that session AND scroll the
+   *  matching message into view with a temporary highlight. Cleared after 2.5s
+   *  so the highlight fades cleanly. */
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(
+    null
+  )
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  // After a search pick, scroll to the highlighted message once it actually
+  // exists in the DOM. We retry briefly because the session may be loading.
+  useEffect(() => {
+    if (!highlightedMessageId) return
+    let cancelled = false
+    let attempts = 0
+    const tryScroll = () => {
+      if (cancelled) return
+      const el = messageRefs.current.get(highlightedMessageId)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // Clear the highlight after the flash animation finishes.
+        setTimeout(() => {
+          if (!cancelled) setHighlightedMessageId(null)
+        }, 2500)
+        return
+      }
+      attempts += 1
+      if (attempts < 20) setTimeout(tryScroll, 100)
+    }
+    tryScroll()
+    return () => {
+      cancelled = true
+    }
+  }, [highlightedMessageId])
   const [draft, setDraft] = useState('')
   const { mutate: deleteSession } = useDeleteChatSession()
 
@@ -407,6 +443,7 @@ function MessagesBody() {
         activeId={activeSessionId ?? undefined}
         onItemClick={(id) => setActiveSessionId(id)}
         onCreateClick={() => setCreateOpen(true)}
+        onCreateDmClick={() => setDmCreateOpen(true)}
         currentUserId={user?.id}
         onDeleteSession={handleDeleteSession}
       />
@@ -428,6 +465,7 @@ function MessagesBody() {
                   description={activeSession.description ?? undefined}
                   members={sessionMembers.map(userToMember)}
                   memberCount={sessionMembers.length}
+                  onSearch={() => setSearchOpen(true)}
                   eyebrowColor={
                     activeSession.project_id
                       ? resolveProjectColor(projectColorMap.get(activeSession.project_id))
@@ -476,6 +514,7 @@ function MessagesBody() {
                   }
                   jobTitle={activeSession.other_user?.job_title ?? undefined}
                   isActive
+                  onSearch={() => setSearchOpen(true)}
                   eyebrowColor={
                     activeSession.other_user
                       ? colorForName(
@@ -499,6 +538,7 @@ function MessagesBody() {
                 messages.map((m, i) => {
                   const prev = messages[i - 1]
                   const showDivider = !prev || ymd(prev.created_at) !== ymd(m.created_at)
+                  const isHighlighted = highlightedMessageId === m.id
                   return (
                     <div key={m.id}>
                       {showDivider && (
@@ -513,11 +553,23 @@ function MessagesBody() {
                           <div className="flex-1 h-px bg-gray-border-light" />
                         </div>
                       )}
-                      <ChatMessage
-                        author={userToMember(m.author)}
-                        time={formatTime(m.created_at)}
-                        body={m.body}
-                      />
+                      <div
+                        ref={(el) => {
+                          if (el) messageRefs.current.set(m.id, el)
+                          else messageRefs.current.delete(m.id)
+                        }}
+                        className={
+                          isHighlighted
+                            ? 'bg-brown-light/60 transition-colors duration-500'
+                            : 'bg-transparent transition-colors duration-500'
+                        }
+                      >
+                        <ChatMessage
+                          author={userToMember(m.author)}
+                          time={formatTime(m.created_at)}
+                          body={m.body}
+                        />
+                      </div>
                     </div>
                   )
                 })
@@ -557,36 +609,32 @@ function MessagesBody() {
         )}
       </section>
 
-      {/* Details panel */}
+      {/* Details panel — sits flush against the conversation pane (Figma 896:7228) */}
       {activeSession?.kind === 'channel' && (
-        <div className="p-[10px] shrink-0 h-full">
-          <ChatDetails
-            variant="channel"
-            name={activeSession.name ?? '(untitled)'}
-            description={activeSession.description ?? undefined}
-            createdLine={`Created ${new Date(activeSession.created_at).toLocaleDateString(
-              'en-US',
-              { month: 'short', day: 'numeric', year: 'numeric' }
-            )}`}
-            members={
-              sessionMembers.map((u) => ({
-                member: userToMember(u),
-                tag: u.id === activeSession.created_by ? 'Lead' : undefined,
-              })) as ChatChannelMember[]
-            }
-            memberCount={sessionMembers.length}
-          />
-        </div>
+        <ChatDetails
+          variant="channel"
+          name={activeSession.name ?? '(untitled)'}
+          description={activeSession.description ?? undefined}
+          createdLine={`Created ${new Date(activeSession.created_at).toLocaleDateString(
+            'en-US',
+            { month: 'short', day: 'numeric', year: 'numeric' }
+          )}`}
+          members={
+            sessionMembers.map((u) => ({
+              member: userToMember(u),
+              tag: u.id === activeSession.created_by ? 'Lead' : undefined,
+            })) as ChatChannelMember[]
+          }
+          memberCount={sessionMembers.length}
+        />
       )}
       {activeSession?.kind === 'dm' && activeSession.other_user && (
-        <div className="p-[10px] shrink-0 h-full">
-          <ChatDetails
-            variant="dm"
-            member={userToMember(activeSession.other_user)}
-            jobTitle={activeSession.other_user.job_title ?? undefined}
-            orgName={org?.name ?? undefined}
-          />
-        </div>
+        <ChatDetails
+          variant="dm"
+          member={userToMember(activeSession.other_user)}
+          jobTitle={activeSession.other_user.job_title ?? undefined}
+          orgName={org?.name ?? undefined}
+        />
       )}
 
       <CreateChatSessionModal
@@ -594,6 +642,37 @@ function MessagesBody() {
         orgId={orgId}
         onClose={() => setCreateOpen(false)}
         onCreated={(id) => setActiveSessionId(id)}
+      />
+
+      {/* DM-locked variant — opens from the DM section "+" button */}
+      <CreateChatSessionModal
+        open={dmCreateOpen}
+        orgId={orgId}
+        lockMode="dm"
+        onClose={() => setDmCreateOpen(false)}
+        onCreated={(id) => setActiveSessionId(id)}
+      />
+
+      {/* Global chat search — triggered by the search icon in the conversation header */}
+      <ChatSearchPanel
+        open={searchOpen}
+        orgId={orgId}
+        sessions={sessions.map((s) => ({
+          id: s.id,
+          kind: s.kind,
+          label:
+            s.kind === 'channel'
+              ? s.name ?? '(untitled)'
+              : s.other_user
+                ? s.other_user.nickname ||
+                  `${s.other_user.first_name} ${s.other_user.last_name}`.trim()
+                : 'Direct message',
+        }))}
+        onClose={() => setSearchOpen(false)}
+        onPick={(sessionId, messageId) => {
+          setActiveSessionId(sessionId)
+          if (messageId) setHighlightedMessageId(messageId)
+        }}
       />
     </div>
   )

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import ProjectAppShell, { useCreateNew } from '../../../components/ProjectAppShell'
@@ -7,12 +7,14 @@ import PriorityTag from '../../../components/ui/PriorityTag'
 import UserGroup from '../../../components/ui/UserGroup'
 import Schedule from '../../../components/ui/Schedule'
 import Icon from '../../../components/ui/Icon'
+import TaskDetailModal from '../../../components/TaskDetailModal'
 import {
   useProject,
   useProjectMeetings,
   useProjectMembersWithRoles,
   useProjectTasks,
 } from '../../../lib/hooks'
+import { resolveProjectColor } from '../../../lib/projectColors'
 import { useFitCount } from '../../../lib/useFitCount'
 import {
   dbPriorityToUi,
@@ -41,22 +43,6 @@ const HEALTH_BREAKDOWN: { key: TaskStatusDb; label: string; color: string }[] = 
   { key: 'blocked', label: 'Blocked', color: '#B65A5A' }, // Red/Med
   { key: 'planned', label: 'Planned', color: '#455E6A' }, // Primary/Main
 ]
-
-/** Palette key → hex used by the project chip / eyebrow tinting. */
-const PROJECT_COLOR_HEX: Record<string, string> = {
-  blue: '#2D5A9E',
-  green: '#2F6B45',
-  amber: '#B68A48',
-  red: '#9B3838',
-  purple: '#5B3D8A',
-  turquoise: '#558589',
-}
-
-function resolveProjectColor(color: string | null | undefined): string {
-  if (!color) return PROJECT_COLOR_HEX.blue
-  if (color.startsWith('#')) return color
-  return PROJECT_COLOR_HEX[color] ?? PROJECT_COLOR_HEX.blue
-}
 
 /** Section eyebrow palette used across the dashboard (Figma 966:11512). */
 const EYEBROW = {
@@ -110,9 +96,11 @@ function CardSection({
 function MiniTaskCard({
   task,
   status,
+  onClick,
 }: {
   task: ProjectTask
   status: 'planned' | 'in-progress' | 'review' | 'done'
+  onClick?: () => void
 }) {
   const STATUS_BORDER: Record<string, string> = {
     planned: '#C7CFD4',
@@ -122,7 +110,19 @@ function MiniTaskCard({
   }
   return (
     <div
-      className="bg-white-white rounded-[5px] flex flex-col gap-[10px] pt-[10px] pb-[8px] pl-[14px] pr-[10px] border-l-[6px] border-solid border border-gray-border-light min-h-[78px]"
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (!onClick) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className={`bg-white-white rounded-[5px] flex flex-col gap-[10px] pt-[10px] pb-[8px] pl-[14px] pr-[10px] border-l-[6px] border-solid border border-gray-border-light min-h-[78px] ${
+        onClick ? 'cursor-pointer hover:bg-white-item transition-colors' : ''
+      }`}
       style={{ borderLeftColor: STATUS_BORDER[status] }}
     >
       <p className="text-[11px] font-semibold text-black leading-snug line-clamp-2">
@@ -223,6 +223,9 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
   const { data: tasks = [] } = useProjectTasks(projectId)
   const { data: meetings = [] } = useProjectMeetings(projectId)
   const { data: members = [] } = useProjectMembersWithRoles(projectId)
+  const [openTask, setOpenTask] = useState<{ task: ProjectTask; idx: number } | null>(
+    null
+  )
 
   // Dynamic capacity hooks — slice each list to fit. `min: 1` ensures every
   // section keeps at least one row visible even at the smallest viewport.
@@ -258,6 +261,14 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
     const done = byStatus.get('done') ?? 0
     const pct = total > 0 ? Math.round((done / total) * 100) : 0
     return { byStatus, total, done, pct }
+  }, [tasks])
+
+  // Stable per-project index so MiniTaskCard ticket IDs match the kanban /
+  // backlog (both share the same `tasks` order from useProjectTasks).
+  const taskIndexById = useMemo(() => {
+    const m = new Map<string, number>()
+    tasks.forEach((t, i) => m.set(t.id, i))
+    return m
   }, [tasks])
 
   const kanbanByCol = useMemo(() => {
@@ -430,6 +441,12 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
                           key={t.id}
                           task={t}
                           status={c.status}
+                          onClick={() =>
+                            setOpenTask({
+                              task: t,
+                              idx: taskIndexById.get(t.id) ?? 0,
+                            })
+                          }
                         />
                       ))}
                       {hidden > 0 && (
@@ -720,6 +737,26 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
           </CardSection>
         </aside>
       </div>
+
+      <TaskDetailModal
+        open={openTask !== null}
+        task={openTask?.task ?? null}
+        projectName={project?.name ?? 'Project'}
+        ticketId={
+          openTask ? ticketId(project?.name ?? 'TSK', openTask.idx) : ''
+        }
+        onClose={() => setOpenTask(null)}
+      />
     </div>
   )
+}
+
+function ticketId(projectName: string, idx: number): string {
+  const prefix = projectName
+    .split(/\s+/)
+    .map((w) => w.charAt(0))
+    .join('')
+    .slice(0, 3)
+    .toUpperCase()
+  return `${prefix || 'TSK'}-${(idx + 100).toString().padStart(3, '0')}`
 }

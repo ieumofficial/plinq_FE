@@ -54,9 +54,12 @@ const MEETING_TYPES: {
   },
 ]
 
-const LOCATIONS: { key: 'zoom' | 'in_person'; label: string }[] = [
-  { key: 'zoom', label: 'Zoom' },
+// `disabled: true` keeps the option visible (so future Zoom support
+// has a stable slot) but the toggle won't switch to it. Phase 3.5
+// flips this back on alongside the zoom-* endpoints in plinq_ai.
+const LOCATIONS: { key: 'zoom' | 'in_person'; label: string; disabled?: boolean }[] = [
   { key: 'in_person', label: 'In-person' },
+  { key: 'zoom', label: 'Zoom (soon)', disabled: true },
 ]
 
 const RECURRENCES: { key: MeetingRecurrence; label: string }[] = [
@@ -124,7 +127,7 @@ export default function CreateMeetingModal({
 
   const [title, setTitle] = useState('')
   const [when, setWhen] = useState<WhenMode>('later')
-  const [location, setLocation] = useState<'zoom' | 'in_person'>('zoom')
+  const [location, setLocation] = useState<'zoom' | 'in_person'>('in_person')
   const [projectId, setProjectId] = useState<string | null>(defaultProjectId ?? null)
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
   const [meetingType, setMeetingType] = useState<MeetingType>('planning')
@@ -148,7 +151,7 @@ export default function CreateMeetingModal({
     if (!open) return
     setTitle('')
     setWhen('later')
-    setLocation('zoom')
+    setLocation('in_person')
     setProjectId(defaultProjectId ?? null)
     setMeetingType('planning')
     setDate('')
@@ -412,15 +415,20 @@ export default function CreateMeetingModal({
               <div className="bg-white-item flex items-start gap-[5px] p-[5px] rounded-[5px] h-[39px]">
                 {LOCATIONS.map((l) => {
                   const selected = location === l.key
+                  const disabled = !!l.disabled
                   return (
                     <button
                       key={l.key}
                       type="button"
-                      onClick={() => setLocation(l.key)}
+                      onClick={() => !disabled && setLocation(l.key)}
+                      disabled={disabled}
+                      title={disabled ? 'Coming in a future release' : undefined}
                       className={`flex items-center justify-center px-[10px] py-[5px] rounded-[5px] text-[12px] font-semibold whitespace-nowrap transition-colors ${
                         selected
                           ? 'bg-[#E6ECEF] text-primary-main'
-                          : 'bg-white-item text-black hover:bg-white-white'
+                          : disabled
+                            ? 'bg-white-item text-gray-secondary cursor-not-allowed opacity-60'
+                            : 'bg-white-item text-black hover:bg-white-white'
                       }`}
                     >
                       {l.label}

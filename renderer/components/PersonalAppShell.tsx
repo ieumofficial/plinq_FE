@@ -1,13 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/router'
 import AppLayout from './ui/AppLayout'
+import AskAiPanel from './ui/AskAiPanel'
 import SideMenu, { type NavItem } from './ui/SideMenu'
 import Header from './ui/Header'
 import CreateNewMenu, { type CreateType } from './CreateNewMenu'
 import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
-import { useCurrentUser, useMyOrg } from '../lib/hooks'
+import { useCurrentUser, useMyOrg, useMyOrgRole } from '../lib/hooks'
 import { useSidebarPref, useSpaceTransition } from '../lib/sidebarPref'
 
 // ─── Create New context ─────────────────────────────────────────────────────
@@ -100,8 +101,16 @@ export default function PersonalAppShell({
   const router = useRouter()
   const { data: user, isFetched: userFetched } = useCurrentUser()
   const { data: org } = useMyOrg(user?.id)
+  const { data: myOrgRole } = useMyOrgRole(user?.id)
   const orgId = org?.id ?? null
   const orgName = org?.name ?? null
+  const isOrgOwner = myOrgRole === 'owner'
+
+  // Owner-only entry: hide the "Organization" rail item from non-owners.
+  // Build a per-render copy so the constant stays unchanged for callers.
+  const railItems = isOrgOwner
+    ? NAV_ITEMS
+    : NAV_ITEMS.filter((it) => it.key !== 'organization')
   const { collapsed: stackedSidebar, toggle: toggleSidebar } = useSidebarPref()
   useSpaceTransition('personal')
 
@@ -113,6 +122,8 @@ export default function PersonalAppShell({
   // Create New flow state
   const [menuOpen, setMenuOpen] = useState(false)
   const [createType, setCreateType] = useState<CreateType | null>(null)
+  // Ask AI panel toggle (right rail).
+  const [askAiOpen, setAskAiOpen] = useState(false)
 
   const initials = user
     ? `${user.first_name[0] ?? ''}${user.last_name[0] ?? ''}`.toUpperCase()
@@ -158,12 +169,13 @@ export default function PersonalAppShell({
             onBack={() => router.back()}
             onForward={() => window.history.forward()}
             onCreateNew={openMenu}
+            onAskAi={() => setAskAiOpen((v) => !v)}
           />
         }
         sidebar={
           <SideMenu
             sectionLabel={stackedSidebar ? undefined : 'Personal Space'}
-            items={NAV_ITEMS}
+            items={railItems}
             footerItems={FOOTER_ITEMS}
             activeKey={active}
             userInitials={initials}
@@ -176,6 +188,15 @@ export default function PersonalAppShell({
             onCreateNew={openMenu}
             onToggleSidebar={toggleSidebar}
           />
+        }
+        aiPanel={
+          askAiOpen ? (
+            <AskAiPanel
+              onClose={() => setAskAiOpen(false)}
+              orgId={orgId ?? undefined}
+              scopeLabel={orgName ?? undefined}
+            />
+          ) : undefined
         }
       >
         {children}

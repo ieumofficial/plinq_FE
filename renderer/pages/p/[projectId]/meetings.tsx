@@ -15,8 +15,7 @@ import { supabase } from '../../../lib/supabase'
 import { deleteMeeting as deleteMeetingRow } from '../../../lib/queries'
 import { userToMember, type MeetingType } from '../../../lib/types'
 import MeetingTypeLabel from '../../../components/ui/MeetingTypeLabel'
-import InPersonRecorder from '../../../components/InPersonRecorder'
-import { analyzeAudio, parseSummary } from '../../../lib/aiAnalyze'
+import { resolveProjectColor } from '../../../lib/projectColors'
 
 function dateBlock(iso: string): { top: string; bottom: string } {
   const d = new Date(iso)
@@ -181,7 +180,10 @@ function MeetingsBody({ projectId }: { projectId: string }) {
           {/* Toolbar */}
           <div className="flex items-end justify-between gap-4">
             <div className="flex flex-col gap-[5px]">
-              <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
+              <p
+                className="text-[10px] font-medium uppercase tracking-[1.5px]"
+                style={{ color: resolveProjectColor(project?.color) }}
+              >
                 {(project?.name ?? '').toUpperCase()} · MEETINGS · {meetings.length} INDEXED
               </p>
               <h1 className="text-black text-[28px] font-semibold leading-tight">

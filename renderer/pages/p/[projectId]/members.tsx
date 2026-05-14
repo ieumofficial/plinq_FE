@@ -29,6 +29,9 @@ import {
 } from '../../../lib/hooks'
 import { userToMember, type ProjectRoleDb } from '../../../lib/types'
 import type { ProjectMember } from '../../../lib/queries'
+import { resolveProjectColor } from '../../../lib/projectColors'
+import DeleteConfirmModal from '../../../components/DeleteConfirmModal'
+import ProjectPermissionDropdown from '../../../components/ProjectPermissionDropdown'
 
 const COLS: Column[] = [
   { key: 'member', label: 'Member', width: 'flex-[2]' },
@@ -240,7 +243,10 @@ function MembersBody({ projectId }: { projectId: string }) {
       {/* Toolbar */}
       <div className="shrink-0 flex items-end justify-between gap-4">
         <div className="flex flex-col gap-[5px]">
-          <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
+          <p
+            className="text-[10px] font-medium uppercase tracking-[1.5px]"
+            style={{ color: resolveProjectColor(project?.color) }}
+          >
             {(project?.name ?? '').toUpperCase()} · MEMBERS · {stats.total} ACTIVE
           </p>
           <h1 className="text-black text-[35px] font-semibold leading-tight">

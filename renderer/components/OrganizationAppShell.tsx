@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/router'
 import AppLayout from './ui/AppLayout'
+import AskAiPanel from './ui/AskAiPanel'
 import SideMenu, { type NavItem } from './ui/SideMenu'
 import StackedSideMenu, { type StackedNavItem } from './ui/StackedSideMenu'
 import Header from './ui/Header'
@@ -11,6 +12,7 @@ import CreateMeetingModal from './CreateMeetingModal'
 import {
   useCurrentUser,
   useMyOrg,
+  useMyOrgRole,
   useOrgMembers,
   useOrgProjects,
 } from '../lib/hooks'
@@ -78,8 +80,13 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
   const router = useRouter()
   const { data: user, isFetched: userFetched } = useCurrentUser()
   const { data: org } = useMyOrg(user?.id)
+  const { data: myOrgRole } = useMyOrgRole(user?.id)
   const { data: members = [] } = useOrgMembers(orgId)
   const { data: orgProjects = [] } = useOrgProjects(orgId)
+  const isOrgOwner = myOrgRole === 'owner'
+  const railItems = isOrgOwner
+    ? PERSONAL_RAIL_ITEMS
+    : PERSONAL_RAIL_ITEMS.filter((it) => it.key !== 'organization')
   const { collapsed: stackedSidebar, toggle: toggleSidebar } = useSidebarPref()
   useSpaceTransition(`org:${orgId}`)
 
@@ -89,6 +96,7 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [createType, setCreateType] = useState<CreateType | null>(null)
+  const [askAiOpen, setAskAiOpen] = useState(false)
 
   const initials = user
     ? `${user.first_name[0] ?? ''}${user.last_name[0] ?? ''}`.toUpperCase()
@@ -143,12 +151,13 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
             onBack={() => router.back()}
             onForward={() => window.history.forward()}
             onCreateNew={openMenu}
+            onAskAi={() => setAskAiOpen((v) => !v)}
           />
         }
         sidebar={
           <SideMenu
             sectionLabel={stackedSidebar ? undefined : 'Personal Space'}
-            items={PERSONAL_RAIL_ITEMS}
+            items={railItems}
             footerItems={PERSONAL_FOOTER}
             activeKey="organization"
             userInitials={initials}
@@ -178,6 +187,15 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
             onItemClick={(k) => goPage(k as OrgActiveKey)}
             onBack={() => router.push('/personal-dashboard')}
           />
+        }
+        aiPanel={
+          askAiOpen ? (
+            <AskAiPanel
+              onClose={() => setAskAiOpen(false)}
+              orgId={orgId}
+              scopeLabel={orgName}
+            />
+          ) : undefined
         }
       >
         {children}

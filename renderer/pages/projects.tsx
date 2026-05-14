@@ -119,6 +119,7 @@ function ProjectActionMenu({
 function ProjectCardWithMenu({
   id,
   name,
+  color,
   description,
   status,
   progress,
@@ -133,6 +134,7 @@ function ProjectCardWithMenu({
 }: {
   id: string
   name: string
+  color?: string | null
   description?: string
   status: ReturnType<typeof dbStatusToUi>
   progress: number
@@ -151,6 +153,7 @@ function ProjectCardWithMenu({
     <div className="relative">
       <ProjectListCard
         name={name}
+        color={color}
         description={description}
         status={status}
         progress={progress}
@@ -336,6 +339,7 @@ function ProjectsPageBody() {
                 key={p.id}
                 id={p.id}
                 name={p.name}
+                color={p.color}
                 description={p.description ?? undefined}
                 status={dbStatusToUi(p.status)}
                 progress={p.progressPct ?? 0}

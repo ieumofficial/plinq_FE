@@ -44,6 +44,7 @@ import {
 import { supabase } from './supabase'
 import { queryKeys } from './queryKeys'
 import type { OrgRoleDb, ProjectRoleDb, ProjectRow, TaskStatusDb } from './types'
+import { aiFetch } from './aiClient'
 
 // ─── User / org ─────────────────────────────────────────────────────────────
 
@@ -71,6 +72,27 @@ export function useMyOrg(userId: string | undefined) {
       const org = (data as { organizations: { id: string; name: string } | null } | null)
         ?.organizations
       return org ?? null
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+/** Current user's role in their (single) organization. Returns null if the
+ *  user has no org membership yet. Used to gate "owner-only" UI like the
+ *  Organization sidebar entry. */
+export function useMyOrgRole(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['myOrgRole', userId ?? null] as const,
+    queryFn: async (): Promise<OrgRoleDb | null> => {
+      if (!userId) return null
+      const { data } = await supabase
+        .from('organization_members')
+        .select('role')
+        .eq('user_id', userId)
+        .limit(1)
+        .maybeSingle()
+      return (data as { role: OrgRoleDb } | null)?.role ?? null
     },
     enabled: !!userId,
     staleTime: 5 * 60 * 1000,
@@ -155,6 +177,52 @@ export function useUpdateTaskStatus() {
       const { error } = await supabase
         .from('tasks')
         .update({ status })
+        .eq('id', taskId)
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.tasks.all })
+      qc.invalidateQueries({ queryKey: queryKeys.calendar.all })
+      qc.invalidateQueries({ queryKey: queryKeys.projects.all })
+      qc.invalidateQueries({ queryKey: ['project'] })
+    },
+  })
+}
+
+/** Delete a task. Invalidates task/calendar/project caches on success. */
+export function useDeleteTask() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (taskId: string) => {
+      const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.tasks.all })
+      qc.invalidateQueries({ queryKey: queryKeys.calendar.all })
+      qc.invalidateQueries({ queryKey: queryKeys.projects.all })
+      qc.invalidateQueries({ queryKey: ['project'] })
+    },
+  })
+}
+
+export type TaskPatch = {
+  title?: string
+  description?: string | null
+  status?: TaskStatusDb
+  priority?: import('./types').TaskPriorityDb
+  due_date?: string | null
+  start_date?: string | null
+}
+
+/** Patch arbitrary task fields. Invalidates the same caches as status updates. */
+export function useUpdateTask() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ taskId, patch }: { taskId: string; patch: TaskPatch }) => {
+      const { error } = await supabase
+        .from('tasks')
+        .update(patch)
         .eq('id', taskId)
       if (error) throw new Error(error.message)
     },
@@ -317,6 +385,60 @@ export function useRemoveOrgMember(orgId: string | null | undefined) {
         .eq('org_id', orgId)
         .eq('user_id', userId)
       if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.members.all })
+    },
+  })
+}
+
+/** Update a project member's role (editor / admin / readonly). Use `.select()`
+ *  so RLS-filtered rows surface as "0 affected" → caller can show a perm error. */
+export function useUpdateProjectMemberRole(projectId: string | null | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      userId: string
+      role: import('./types').ProjectRoleDb
+    }) => {
+      if (!projectId) throw new Error('projectId required')
+      const { data, error } = await supabase
+        .from('project_members')
+        .update({ role: input.role })
+        .eq('project_id', projectId)
+        .eq('user_id', input.userId)
+        .select('user_id')
+      if (error) throw new Error(error.message)
+      if (!data || data.length === 0) {
+        throw new Error(
+          "Couldn't update permission — you may not have access. Only the project lead or an admin can change roles."
+        )
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.members.all })
+    },
+  })
+}
+
+/** Remove a user from a project. Same RLS caveat as useUpdateProjectMemberRole. */
+export function useRemoveProjectMember(projectId: string | null | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      if (!projectId) throw new Error('projectId required')
+      const { data, error } = await supabase
+        .from('project_members')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .select('user_id')
+      if (error) throw new Error(error.message)
+      if (!data || data.length === 0) {
+        throw new Error(
+          "Couldn't remove member — you may not have access. Only the project lead or an admin can remove members."
+        )
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.members.all })
@@ -547,6 +669,92 @@ export function useDeleteChatSession() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.chat.all })
+    },
+  })
+}
+
+// ─── AI agent conversations ────────────────────────────────────────────────
+
+export type AgentConversation = {
+  id: string
+  org_id: string | null
+  project_id: string | null
+  title: string | null
+  created_at: string
+}
+
+export type AgentMessage = {
+  id: string
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  content: string
+  created_at: string
+}
+
+/** List the user's recent AI conversations in (orgId, projectId) scope. */
+export function useAgentConversations(scope: {
+  orgId?: string | null
+  projectId?: string | null
+  enabled?: boolean
+}) {
+  const orgId = scope.orgId ?? null
+  const projectId = scope.projectId ?? null
+  return useQuery({
+    queryKey: queryKeys.agentChats.list(orgId, projectId),
+    enabled: scope.enabled !== false,
+    queryFn: async (): Promise<AgentConversation[]> => {
+      const params = new URLSearchParams({ limit: '50' })
+      if (orgId) params.set('org_id', orgId)
+      if (projectId) params.set('project_id', projectId)
+      const r = await aiFetch(`/agent/conversations?${params.toString()}`, {
+        method: 'GET',
+      })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const j = await r.json()
+      return j.conversations as AgentConversation[]
+    },
+  })
+}
+
+/** Fetch one conversation's messages. */
+export function useAgentMessages(conversationId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.agentChats.messages(conversationId ?? ''),
+    enabled: !!conversationId,
+    queryFn: async (): Promise<{
+      conversation: AgentConversation
+      messages: AgentMessage[]
+    }> => {
+      const r = await aiFetch(
+        `/agent/conversations/${conversationId}/messages?limit=200`,
+        { method: 'GET' },
+      )
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      return r.json()
+    },
+  })
+}
+
+/** Delete an AI conversation. Invalidates the list cache. */
+export function useDeleteAgentConversation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const r = await aiFetch(`/agent/conversations/${conversationId}`, {
+        method: 'DELETE',
+      })
+      if (!r.ok) {
+        let detail = `HTTP ${r.status}`
+        try {
+          const j = await r.json()
+          detail = typeof j.detail === 'string' ? j.detail : detail
+        } catch {
+          /* keep status */
+        }
+        throw new Error(detail)
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.agentChats.all })
     },
   })
 }

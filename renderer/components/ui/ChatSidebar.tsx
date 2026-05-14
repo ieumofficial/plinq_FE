@@ -56,6 +56,8 @@ type Props = {
   searchValue?: string
   onSearchChange?: (value: string) => void
   onCreateClick?: () => void
+  /** Triggered by the "+" icon button on the DM section header. */
+  onCreateDmClick?: () => void
 
   sessionsCount?: number
   sessionGroups?: ChatSessionGroup[]
@@ -330,9 +332,14 @@ function DmRow({
 function SectionHeader({
   label,
   count,
+  onAdd,
+  addLabel,
 }: {
   label: string
   count?: number
+  /** Optional trailing "+" icon button (e.g. on the DM section header). */
+  onAdd?: () => void
+  addLabel?: string
 }) {
   return (
     <div className="flex items-center gap-[10px]">
@@ -346,6 +353,16 @@ function SectionHeader({
         >
           {count}
         </p>
+      )}
+      {onAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          aria-label={addLabel ?? 'Add'}
+          className="ml-auto inline-flex items-center justify-center w-[18px] h-[18px] rounded-[3px] text-gray-main hover:bg-white-item hover:text-black transition-colors"
+        >
+          <Icon name="Add" size={13} />
+        </button>
       )}
     </div>
   )
@@ -375,6 +392,7 @@ export default function ChatSidebar({
   searchValue = '',
   onSearchChange,
   onCreateClick,
+  onCreateDmClick,
   sessionsCount,
   sessionGroups = [],
   dmCount,
@@ -505,7 +523,12 @@ export default function ChatSidebar({
 
         {/* DMs */}
         <div className="flex flex-col gap-[10px] p-[10px]">
-          <SectionHeader label="Direct Messages" count={dmCount ?? dms.length} />
+          <SectionHeader
+            label="Direct Messages"
+            count={dmCount ?? dms.length}
+            onAdd={onCreateDmClick}
+            addLabel="New direct message"
+          />
           <div className="flex flex-col gap-[15px]">
             {dms.map((d) => (
               <DmRow

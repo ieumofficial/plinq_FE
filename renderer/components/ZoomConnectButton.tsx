@@ -17,7 +17,26 @@ type Props = {
  * instead of `backend` over Express) and the external-link mechanism
  * (Electron IPC when available).
  */
-export default function ZoomConnectButton({ onChange }: Props) {
+export default function ZoomConnectButton({ onChange: _onChange }: Props) {
+  // Zoom integration is parked until the backend (zoom-* endpoints in
+  // plinq_ai) lands in Phase 3.5. Render a disabled stub so the slot
+  // stays in the layout — full implementation below this guard.
+  return (
+    <button
+      type="button"
+      disabled
+      title="Zoom integration coming in a future release"
+      className="px-[12px] py-[6px] rounded-md bg-[#2D8CFF]/40 text-white font-medium text-[13px] leading-[20px] tracking-[0.2px] cursor-not-allowed inline-flex items-center gap-[6px]"
+    >
+      Connect Zoom
+      <span className="text-[10px] uppercase tracking-[1px] bg-white/30 rounded px-[5px] py-[1px]">
+        Soon
+      </span>
+    </button>
+  )
+
+  // ─── Original implementation (re-enable in Phase 3.5) ──────────────────
+  // eslint-disable-next-line @typescript-eslint/no-unreachable-code, @typescript-eslint/no-unused-vars
   const [status, setStatus] = useState<ZoomStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

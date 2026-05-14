@@ -1,7 +1,10 @@
-import type { ReactNode } from 'react'
+import { useRouter } from 'next/router'
+import { useState, type ReactNode } from 'react'
 import MenuItem from './MenuItem'
 import Button from './Button'
 import type { IconName } from './Icon'
+import ProfileDropdown from '../ProfileDropdown'
+import { usePresence } from '../../lib/presencePref'
 
 export type NavItem = {
   key: string
@@ -49,6 +52,10 @@ export default function SideMenu({
   sectionExtra,
   onToggleSidebar,
 }: Props) {
+  const router = useRouter()
+  const [presence, setPresence] = usePresence()
+  const [profileRect, setProfileRect] = useState<DOMRect | null>(null)
+
   const widthClass = stacked ? 'w-[59px]' : 'w-[200px]'
   // Less top padding now that the org block lives in the header above.
   const padding = 'pt-[5px] pb-[18px] px-[12px]'
@@ -117,7 +124,18 @@ export default function SideMenu({
           />
         ))}
         <div className="h-px bg-gray-border-light w-full" />
-        <div className={`flex items-center px-[5px] py-[10px] w-full ${stacked ? 'justify-center' : 'gap-[10px]'}`}>
+        <button
+          type="button"
+          onClick={(e) => {
+            setProfileRect(
+              profileRect ? null : e.currentTarget.getBoundingClientRect()
+            )
+          }}
+          className={`flex items-center px-[5px] py-[10px] w-full rounded-[5px] hover:bg-gray-extra-light transition-colors ${
+            stacked ? 'justify-center' : 'gap-[10px]'
+          }`}
+          aria-label="Open profile menu"
+        >
           <span className="bg-primary-main text-white rounded-full w-[25px] h-[25px] inline-flex items-center justify-center text-[12px] font-semibold uppercase shrink-0">
             {userInitials}
           </span>
@@ -129,8 +147,21 @@ export default function SideMenu({
               {userName}
             </span>
           )}
-        </div>
+        </button>
       </div>
+      <ProfileDropdown
+        anchorRect={profileRect}
+        presence={presence}
+        onPresenceChange={(next) => {
+          setPresence(next)
+          setProfileRect(null)
+        }}
+        onMyPage={() => {
+          setProfileRect(null)
+          router.push('/my/overview')
+        }}
+        onClose={() => setProfileRect(null)}
+      />
     </aside>
   )
 }

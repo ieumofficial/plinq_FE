@@ -15,9 +15,11 @@ import {
   getChatSessionMembers,
   getChatSessions,
   getCurrentUser,
+  getMyOrgsWithStats,
   getOrgMembers,
   getOrgMembersWithRoles,
   inviteToOrganization,
+  updateCurrentUser,
   getProject,
   getProjectCounts,
   getProjectDocs,
@@ -34,6 +36,7 @@ import {
   type NewDocInput,
   type ProjectPatch,
   type ProjectWithStats,
+  type UserProfilePatch,
 } from './queries'
 import { supabase } from './supabase'
 import { queryKeys } from './queryKeys'
@@ -189,6 +192,31 @@ export function useOrgMembers(orgId: string | null | undefined) {
     queryFn: () => getOrgMembers(orgId!),
     enabled: !!orgId,
     staleTime: 60 * 1000,
+  })
+}
+
+/** All orgs the current user belongs to, with member/project totals. */
+export function useMyOrgsWithStats(userId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['myOrgs', 'withStats', userId ?? null] as const,
+    queryFn: () => getMyOrgsWithStats(userId!),
+    enabled: !!userId,
+    staleTime: 60 * 1000,
+  })
+}
+
+/** Patch the current user's profile (display name fields, role/job title). */
+export function useUpdateCurrentUser() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (patch: UserProfilePatch) => {
+      const result = await updateCurrentUser(patch)
+      if ('error' in result) throw new Error(result.error)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.currentUser() })
+      qc.invalidateQueries({ queryKey: queryKeys.members.all })
+    },
   })
 }
 

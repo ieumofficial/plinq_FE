@@ -703,6 +703,106 @@ export async function inviteToOrganization(input: {
   return { ok: true }
 }
 
+export type MyOrgWithStats = {
+  id: string
+  name: string
+  /** Member count across the org. */
+  memberCount: number
+  /** Total projects in the org. */
+  projectCount: number
+  /** Projects in this org where the current user is a member. */
+  myProjectCount: number
+}
+
+/** Orgs the current user belongs to, with member/project totals. Used by
+ *  the My Space profile page. */
+export async function getMyOrgsWithStats(
+  userId: string
+): Promise<MyOrgWithStats[]> {
+  const { data: memberships, error } = await supabase
+    .from('organization_members')
+    .select('org_id, organizations(id, name)')
+    .eq('user_id', userId)
+  if (error) {
+    console.error('[queries] getMyOrgsWithStats memberships', error)
+    return []
+  }
+  const orgs: { id: string; name: string }[] = []
+  for (const row of memberships ?? []) {
+    const o = (row as unknown as { organizations: { id: string; name: string } | null })
+      .organizations
+    if (o) orgs.push(o)
+  }
+  if (orgs.length === 0) return []
+
+  const orgIds = orgs.map((o) => o.id)
+  const [memberCounts, projectsResult, myProjects] = await Promise.all([
+    supabase
+      .from('organization_members')
+      .select('org_id', { count: 'exact' })
+      .in('org_id', orgIds),
+    supabase
+      .from('projects')
+      .select('id, org_id')
+      .in('org_id', orgIds),
+    supabase
+      .from('project_members')
+      .select('project_id, projects(org_id)')
+      .eq('user_id', userId),
+  ])
+
+  const memberCountByOrg = new Map<string, number>()
+  for (const row of memberCounts.data ?? []) {
+    const oid = (row as { org_id: string }).org_id
+    memberCountByOrg.set(oid, (memberCountByOrg.get(oid) ?? 0) + 1)
+  }
+
+  const projectCountByOrg = new Map<string, number>()
+  for (const row of projectsResult.data ?? []) {
+    const oid = (row as { org_id: string }).org_id
+    projectCountByOrg.set(oid, (projectCountByOrg.get(oid) ?? 0) + 1)
+  }
+
+  const myProjectCountByOrg = new Map<string, number>()
+  for (const row of myProjects.data ?? []) {
+    const oid = (row as unknown as { projects: { org_id: string } | null }).projects?.org_id
+    if (!oid) continue
+    myProjectCountByOrg.set(oid, (myProjectCountByOrg.get(oid) ?? 0) + 1)
+  }
+
+  return orgs.map((o) => ({
+    id: o.id,
+    name: o.name,
+    memberCount: memberCountByOrg.get(o.id) ?? 0,
+    projectCount: projectCountByOrg.get(o.id) ?? 0,
+    myProjectCount: myProjectCountByOrg.get(o.id) ?? 0,
+  }))
+}
+
+export type UserProfilePatch = {
+  first_name?: string
+  last_name?: string
+  nickname?: string | null
+  job_title?: string | null
+}
+
+/** Update the current user's profile fields. Email is auth-managed and
+ *  cannot be changed here. */
+export async function updateCurrentUser(
+  patch: UserProfilePatch
+): Promise<{ ok: true } | { error: string }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in' }
+  const { error } = await supabase
+    .from('users')
+    .update(patch)
+    .eq('id', user.id)
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
 export async function getProjectMembers(projectId: string): Promise<UserRow[]> {
   const { data, error } = await supabase
     .from('project_members')

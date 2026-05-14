@@ -206,7 +206,12 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
                 })}
               </div>
             </div>
-            <Button size="compact" variant="secondary">
+            <Button
+              size="compact"
+              variant="secondary"
+              disabled
+              title="Custom colors aren't wired up yet."
+            >
               🎨 Custom hex
             </Button>
           </div>
@@ -313,7 +318,9 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
                 </span>
                 <button
                   type="button"
-                  className="text-primary-main text-[10px] hover:underline"
+                  disabled
+                  title="Suggestions aren't wired up yet."
+                  className="text-gray-secondary text-[10px] cursor-not-allowed"
                 >
                   + Sam Lee, + Riley Wong
                 </button>
@@ -327,7 +334,12 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
           <span className="text-gray-secondary text-[12px]">
             {pickedMembers.length} members
           </span>
-          <Button size="default" onClick={onSave}>
+          <Button
+            size="default"
+            onClick={onSave}
+            disabled
+            title="Org settings save isn't wired up yet."
+          >
             Save changes
           </Button>
         </div>

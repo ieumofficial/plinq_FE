@@ -13,6 +13,7 @@ import CreateMeetingModal from './CreateMeetingModal'
 import {
   useCurrentUser,
   useMyOrg,
+  useMyOrgRole,
   useProject,
   useProjectCounts,
   useUserProjects,
@@ -22,9 +23,15 @@ import { dbStatusToUi } from '../lib/types'
 
 // ─── Create New context ─────────────────────────────────────────────────────
 
+/** Prefilled fields the caller can hand to the create modals. Only `status`
+ *  is wired through today (used by the kanban column "+ Add" buttons). */
+export type CreateOpts = {
+  status?: import('../lib/types').TaskStatusDb
+}
+
 type CreateNewApi = {
   openMenu: () => void
-  open: (type: CreateType) => void
+  open: (type: CreateType, opts?: CreateOpts) => void
 }
 
 const CreateNewContext = createContext<CreateNewApi | null>(null)
@@ -85,9 +92,14 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
   const router = useRouter()
   const { data: user, isFetched: userFetched } = useCurrentUser()
   const { data: org } = useMyOrg(user?.id)
+  const { data: myOrgRole } = useMyOrgRole(user?.id)
   const { data: project } = useProject(projectId)
   const { data: counts } = useProjectCounts(projectId)
   const { data: userProjects = [] } = useUserProjects(user?.id)
+  const isOrgOwner = myOrgRole === 'owner'
+  const railItems = isOrgOwner
+    ? PERSONAL_RAIL_ITEMS
+    : PERSONAL_RAIL_ITEMS.filter((it) => it.key !== 'organization')
   const { collapsed: stackedSidebar, toggle: toggleSidebar } = useSidebarPref()
   useSpaceTransition(`project:${projectId}`)
   const [switcherOpen, setSwitcherOpen] = useState(false)
@@ -100,6 +112,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [createType, setCreateType] = useState<CreateType | null>(null)
+  const [createOpts, setCreateOpts] = useState<CreateOpts>({})
   const [askAiOpen, setAskAiOpen] = useState(false)
 
   const initials = user
@@ -111,21 +124,30 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
 
   const openMenu = () => {
     setCreateType(null)
+    setCreateOpts({})
     setMenuOpen(true)
   }
   const pickType = (t: CreateType) => {
     setMenuOpen(false)
+    setCreateOpts({})
     setCreateType(t)
   }
   const closeAll = () => {
     setMenuOpen(false)
     setCreateType(null)
+    setCreateOpts({})
   }
   // Stay on current page; TanStack Query invalidation in the create modals
   // refreshes the data automatically.
   const onCreated = () => closeAll()
 
-  const api: CreateNewApi = { openMenu, open: (t) => setCreateType(t) }
+  const api: CreateNewApi = {
+    openMenu,
+    open: (t, opts) => {
+      setCreateOpts(opts ?? {})
+      setCreateType(t)
+    },
+  }
 
   const projectName = project?.name ?? 'Project'
   const projectInitial = projectName.charAt(0).toUpperCase()
@@ -166,7 +188,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
         sidebar={
           <SideMenu
             sectionLabel={stackedSidebar ? undefined : 'Personal Space'}
-            items={PERSONAL_RAIL_ITEMS}
+            items={railItems}
             footerItems={PERSONAL_FOOTER}
             activeKey="projects"
             userInitials={initials}
@@ -276,6 +298,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
       <CreateTaskModal
         open={createType === 'task'}
         defaultProjectId={projectId}
+        defaultStatus={createOpts.status}
         lockProject
         onClose={closeAll}
         onCreated={onCreated}

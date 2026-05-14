@@ -75,6 +75,27 @@ export function useMyOrg(userId: string | undefined) {
   })
 }
 
+/** Current user's role in their (single) organization. Returns null if the
+ *  user has no org membership yet. Used to gate "owner-only" UI like the
+ *  Organization sidebar entry. */
+export function useMyOrgRole(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['myOrgRole', userId ?? null] as const,
+    queryFn: async (): Promise<OrgRoleDb | null> => {
+      if (!userId) return null
+      const { data } = await supabase
+        .from('organization_members')
+        .select('role')
+        .eq('user_id', userId)
+        .limit(1)
+        .maybeSingle()
+      return (data as { role: OrgRoleDb } | null)?.role ?? null
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
 // ─── Projects ───────────────────────────────────────────────────────────────
 
 export function useUserProjects(

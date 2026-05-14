@@ -183,7 +183,7 @@ export default function ChatDetails(props: Props) {
       aiCard,
     } = props
     return (
-      <aside className="w-[240px] shrink-0 h-full flex flex-col bg-white-white border border-solid border-gray-border-light rounded-[10px] overflow-hidden">
+      <aside className="w-[290px] shrink-0 h-full flex flex-col bg-white-white border-t border-solid border-gray-border-light overflow-hidden">
         <div className="flex-1 min-h-0 overflow-y-auto p-[15px] flex flex-col gap-[15px]">
           {/* About */}
           <div className="flex flex-col gap-[5px]">
@@ -259,7 +259,7 @@ export default function ChatDetails(props: Props) {
   const { member, jobTitle, orgName, sharedSessions, sharedFiles, aiCard } = props
   const initial = (member.name?.charAt(0) ?? '?').toUpperCase()
   return (
-    <aside className="w-[240px] shrink-0 h-full flex flex-col bg-white-white border border-solid border-gray-border-light rounded-[10px] overflow-hidden">
+    <aside className="w-[290px] shrink-0 h-full flex flex-col bg-white-white border-t border-solid border-gray-border-light overflow-hidden">
       <div className="flex-1 min-h-0 overflow-y-auto p-[15px] flex flex-col gap-[15px]">
         {/* Profile */}
         <div className="flex flex-col items-center gap-[7px]">

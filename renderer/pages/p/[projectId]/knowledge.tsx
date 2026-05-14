@@ -8,6 +8,7 @@ import FileLabel, { type FileCategory } from '../../../components/ui/FileLabel'
 import UserGroup from '../../../components/ui/UserGroup'
 import FilterChecklist from '../../../components/ui/FilterChecklist'
 import NewDocModal from '../../../components/NewDocModal'
+import DeleteConfirmModal from '../../../components/DeleteConfirmModal'
 import {
   TableHeader,
   TableRow,
@@ -132,7 +133,7 @@ function KnowledgeBody({ projectId }: { projectId: string }) {
   const { data: members = [] } = useProjectMembersWithRoles(projectId)
   const { data: docs = [] } = useProjectDocs(projectId)
   const { isPinned, toggle: togglePin } = usePinnedDocs(projectId)
-  const { mutate: deleteDoc } = useDeleteKnowledgeDoc()
+  const { mutate: deleteDoc, isPending: isDeleting } = useDeleteKnowledgeDoc()
 
   const isAdmin = useMemo(() => {
     if (!me) return false
@@ -147,8 +148,7 @@ function KnowledgeBody({ projectId }: { projectId: string }) {
   const [sortRecent, setSortRecent] = useState(true)
   const [newDocOpen, setNewDocOpen] = useState(false)
   const [previewDoc, setPreviewDoc] = useState<ProjectDoc | null>(null)
-  const [rowMenuDoc, setRowMenuDoc] = useState<ProjectDoc | null>(null)
-  const rowMenuRef = useClickOutside(!!rowMenuDoc, () => setRowMenuDoc(null))
+  const [deletingDoc, setDeletingDoc] = useState<ProjectDoc | null>(null)
 
   const allTagsOn = tagFilter.size === TAG_OPTIONS.length
 
@@ -357,63 +357,24 @@ function KnowledgeBody({ projectId }: { projectId: string }) {
                     </span>
                   </TableCell>
                   <TableCell width="w-[40px]">
-                    <div
-                      className="relative"
-                      ref={rowMenuDoc?.id === d.id ? rowMenuRef : undefined}
+                    <button
+                      type="button"
+                      disabled={!isAdmin}
+                      title={
+                        isAdmin
+                          ? undefined
+                          : 'Only project admins can delete docs'
+                      }
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (!isAdmin) return
+                        setDeletingDoc(d)
+                      }}
+                      className="text-red-main hover:bg-red-50 inline-flex items-center justify-center w-[24px] h-[24px] rounded transition-colors disabled:text-gray-secondary disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                      aria-label="Delete document"
                     >
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setRowMenuDoc((prev) => (prev?.id === d.id ? null : d))
-                        }}
-                        className="text-gray-main hover:bg-white-item p-1 rounded transition-colors w-[28px] h-[28px] inline-flex items-center justify-center"
-                        aria-label="Document actions"
-                      >
-                        <Icon name="Dot-Menu" size={15} />
-                      </button>
-
-                      {rowMenuDoc?.id === d.id && (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          className={`absolute z-30 right-0 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md min-w-[180px] py-[5px] ${
-                            // Open upward for the last 2 rows so the menu
-                            // isn't clipped by the table's scroll container.
-                            i >= filtered.length - 2 && filtered.length > 2
-                              ? 'bottom-[32px]'
-                              : 'top-[32px]'
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              togglePin(d.id)
-                              setRowMenuDoc(null)
-                            }}
-                            className="w-full flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left text-black hover:bg-white-item transition-colors"
-                          >
-                            <Icon name="Pin" size={13} className="text-gray-main" />
-                            <span>{pinnedNow ? 'Unpin' : 'Pin'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!isAdmin}
-                            title={isAdmin ? undefined : 'Only project admins can delete docs'}
-                            onClick={() => {
-                              if (!window.confirm(`Delete "${d.name}"?`)) return
-                              deleteDoc(
-                                { docId: d.id, projectId },
-                                { onSuccess: () => setRowMenuDoc(null) }
-                              )
-                            }}
-                            className="w-full flex items-center gap-[10px] px-[10px] py-[7px] text-[12px] text-left text-red-main hover:bg-white-item transition-colors disabled:text-gray-secondary disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                          >
-                            <Icon name="Cross" size={13} />
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                      <Icon name="Trash" size={15} />
+                    </button>
                   </TableCell>
                 </TableRow>
               )
@@ -435,18 +396,84 @@ function KnowledgeBody({ projectId }: { projectId: string }) {
       {previewDoc && (
         <DocPreviewModal
           doc={previewDoc}
+          pinned={isPinned(previewDoc.id)}
+          onTogglePin={() => togglePin(previewDoc.id)}
           onClose={() => setPreviewDoc(null)}
         />
       )}
+
+      {/* Delete confirmation */}
+      <DeleteConfirmModal
+        open={deletingDoc !== null}
+        type="file"
+        title="Delete this file?"
+        body={
+          <>
+            This action is <strong className="font-bold">permanent</strong>. The
+            file will be removed for everyone in the workspace.
+          </>
+        }
+        subject={
+          deletingDoc && (
+            <div className="flex items-center gap-[10px] min-w-0">
+              <FileLabel
+                variant="icon"
+                category={SOURCE_TO_CATEGORY[deletingDoc.source]}
+              />
+              <div className="flex flex-col gap-[3px] min-w-0">
+                <p className="text-black text-[12px] font-semibold truncate">
+                  {deletingDoc.name}
+                </p>
+                <p className="text-gray-main text-[8px] truncate">
+                  {deletingDoc.file_type ?? 'Doc'} · Edited{' '}
+                  {relativeDate(deletingDoc.uploaded_at)}
+                  {deletingDoc.uploader
+                    ? ` by ${
+                        deletingDoc.uploader.nickname ||
+                        `${deletingDoc.uploader.first_name} ${deletingDoc.uploader.last_name}`.trim() ||
+                        deletingDoc.uploader.email
+                      }`
+                    : ''}
+                </p>
+              </div>
+            </div>
+          )
+        }
+        consequences={
+          deletingDoc
+            ? [
+                `Removed from ${project?.name ?? 'this project'}'s knowledge base`,
+                'Any task descriptions or references to this file will break — descriptions are preserved',
+              ]
+            : []
+        }
+        confirmLabel="Delete file"
+        submitting={isDeleting}
+        onClose={() => setDeletingDoc(null)}
+        onConfirm={() => {
+          if (!deletingDoc) return
+          deleteDoc(
+            { docId: deletingDoc.id, projectId },
+            {
+              onSuccess: () => setDeletingDoc(null),
+              onError: (err) => window.alert(err.message),
+            }
+          )
+        }}
+      />
     </div>
   )
 }
 
 function DocPreviewModal({
   doc,
+  pinned,
+  onTogglePin,
   onClose,
 }: {
   doc: ProjectDoc
+  pinned: boolean
+  onTogglePin: () => void
   onClose: () => void
 }) {
   useEffect(() => {
@@ -494,14 +521,30 @@ function DocPreviewModal({
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="text-gray-main hover:bg-white-item rounded p-1 transition-colors shrink-0"
-          >
-            <Icon name="Cross" size={13} />
-          </button>
+          <div className="flex items-center gap-[5px] shrink-0">
+            <button
+              type="button"
+              onClick={onTogglePin}
+              aria-label={pinned ? 'Unpin' : 'Pin'}
+              title={pinned ? 'Unpin' : 'Pin'}
+              className={`inline-flex items-center gap-[5px] px-[10px] h-[28px] rounded-[5px] border border-solid text-[12px] transition-colors ${
+                pinned
+                  ? 'bg-blue-light text-blue-main border-blue-main/30'
+                  : 'bg-white-white text-gray-main border-gray-border-light hover:bg-white-item'
+              }`}
+            >
+              <Icon name="Pin" size={13} />
+              <span>{pinned ? 'Pinned' : 'Pin'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="text-gray-main hover:bg-white-item rounded p-1 transition-colors"
+            >
+              <Icon name="Cross" size={13} />
+            </button>
+          </div>
         </div>
 
         {/* Preview body — blind placeholder until real file rendering ships */}

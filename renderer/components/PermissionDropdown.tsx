@@ -1,38 +1,36 @@
 import { useEffect, useRef, useState } from 'react'
-import type { OrgRoleDb } from '../lib/types'
+import type { OrgRoleDb, ProjectRoleDb } from '../lib/types'
+
+/** Roles this dropdown can show — org and project both reuse this UI. */
+export type PermissionRole = OrgRoleDb | ProjectRoleDb
+
+export type PermissionOption = {
+  key: PermissionRole
+  label: string
+  /** Tailwind background class for the role chip rendered inside the option. */
+  bg: string
+  desc: string
+}
 
 type Props = {
   /** Trigger button's bounding rect. Null when closed. */
   anchorRect: DOMRect | null
-  current: OrgRoleDb
-  /** Owner cannot be reassigned through this dropdown; if the current role
-   *  is owner we render disabled. */
+  current: PermissionRole
+  /** Roles the caller can grant — does not include the current row's role
+   *  by default. Callers pass the full list they want to show. */
+  options: PermissionOption[]
   onClose: () => void
-  onSave: (next: OrgRoleDb) => void
+  onSave: (next: PermissionRole) => void
 }
-
-const OPTIONS: { key: OrgRoleDb; label: string; bg: string; desc: string }[] = [
-  {
-    key: 'admin',
-    label: 'Admin',
-    bg: 'bg-gray-main',
-    desc: 'Full access to the organization — members, settings.',
-  },
-  {
-    key: 'member',
-    label: 'Member',
-    bg: 'bg-gray-light',
-    desc: 'Standard access to projects shared with them.',
-  },
-]
 
 export default function PermissionDropdown({
   anchorRect,
   current,
+  options,
   onClose,
   onSave,
 }: Props) {
-  const [selected, setSelected] = useState<OrgRoleDb>(current)
+  const [selected, setSelected] = useState<PermissionRole>(current)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -67,7 +65,7 @@ export default function PermissionDropdown({
     position: 'fixed',
     top: anchorRect.bottom + 4,
     left: Math.max(8, anchorRect.left),
-    width: 190,
+    width: 220,
   }
 
   return (
@@ -80,7 +78,7 @@ export default function PermissionDropdown({
       <p className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
         set permission
       </p>
-      {OPTIONS.map((opt) => {
+      {options.map((opt) => {
         const isSel = selected === opt.key
         return (
           <button

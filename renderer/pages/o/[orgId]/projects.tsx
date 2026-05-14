@@ -625,17 +625,19 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
                     </span>
                   </TableCell>
                   <TableCell width="w-[30px]" align="right">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setDeleting(p)
-                      }}
-                      className="text-red-main hover:bg-red-50 inline-flex items-center justify-center w-[24px] h-[24px] rounded transition-colors"
-                      aria-label="Delete project"
-                    >
-                      <Icon name="Trash" size={15} />
-                    </button>
+                    {user && p.lead_id === user.id ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDeleting(p)
+                        }}
+                        className="text-red-main hover:bg-red-50 inline-flex items-center justify-center w-[24px] h-[24px] rounded transition-colors"
+                        aria-label="Delete project"
+                      >
+                        <Icon name="Trash" size={15} />
+                      </button>
+                    ) : null}
                   </TableCell>
                 </TableRow>
               )
@@ -697,6 +699,7 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
           if (!deleting) return
           deleteProject.mutate(deleting.id, {
             onSuccess: () => setDeleting(null),
+            onError: (err) => window.alert(err.message),
           })
         }}
       />

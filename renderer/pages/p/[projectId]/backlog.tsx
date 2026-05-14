@@ -14,7 +14,15 @@ import Table, {
   TableCell,
   type Column,
 } from '../../../components/ui/Table'
-import { useProject, useProjectMembers, useProjectTasks } from '../../../lib/hooks'
+import Icon from '../../../components/ui/Icon'
+import DeleteConfirmModal from '../../../components/DeleteConfirmModal'
+import {
+  useDeleteTask,
+  useProject,
+  useProjectMembers,
+  useProjectTasks,
+} from '../../../lib/hooks'
+import type { ProjectTask } from '../../../lib/queries'
 import TaskDetailModal from '../../../components/TaskDetailModal'
 import {
   dbPriorityToUi,
@@ -73,6 +81,7 @@ const COLS: Column[] = [
   { key: 'due', label: 'Due', width: 'w-[80px]' },
   { key: 'status', label: 'Status', width: 'w-[130px]' },
   { key: 'priority', label: 'Priority', width: 'w-[100px]' },
+  { key: 'delete', label: '', width: 'w-[40px]' },
 ]
 
 function ticketId(projectName: string, idx: number): string {
@@ -131,6 +140,8 @@ function BacklogBody({ projectId }: { projectId: string }) {
   const { data: project } = useProject(projectId)
   const { data: tasks = [] } = useProjectTasks(projectId)
   const { data: members = [] } = useProjectMembers(projectId)
+  const deleteTaskMut = useDeleteTask()
+  const [deletingTask, setDeletingTask] = useState<ProjectTask | null>(null)
   const [search, setSearch] = useState('')
   const [openTask, setOpenTask] = useState<{ task: ProjectTask; idx: number } | null>(
     null
@@ -465,6 +476,47 @@ function BacklogBody({ projectId }: { projectId: string }) {
         })}
       </div>
 
+      {/* Delete confirmation */}
+      <DeleteConfirmModal
+        open={deletingTask !== null}
+        type="task"
+        title="Delete this task?"
+        body={
+          <>
+            This action is <strong className="font-bold">permanent</strong>. The
+            task will be removed for everyone in the workspace.
+          </>
+        }
+        subject={
+          deletingTask && (
+            <div className="flex flex-col gap-[3px] min-w-0">
+              <p className="text-gray-secondary text-[10px] tracking-[0.5px]">
+                {(project?.name ?? 'Project')} ·{' '}
+                {ticketId(project?.name ?? 'TSK', tasks.findIndex((x) => x.id === deletingTask.id))}
+              </p>
+              <p className="text-black text-[12px] font-semibold truncate">
+                {deletingTask.title}
+              </p>
+            </div>
+          )
+        }
+        consequences={
+          deletingTask
+            ? [`Removed from the ${project?.name ?? 'project'} project workspace`]
+            : []
+        }
+        confirmLabel="Delete task"
+        submitting={deleteTaskMut.isPending}
+        onClose={() => setDeletingTask(null)}
+        onConfirm={() => {
+          if (!deletingTask) return
+          deleteTaskMut.mutate(deletingTask.id, {
+            onSuccess: () => setDeletingTask(null),
+            onError: (err) => window.alert(err.message),
+          })
+        }}
+      />
+
       {/* Table — shrinks to content when rows are few, scrolls internally when overflowing */}
       <div className="min-h-0 bg-white-white rounded-[10px] border border-gray-border-light flex flex-col overflow-hidden">
         <TableHeader columns={COLS} className="shrink-0" />
@@ -532,6 +584,19 @@ function BacklogBody({ projectId }: { projectId: string }) {
                 </TableCell>
                 <TableCell width="w-[100px]">
                   <PriorityTag priority={dbPriorityToUi(t.priority)} />
+                </TableCell>
+                <TableCell width="w-[40px]" align="right">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDeletingTask(t)
+                    }}
+                    className="text-red-main hover:bg-red-50 inline-flex items-center justify-center w-[24px] h-[24px] rounded transition-colors"
+                    aria-label="Delete task"
+                  >
+                    <Icon name="Trash" size={15} />
+                  </button>
                 </TableCell>
               </TableRow>
             )

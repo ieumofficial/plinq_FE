@@ -370,6 +370,98 @@ export async function createProject(
   return { id: projectId }
 }
 
+/**
+ * Delete a project plus every row that references it. The schema does not
+ * have `ON DELETE CASCADE` on most project FKs, so a plain
+ * `delete from projects` fails with a foreign-key violation as soon as the
+ * project has a member, task, meeting, doc, or chat session. We clear the
+ * children explicitly in dependency order. Mirrors `deleteMeeting`.
+ */
+export async function deleteProject(
+  projectId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const [tasksRes, meetingsRes, sessionsRes] = await Promise.all([
+    supabase.from('tasks').select('id').eq('project_id', projectId),
+    supabase.from('meetings').select('id').eq('project_id', projectId),
+    supabase.from('chat_sessions').select('id').eq('project_id', projectId),
+  ])
+  const taskIds = (tasksRes.data ?? []).map((r) => (r as { id: string }).id)
+  const meetingIds = (meetingsRes.data ?? []).map((r) => (r as { id: string }).id)
+  const sessionIds = (sessionsRes.data ?? []).map((r) => (r as { id: string }).id)
+
+  // chat — `chat_sessions` has ON DELETE CASCADE for messages/members per
+  // `deleteChatSession`, so deleting the parent rows is enough.
+  if (sessionIds.length > 0) {
+    const { error } = await supabase
+      .from('chat_sessions')
+      .delete()
+      .in('id', sessionIds)
+    if (error) return { error: error.message }
+  }
+
+  // meetings — mirror `deleteMeeting`'s manual child cleanup.
+  if (meetingIds.length > 0) {
+    for (const table of [
+      'meeting_attendees',
+      'meeting_agendas',
+      'meeting_invites',
+      'meeting_minutes',
+      'transcript_segments',
+      'meeting_decisions',
+    ]) {
+      const { error: e } = await supabase
+        .from(table)
+        .delete()
+        .in('meeting_id', meetingIds)
+      if (e) console.warn(`[deleteProject] ${table}:`, e.message)
+    }
+    const { error } = await supabase
+      .from('meetings')
+      .delete()
+      .in('id', meetingIds)
+    if (error) return { error: error.message }
+  }
+
+  // tasks — `task_assignees` references `tasks.id`.
+  if (taskIds.length > 0) {
+    await supabase.from('task_assignees').delete().in('task_id', taskIds)
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .in('id', taskIds)
+    if (error) return { error: error.message }
+  }
+
+  // remaining direct children of the project row
+  for (const table of [
+    'knowledge_documents',
+    'project_invites',
+    'project_members',
+  ]) {
+    const { error: e } = await supabase
+      .from(table)
+      .delete()
+      .eq('project_id', projectId)
+    if (e) console.warn(`[deleteProject] ${table}:`, e.message)
+  }
+
+  // Use `.select('id')` so an RLS-filtered delete (caller is not the lead /
+  // admin) is surfaced as 0 returned rows instead of looking like success.
+  const { data, error } = await supabase
+    .from('projects')
+    .delete()
+    .eq('id', projectId)
+    .select('id')
+  if (error) return { error: error.message }
+  if (!data || data.length === 0) {
+    return {
+      error:
+        "Couldn't delete the project — you may not have permission. Only the project lead can delete this project.",
+    }
+  }
+  return { ok: true }
+}
+
 export async function addProjectInvite(input: {
   project_id: string
   email: string
@@ -387,6 +479,56 @@ export async function addProjectInvite(input: {
   })
   if (error) return { error: error.message }
   return { ok: true }
+}
+
+/**
+ * Invite a user to a project by email. Two-step: look up the email in
+ * `public.users` (via the SECURITY DEFINER RPC so RLS doesn't hide the row),
+ * and if a registered user exists, add them to `project_members` directly.
+ * Otherwise create a pending row in `project_invites` so the join happens
+ * once they sign up.
+ */
+export async function inviteToProject(input: {
+  project_id: string
+  email: string
+  role: import('./types').ProjectRoleDb
+}): Promise<
+  | { ok: true; mode: 'added' | 'invited' }
+  | { error: 'already_member' | string }
+> {
+  const email = input.email.trim().toLowerCase()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in' }
+
+  const { data: userId, error: lookupErr } = await supabase.rpc(
+    'lookup_user_id_by_email',
+    { p_email: email }
+  )
+  if (lookupErr) return { error: lookupErr.message }
+
+  if (userId) {
+    const { error } = await supabase.from('project_members').insert({
+      project_id: input.project_id,
+      user_id: userId,
+      role: input.role,
+    })
+    if (error) {
+      if (error.code === '23505') return { error: 'already_member' }
+      return { error: error.message }
+    }
+    return { ok: true, mode: 'added' }
+  }
+
+  const { error } = await supabase.from('project_invites').insert({
+    project_id: input.project_id,
+    email,
+    role: input.role,
+    invited_by: user.id,
+  })
+  if (error) return { error: error.message }
+  return { ok: true, mode: 'invited' }
 }
 
 // ─── Project mutations ──────────────────────────────────────────────────────
@@ -477,6 +619,37 @@ export async function createTask(
   }
 
   return { id: taskId }
+}
+
+/**
+ * Delete a task. Cleans up `task_assignees` first (no cascade in schema),
+ * then nulls out `parent_task_id` on any children so they survive the
+ * delete, then deletes the task row. Uses `.select()` on the final step so
+ * an RLS-filtered delete (caller is not a project admin) surfaces as 0
+ * returned rows.
+ */
+export async function deleteTask(
+  taskId: string,
+): Promise<{ ok: true } | { error: string }> {
+  await supabase.from('task_assignees').delete().eq('task_id', taskId)
+  await supabase
+    .from('tasks')
+    .update({ parent_task_id: null })
+    .eq('parent_task_id', taskId)
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', taskId)
+    .select('id')
+  if (error) return { error: error.message }
+  if (!data || data.length === 0) {
+    return {
+      error:
+        "Couldn't delete the task — you may not have permission. Only the project lead or an admin can delete tasks.",
+    }
+  }
+  return { ok: true }
 }
 
 // ─── Meeting mutations ──────────────────────────────────────────────────────
@@ -722,16 +895,20 @@ export async function inviteToOrganization(input: {
   | { error: 'not_found' | 'already_member' | string }
 > {
   const email = input.email.trim().toLowerCase()
-  const { data: userRow, error: userErr } = await supabase
-    .from('users')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle()
+  // `public.users` RLS only exposes the caller themselves and users in the
+  // same org, so a direct `from('users').select(...)` returns null for an
+  // external invitee even when the row exists. Look up via a SECURITY
+  // DEFINER RPC that returns just the id on exact-email match — this
+  // unblocks invite without opening up the user directory.
+  const { data: userId, error: userErr } = await supabase.rpc(
+    'lookup_user_id_by_email',
+    { p_email: email }
+  )
   if (userErr) return { error: userErr.message }
-  if (!userRow) return { error: 'not_found' }
+  if (!userId) return { error: 'not_found' }
   const { error: insertErr } = await supabase.from('organization_members').insert({
     org_id: input.org_id,
-    user_id: userRow.id,
+    user_id: userId,
     role: input.role,
   })
   if (insertErr) {

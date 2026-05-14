@@ -8,7 +8,7 @@ import FileLabel, { type FileCategory } from '../../../components/ui/FileLabel'
 import UserGroup from '../../../components/ui/UserGroup'
 import FilterChecklist from '../../../components/ui/FilterChecklist'
 import NewDocModal from '../../../components/NewDocModal'
-import Table, {
+import {
   TableHeader,
   TableRow,
   TableCell,

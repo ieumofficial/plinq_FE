@@ -31,7 +31,7 @@ export type ProjectRow = {
   id: string
   name: string
   description: string | null
-  team_id: string | null
+  org_id: string
   lead_id: string | null
   status: ProjectStatusDb
   color: string
@@ -81,7 +81,6 @@ export type ChatMessageRow = {
 export type TaskRow = {
   id: string
   project_id: string | null
-  team_id: string | null
   parent_task_id: string | null
   title: string
   description: string | null

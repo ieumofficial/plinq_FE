@@ -9,7 +9,7 @@ import { aiStream } from '../lib/aiClient'
 import { markAiBusy } from '../lib/aiActivity'
 import { useQueryClient } from '@tanstack/react-query'
 import { createTask } from '../lib/queries'
-import { useCurrentUser, useProjectMembers, useUserProjects } from '../lib/hooks'
+import { useActiveOrg, useCurrentUser, useProjectMembers, useUserProjects } from '../lib/hooks'
 import { queryKeys } from '../lib/queryKeys'
 import { userToMember, type TaskStatusDb, type UserRow } from '../lib/types'
 
@@ -355,7 +355,10 @@ export default function CreateTaskModal({
   onCreated,
 }: Props) {
   const { data: me } = useCurrentUser()
-  const { data: projects = [] } = useUserProjects(me?.id)
+  const activeOrg = useActiveOrg(me?.id)
+  const { data: projects = [] } = useUserProjects(me?.id, {
+    orgId: activeOrg?.id ?? null,
+  })
   const queryClient = useQueryClient()
   const [title, setTitle] = useState('')
   const [projectId, setProjectId] = useState<string | null>(defaultProjectId ?? null)
@@ -814,7 +817,9 @@ export default function CreateTaskModal({
                 <>
                   <ProjectLabel name={project.name} color={project.color} size="sm" />
                   <span className="text-[13px] text-black font-semibold">{project.name}</span>
-                  <span className="text-[12px] text-gray-secondary">· Org name</span>
+                  {activeOrg?.name && (
+                    <span className="text-[12px] text-gray-secondary">· {activeOrg.name}</span>
+                  )}
                   {!lockProject && (
                     <span className="ml-auto text-gray-secondary">
                       <Icon

@@ -1,10 +1,13 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
+import { useQueryClient } from '@tanstack/react-query'
 import DarkBackground from '../components/DarkBackground'
 import Logo from '../components/ui/Logo'
 import Icon from '../components/ui/Icon'
 import { supabase } from '../lib/supabase'
+import { setActiveOrgId } from '../lib/activeOrgStore'
+import { queryKeys } from '../lib/queryKeys'
 
 const noDrag: CSSProperties = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
@@ -18,6 +21,7 @@ const ORG_COLORS = ['#455E6A', '#9B3838', '#5B3D8A', '#2D5A9E', '#2F6B45']
 
 export default function ChooseOrgPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [orgs, setOrgs] = useState<OrgInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [firstName, setFirstName] = useState('')
@@ -106,9 +110,24 @@ export default function ChooseOrgPage() {
   const displayedOrgs = showAll ? orgs : orgs.slice(0, 4)
   const hiddenCount = orgs.length - 4
 
-  const handleSelectOrg = (_orgId: string) => {
-    // TODO: store selected org in context/store
-    router.push('/personal-dashboard')
+  const handleSelectOrg = async (orgId: string) => {
+    // 1. Persist the choice so Personal Space pages know which org to scope to.
+    setActiveOrgId(orgId)
+    // 2. Make sure the auth session is actually live before navigating. The
+    //    next page reads useCurrentUser, which on a re-login can still be
+    //    holding a cached null from the previous signout — that triggers
+    //    PersonalAppShell's "no user → /" bounce.
+    const { data: sessionData } = await supabase.auth.getSession()
+    if (!sessionData.session?.user) {
+      console.warn('[choose-org] no live session at handleSelectOrg — back to /')
+      router.replace('/')
+      return
+    }
+    // 3. Drop the stale currentUser cache so PersonalAppShell does a fresh
+    //    fetch instead of reading a cached null.
+    queryClient.removeQueries({ queryKey: queryKeys.currentUser() })
+    // 4. replace() so the back button doesn't return to choose-org mid-session.
+    router.replace('/personal-dashboard')
   }
 
   if (loading) {

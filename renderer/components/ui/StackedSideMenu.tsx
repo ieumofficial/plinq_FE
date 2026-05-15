@@ -131,20 +131,22 @@ export default function StackedSideMenu({
                 <button
                   type="button"
                   onClick={header.onSwitch}
-                  className="flex items-center gap-[5px] h-[19.32px] -mx-[2px] px-[2px] rounded hover:bg-white-white/60"
+                  className="flex items-start gap-[5px] -mx-[2px] px-[2px] py-[1px] rounded hover:bg-white-white/60 text-left"
                 >
-                  <ProjectLabel
-                    name={header.initial}
-                    color={header.color}
-                    size="sm"
-                  />
-                  <span className="text-black text-[14px] font-semibold">
+                  <span className="shrink-0 mt-[1px]">
+                    <ProjectLabel
+                      name={header.initial}
+                      color={header.color}
+                      size="sm"
+                    />
+                  </span>
+                  <span className="flex-1 min-w-0 break-words text-black text-[14px] font-semibold leading-tight">
                     {header.name}
                   </span>
                   <Icon
                     name="ArrowRight"
                     size={11}
-                    className={`text-black transition-transform ${
+                    className={`shrink-0 mt-[3px] text-black transition-transform ${
                       header.switchOpen ? '-rotate-90' : 'rotate-90'
                     }`}
                   />
@@ -155,9 +157,9 @@ export default function StackedSideMenu({
                 // the header + settings treatment. #2D5A9E is the shared org
                 // colour placeholder until the organizations.color migration
                 // lands and this becomes DB-driven.
-                <div className="flex items-center gap-[5px] h-[19.32px]">
+                <div className="flex items-start gap-[5px]">
                   <span
-                    className="inline-flex items-center justify-center font-bold uppercase text-white shrink-0"
+                    className="inline-flex items-center justify-center font-bold uppercase text-white shrink-0 mt-[1px]"
                     style={{
                       width: 20,
                       height: 20,
@@ -169,7 +171,7 @@ export default function StackedSideMenu({
                   >
                     {(header.initial?.charAt(0) ?? '?').toUpperCase()}
                   </span>
-                  <span className="text-black text-[14px] font-semibold">
+                  <span className="flex-1 min-w-0 break-words text-black text-[14px] font-semibold leading-tight">
                     {header.name}
                   </span>
                 </div>

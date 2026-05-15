@@ -533,6 +533,10 @@ export default function CreateTaskModal({
           conversation_id: null,
           org_id: null,
           project_id: projectId,
+          // One-shot scratch call — must NOT create a persisted agent
+          // conversation (otherwise every description suggestion pollutes
+          // the Ask-AI session list).
+          ephemeral: true,
         },
         (evt) => {
           // Cancelled — drop any further events from this stream.

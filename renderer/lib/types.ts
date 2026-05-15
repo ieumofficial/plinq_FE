@@ -18,6 +18,8 @@ export type ProjectStatusDb = 'planned' | 'in_progress' | 'review' | 'blocked' |
 
 // ─── Row shapes ──────────────────────────────────────────────────────────────
 
+export type UserStatus = 'available' | 'in_meeting' | 'unavailable'
+
 export type UserRow = {
   id: string
   email: string
@@ -25,6 +27,7 @@ export type UserRow = {
   last_name: string
   nickname: string | null
   job_title: string | null
+  status?: UserStatus
 }
 
 export type ProjectRow = {
@@ -141,9 +144,11 @@ export function dbPriorityToUi(p: TaskPriorityDb): Priority {
   }
 }
 
-export function userToMember(u: Pick<UserRow, 'first_name' | 'last_name' | 'nickname'>): Member {
+export function userToMember(
+  u: Pick<UserRow, 'first_name' | 'last_name' | 'nickname'> & { status?: UserStatus },
+): Member {
   const name = u.nickname || `${u.first_name} ${u.last_name}`.trim() || 'User'
-  return { name }
+  return { name, status: u.status }
 }
 
 /** Format a YYYY-MM-DD or ISO date as the short label used on cards: "Apr 22". */

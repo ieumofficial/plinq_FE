@@ -70,20 +70,9 @@ const PRESENCE_OPTIONS: { key: Presence; label: string; color: string }[] = [
   { key: 'unavailable', label: 'Unavailable', color: '#9B3838' },
 ]
 
-/** Stable per-user mock presence until a real presence service ships. Hash the
- *  user id so the same person always shows the same status across sessions. */
-function mockPresence(userId: string): Presence {
-  let h = 0
-  for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) | 0
-  const pool: Presence[] = [
-    'available',
-    'available',
-    'available',
-    'in_meeting',
-    'unavailable',
-  ]
-  return pool[Math.abs(h) % pool.length]
-}
+// Real presence now lives on `users.status` and is auto-flipped by
+// LiveKit join/leave webhooks. The old mockPresence(userId) hash helper
+// is gone — see `m.status ?? 'available'` at the call site.
 
 function memberDisplayName(m: {
   nickname: string | null
@@ -189,7 +178,7 @@ function MembersBody({ projectId }: { projectId: string }) {
   const filtered = useMemo(() => {
     let arr = members
     if (presenceFilter.size < PRESENCE_OPTIONS.length) {
-      arr = arr.filter((m) => presenceFilter.has(mockPresence(m.id)))
+      arr = arr.filter((m) => presenceFilter.has(m.status ?? 'available'))
     }
     if (search.trim()) {
       const q = search.toLowerCase()
@@ -209,7 +198,7 @@ function MembersBody({ projectId }: { projectId: string }) {
     let inMeeting = 0
     for (const m of members) {
       if (m.job_title) roles.add(m.job_title)
-      if (mockPresence(m.id) === 'in_meeting') inMeeting += 1
+      if ((m.status ?? 'available') === 'in_meeting') inMeeting += 1
     }
     return {
       total: members.length,
@@ -291,7 +280,7 @@ function MembersBody({ projectId }: { projectId: string }) {
                   <FilterChecklist
                     key={p.key}
                     label={p.label}
-                    count={members.filter((m) => mockPresence(m.id) === p.key).length}
+                    count={members.filter((m) => (m.status ?? 'available') === p.key).length}
                     color={p.color}
                     checked={presenceFilter.has(p.key)}
                     onChange={() => togglePresence(p.key)}
@@ -352,7 +341,7 @@ function MembersBody({ projectId }: { projectId: string }) {
           </div>
         ) : (
           filtered.map((m, i) => {
-            const presence = mockPresence(m.id)
+            const presence: Presence = m.status ?? 'available'
             return (
               <TableRow
                 key={m.id}
@@ -420,7 +409,7 @@ function MembersBody({ projectId }: { projectId: string }) {
       {detailMember && (
         <MemberDetailPanel
           member={detailMember}
-          presence={mockPresence(detailMember.id)}
+          presence={detailMember.status ?? 'available'}
           onClose={() => setDetailMember(null)}
         />
       )}

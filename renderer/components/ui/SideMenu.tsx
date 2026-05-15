@@ -5,7 +5,7 @@ import Button from './Button'
 import type { IconName } from './Icon'
 import ProfileDropdown from '../ProfileDropdown'
 import { useCurrentUser } from '../../lib/hooks'
-import { usePresence } from '../../lib/presencePref'
+import { usePresence, PRESENCE_DOT } from '../../lib/presencePref'
 
 export type NavItem = {
   key: string
@@ -144,8 +144,22 @@ export default function SideMenu({
           }`}
           aria-label="Open profile menu"
         >
-          <span className="bg-primary-main text-white rounded-full w-[25px] h-[25px] inline-flex items-center justify-center text-[12px] font-semibold uppercase shrink-0">
-            {userInitials}
+          <span className="relative inline-flex shrink-0">
+            <span className="bg-primary-main text-white rounded-full w-[25px] h-[25px] inline-flex items-center justify-center text-[12px] font-semibold uppercase">
+              {userInitials}
+            </span>
+            <span
+              aria-hidden
+              className="absolute rounded-full"
+              style={{
+                width: 9,
+                height: 9,
+                right: -1,
+                bottom: -1,
+                backgroundColor: PRESENCE_DOT[presence],
+                border: '1.5px solid #1F2F38',
+              }}
+            />
           </span>
           {!stacked && (
             <span

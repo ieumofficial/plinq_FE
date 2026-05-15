@@ -25,7 +25,7 @@ export async function getCurrentUser(): Promise<UserRow | null> {
   if (!user) return null
   const { data, error } = await supabase
     .from('users')
-    .select('id, email, first_name, last_name, nickname, job_title')
+    .select('id, email, first_name, last_name, nickname, job_title, status')
     .eq('id', user.id)
     .single()
   if (error) {
@@ -95,7 +95,7 @@ export async function getUserProjects(
   const [membersRes, tasksRes] = await Promise.all([
     supabase
       .from('project_members')
-      .select('project_id, users(id, email, first_name, last_name, nickname, job_title)')
+      .select('project_id, users(id, email, first_name, last_name, nickname, job_title, status)')
       .in('project_id', ids),
     supabase
       .from('tasks')
@@ -195,7 +195,7 @@ export async function getOrgProjects(
     supabase
       .from('project_members')
       .select(
-        'project_id, users(id, email, first_name, last_name, nickname, job_title)'
+        'project_id, users(id, email, first_name, last_name, nickname, job_title, status)'
       )
       .in('project_id', ids),
     supabase
@@ -839,7 +839,7 @@ export async function addMeetingInvite(input: {
 export async function getOrgMembers(orgId: string): Promise<UserRow[]> {
   const { data, error } = await supabase
     .from('organization_members')
-    .select('users(id, email, first_name, last_name, nickname, job_title)')
+    .select('users(id, email, first_name, last_name, nickname, job_title, status)')
     .eq('org_id', orgId)
   if (error) {
     console.error('[queries] getOrgMembers', error)
@@ -863,7 +863,7 @@ export async function getOrgMembersWithRoles(
 ): Promise<OrgMemberWithRole[]> {
   const { data, error } = await supabase
     .from('organization_members')
-    .select('role, users(id, email, first_name, last_name, nickname, job_title)')
+    .select('role, users(id, email, first_name, last_name, nickname, job_title, status)')
     .eq('org_id', orgId)
   if (error) {
     console.error('[queries] getOrgMembersWithRoles', error)
@@ -1021,7 +1021,7 @@ export async function updateCurrentUser(
 export async function getProjectMembers(projectId: string): Promise<UserRow[]> {
   const { data, error } = await supabase
     .from('project_members')
-    .select('users(id, email, first_name, last_name, nickname, job_title)')
+    .select('users(id, email, first_name, last_name, nickname, job_title, status)')
     .eq('project_id', projectId)
   if (error) {
     console.error('[queries] getProjectMembers', error)
@@ -1151,7 +1151,7 @@ export async function getUserUpcomingMeetings(
   const ids = ms.map((m) => m.id)
   const { data: attRows, error: attErr } = await supabase
     .from('meeting_attendees')
-    .select('meeting_id, users(id, email, first_name, last_name, nickname, job_title)')
+    .select('meeting_id, users(id, email, first_name, last_name, nickname, job_title, status)')
     .in('meeting_id', ids)
   if (attErr) console.error('[queries] meeting attendees expand', attErr)
 
@@ -1245,7 +1245,7 @@ export async function getProjectTasks(projectId: string): Promise<ProjectTask[]>
   const { data: assignRows, error: aErr } = await supabase
     .from('task_assignees')
     .select(
-      'task_id, users:user_id(id, email, first_name, last_name, nickname, job_title)'
+      'task_id, users:user_id(id, email, first_name, last_name, nickname, job_title, status)'
     )
     .in('task_id', taskIds)
   if (aErr) console.error('[queries] task assignees', aErr)
@@ -1273,7 +1273,7 @@ export async function getProjectMembersWithRoles(
   // one here without first adding a migration.
   const { data, error } = await supabase
     .from('project_members')
-    .select('role, users(id, email, first_name, last_name, nickname, job_title)')
+    .select('role, users(id, email, first_name, last_name, nickname, job_title, status)')
     .eq('project_id', projectId)
   if (error) {
     console.error('[queries] getProjectMembersWithRoles', error)
@@ -1319,7 +1319,7 @@ export async function getProjectMeetings(projectId: string): Promise<ProjectMeet
   const [attRes, actionRes, minRes] = await Promise.all([
     supabase
       .from('meeting_attendees')
-      .select('meeting_id, users(id, email, first_name, last_name, nickname, job_title)')
+      .select('meeting_id, users(id, email, first_name, last_name, nickname, job_title, status)')
       .in('meeting_id', ids),
     supabase.from('tasks').select('source_meeting_id').in('source_meeting_id', ids),
     supabase.from('meeting_minutes').select('meeting_id, summary').in('meeting_id', ids),
@@ -1375,7 +1375,7 @@ export async function getProjectDocs(projectId: string): Promise<ProjectDoc[]> {
   const { data, error } = await supabase
     .from('knowledge_documents')
     .select(
-      'id, project_id, name, file_url, file_type, source, uploaded_by, uploaded_at, users:uploaded_by(id, email, first_name, last_name, nickname, job_title)'
+      'id, project_id, name, file_url, file_type, source, uploaded_by, uploaded_at, users:uploaded_by(id, email, first_name, last_name, nickname, job_title, status)'
     )
     .eq('project_id', projectId)
     .order('uploaded_at', { ascending: false })
@@ -1579,7 +1579,7 @@ export async function getChatSessions(
   if (otherUserIds.size > 0) {
     const { data: users, error: uErr } = await supabase
       .from('users')
-      .select('id, email, first_name, last_name, nickname, job_title')
+      .select('id, email, first_name, last_name, nickname, job_title, status')
       .in('id', Array.from(otherUserIds))
     if (uErr) console.error('[queries] dm other users', uErr)
     usersById = new Map((users ?? []).map((u) => [u.id as string, u as UserRow]))
@@ -1725,7 +1725,7 @@ export async function getChatMessages(
   let q = supabase
     .from('chat_messages')
     .select(
-      'id, session_id, author_id, body, reply_to_id, pinned_at, pinned_by, edited_at, created_at, users:author_id(id, email, first_name, last_name, nickname, job_title)'
+      'id, session_id, author_id, body, reply_to_id, pinned_at, pinned_by, edited_at, created_at, users:author_id(id, email, first_name, last_name, nickname, job_title, status)'
     )
     .eq('session_id', sessionId)
     .is('reply_to_id', null) // top-level only; threads loaded separately
@@ -1886,7 +1886,7 @@ export async function getChatSessionMembers(
 ): Promise<UserRow[]> {
   const { data, error } = await supabase
     .from('chat_session_members')
-    .select('users(id, email, first_name, last_name, nickname, job_title)')
+    .select('users(id, email, first_name, last_name, nickname, job_title, status)')
     .eq('session_id', sessionId)
   if (error) {
     console.error('[queries] getChatSessionMembers', error)

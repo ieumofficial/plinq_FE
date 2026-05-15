@@ -3,6 +3,8 @@ export type Member = {
   avatarUrl?: string
   /** Background color for the initial-letter fallback. */
   color?: string
+  /** Optional presence — when provided, renders a small status dot overlay. */
+  status?: 'available' | 'in_meeting' | 'unavailable'
 }
 
 type Props = {
@@ -33,6 +35,40 @@ function colorFor(name: string, override?: string) {
   return FALLBACK_COLORS[Math.abs(h) % FALLBACK_COLORS.length]
 }
 
+// Map status enum → solid dot color (kept here so consumers don't have to
+// import presencePref). Tweak alongside PRESENCE_DOT in lib/presencePref.ts.
+const STATUS_DOT_COLOR: Record<NonNullable<Member['status']>, string> = {
+  available: '#2F6B45',
+  in_meeting: '#B68A48',
+  unavailable: '#9B3838',
+}
+
+function StatusDot({
+  status,
+  parentSize,
+  borderColor,
+}: {
+  status: NonNullable<Member['status']>
+  parentSize: number
+  borderColor: string
+}) {
+  const dotSize = Math.max(6, Math.round(parentSize * 0.32))
+  return (
+    <span
+      aria-hidden
+      className="absolute rounded-full border border-solid"
+      style={{
+        width: dotSize,
+        height: dotSize,
+        backgroundColor: STATUS_DOT_COLOR[status],
+        borderColor,
+        right: -2,
+        bottom: -2,
+      }}
+    />
+  )
+}
+
 function Avatar({
   member,
   size,
@@ -47,23 +83,37 @@ function Avatar({
     height: size,
     borderColor,
   }
+  // Wrap in a positioned span when we need the status dot overlay.
+  const dot = member.status ? (
+    <StatusDot
+      status={member.status}
+      parentSize={size}
+      borderColor={borderColor}
+    />
+  ) : null
   if (member.avatarUrl) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={member.avatarUrl}
-        alt={member.name}
-        style={style}
-        className="rounded-full border border-solid object-cover -mr-[5px] last:mr-0 shrink-0 bg-white-secondary"
-      />
+      <span className="relative inline-block -mr-[5px] last:mr-0 shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={member.avatarUrl}
+          alt={member.name}
+          style={style}
+          className="rounded-full border border-solid object-cover bg-white-secondary"
+        />
+        {dot}
+      </span>
     )
   }
   return (
-    <span
-      style={{ ...style, backgroundColor: colorFor(member.name, member.color) }}
-      className="rounded-full border border-solid -mr-[5px] last:mr-0 shrink-0 inline-flex items-center justify-center text-white font-semibold uppercase select-none"
-    >
-      <span style={{ fontSize: Math.max(8, size * 0.5) }}>{member.name[0]}</span>
+    <span className="relative inline-flex -mr-[5px] last:mr-0 shrink-0">
+      <span
+        style={{ ...style, backgroundColor: colorFor(member.name, member.color) }}
+        className="rounded-full border border-solid inline-flex items-center justify-center text-white font-semibold uppercase select-none"
+      >
+        <span style={{ fontSize: Math.max(8, size * 0.5) }}>{member.name[0]}</span>
+      </span>
+      {dot}
     </span>
   )
 }

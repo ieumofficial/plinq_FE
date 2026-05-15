@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import Icon from './ui/Icon'
 import PriorityTag from './ui/PriorityTag'
 import DatePicker from './ui/DatePicker'
-import { supabase } from '../lib/supabase'
 import {
   useProjectMembers,
   useProjectTasks,
@@ -20,11 +19,12 @@ import {
   type TaskRow,
 } from '../lib/types'
 
-const PRIORITY_KEYS_BASE: TaskPriorityDb[] = ['urgent', 'high', 'medium', 'low']
-// 'lowest' is only offered once the task_priority enum has the value (see the
-// runtime probe in TaskDetailModal) — selecting it otherwise would 22P02.
-const PRIORITY_KEYS_WITH_LOWEST: TaskPriorityDb[] = [
-  ...PRIORITY_KEYS_BASE,
+// task_priority is the unified 5-value enum (lowest..highest).
+const PRIORITY_KEYS: TaskPriorityDb[] = [
+  'highest',
+  'high',
+  'medium',
+  'low',
   'lowest',
 ]
 
@@ -398,29 +398,7 @@ export default function TaskDetailModal({
     task?.project_id ?? null
   )
 
-  // Probe whether the task_priority enum has 'lowest' (added by
-  // supabase/migrations/*_add_task_priority_lowest.sql). Only offer it once
-  // the value exists — selecting it otherwise would 22P02 and fail the save.
-  const [lowestSupported, setLowestSupported] = useState(false)
-  useEffect(() => {
-    let cancelled = false
-    supabase
-      .from('tasks')
-      .select('id')
-      .eq('priority', 'lowest')
-      .limit(1)
-      .then(({ error }) => {
-        // 22P02 = invalid enum value → not migrated yet. Any other result
-        // (rows or empty) means the enum accepts it.
-        if (!cancelled && !error) setLowestSupported(true)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-  const priorityKeys = lowestSupported
-    ? PRIORITY_KEYS_WITH_LOWEST
-    : PRIORITY_KEYS_BASE
+  const priorityKeys = PRIORITY_KEYS
 
   // Local edit state — initialised from `task` whenever a new one opens.
   const [status, setStatus] = useState<TaskStatusDb>('planned')

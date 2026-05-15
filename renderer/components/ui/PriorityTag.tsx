@@ -19,15 +19,24 @@ const STYLES: Record<
   lowest: { bg: 'bg-blue-light', text: 'text-blue-main', icon: 'Lowest', label: 'Lowest' },
 }
 
+/** Map any incoming value (incl. the legacy DB enum 'urgent', or a value
+ *  from a not-yet-migrated row) onto a guaranteed-valid key so this never
+ *  crashes on STYLES[priority]. */
+function normalizePriority(p: string | null | undefined): Priority {
+  if (p === 'urgent') return 'highest'
+  if (p && p in STYLES) return p as Priority
+  return 'medium'
+}
+
 type Props = {
-  priority: Priority
+  priority: Priority | string
   /** Icon-only when false. */
   isText?: boolean
   className?: string
 }
 
 export default function PriorityTag({ priority, isText = true, className }: Props) {
-  const s = STYLES[priority]
+  const s = STYLES[normalizePriority(priority)]
   return (
     <span
       className={`inline-flex items-center px-[5px] py-[2px] rounded-[2px] ${

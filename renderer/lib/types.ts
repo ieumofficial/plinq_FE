@@ -135,10 +135,20 @@ export function dbStatusToUi(s: TaskStatusDb): Status {
   }
 }
 
-// DB and UI priority enums are unified — this is now an identity pass-through
-// kept for call-site stability.
-export function dbPriorityToUi(p: TaskPriorityDb): Priority {
-  return p
+// DB and UI priority enums are unified. Still normalizes defensively so a
+// not-yet-migrated row (legacy 'urgent', or anything unexpected) can't crash
+// downstream consumers like PriorityTag's STYLES lookup.
+const _UI_PRIORITIES = new Set<Priority>([
+  'highest',
+  'high',
+  'medium',
+  'low',
+  'lowest',
+])
+export function dbPriorityToUi(p: TaskPriorityDb | string): Priority {
+  if (p === 'urgent') return 'highest'
+  if (_UI_PRIORITIES.has(p as Priority)) return p as Priority
+  return 'medium'
 }
 
 export function userToMember(

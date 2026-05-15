@@ -7,6 +7,7 @@ import Input from '../../../components/ui/Input'
 import Icon from '../../../components/ui/Icon'
 import UserGroup from '../../../components/ui/UserGroup'
 import ProjectLabel from '../../../components/ui/ProjectLabel'
+import DatePicker from '../../../components/ui/DatePicker'
 import {
   useCurrentUser,
   useMyOrg,
@@ -143,6 +144,9 @@ function SettingsBody({ projectId }: { projectId: string }) {
     customHexPopupRef
   )
   const [status, setStatus] = useState<ProjectStatusDb>('planned')
+  const [dueDate, setDueDate] = useState<string>('')
+  const [datePickerAnchor, setDatePickerAnchor] = useState<DOMRect | null>(null)
+  const dateTriggerRef = useRef<HTMLButtonElement>(null)
   const [error, setError] = useState('')
   const [memberSearch, setMemberSearch] = useState('')
 
@@ -153,6 +157,7 @@ function SettingsBody({ projectId }: { projectId: string }) {
     setDescription(project.description ?? '')
     setLeadId(project.lead_id)
     setStatus(project.status)
+    setDueDate(project.due_date ?? '')
     setError('')
   }, [project])
 
@@ -170,7 +175,8 @@ function SettingsBody({ projectId }: { projectId: string }) {
       color !== project.color ||
       description !== (project.description ?? '') ||
       leadId !== project.lead_id ||
-      status !== project.status)
+      status !== project.status ||
+      (dueDate || null) !== (project.due_date ?? null))
 
   const onSave = () => {
     if (!name.trim()) {
@@ -187,6 +193,7 @@ function SettingsBody({ projectId }: { projectId: string }) {
           description: description.trim() || null,
           lead_id: leadId,
           status,
+          due_date: dueDate || null,
         },
       },
       {
@@ -401,18 +408,47 @@ function SettingsBody({ projectId }: { projectId: string }) {
             </button>
           </div>
 
-          {/* Due date — placeholder, no DB column yet */}
+          {/* Due date — same floating DatePicker the create-project modal uses,
+              persisted to projects.due_date on Save. */}
           <div className="flex flex-col gap-[5px]">
             <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
               Due Date
             </label>
-            <div
-              title="Due date is not stored on projects yet"
-              className="bg-gray-extra-light border border-solid border-gray-border rounded-[8px] px-[12px] h-[48px] flex items-center gap-[8px] text-gray-secondary text-[12px] cursor-not-allowed"
+            <button
+              ref={dateTriggerRef}
+              type="button"
+              disabled={!canEdit}
+              onClick={() => {
+                if (datePickerAnchor) setDatePickerAnchor(null)
+                else
+                  setDatePickerAnchor(
+                    dateTriggerRef.current?.getBoundingClientRect() ?? null,
+                  )
+              }}
+              className="bg-white-item border border-solid border-gray-border rounded-[8px] px-[12px] h-[48px] flex items-center gap-[8px] text-left hover:border-primary-main disabled:cursor-not-allowed disabled:opacity-70"
             >
-              <Icon name="Calendar" size={13} />
-              <span>—</span>
-            </div>
+              <Icon name="Calendar" size={13} className="text-gray-secondary shrink-0" />
+              <span
+                className={`flex-1 text-[12px] ${
+                  dueDate ? 'text-black font-semibold' : 'text-gray-secondary'
+                }`}
+              >
+                {dueDate
+                  ? new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })
+                  : 'Pick a date'}
+              </span>
+              <Icon
+                name="ArrowRight"
+                size={12}
+                className={`ml-auto text-gray-secondary transition-transform ${
+                  datePickerAnchor ? 'rotate-90' : ''
+                }`}
+              />
+            </button>
           </div>
 
           {/* Status */}
@@ -634,6 +670,15 @@ function SettingsBody({ projectId }: { projectId: string }) {
           )}
         </div>
       )}
+
+      {/* Floating date picker for the due-date field — same component the
+          create-project modal uses. */}
+      <DatePicker
+        anchorRect={datePickerAnchor}
+        value={dueDate || null}
+        onChange={(next) => setDueDate(next ?? '')}
+        onClose={() => setDatePickerAnchor(null)}
+      />
     </div>
   )
 }

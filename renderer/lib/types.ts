@@ -39,6 +39,7 @@ export type ProjectRow = {
   status: ProjectStatusDb
   color: string
   budget: number | null
+  due_date: string | null
   created_at: string
 }
 

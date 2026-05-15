@@ -95,8 +95,8 @@ export default function ProjectPreviewModal({
   const projectColor = project?.color ?? 'blue'
   const orgName = org?.name ?? 'Organization'
   const description = project?.description ?? ''
-  const dueLabel = formatDueDate(project?.dueDate ?? null)
-  const dueDiff = dayDiffFromToday(project?.dueDate ?? null)
+  const dueLabel = formatDueDate(project?.due_date ?? null)
+  const dueDiff = dayDiffFromToday(project?.due_date ?? null)
 
   return (
     <div

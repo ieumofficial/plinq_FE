@@ -77,8 +77,7 @@ export default function CreateProjectModal({
   const [leadAnchor, setLeadAnchor] = useState<DOMRect | null>(null)
   const leadTriggerRef = useRef<HTMLButtonElement>(null)
   const [status, setStatus] = useState<ProjectStatusDb>('planned')
-  /** Due date — visual only for now; `projects` table has no due_date column.
-   *  Submitted but not persisted; see queries.ts notes. */
+  /** Project due date (YYYY-MM-DD). Persisted to projects.due_date. */
   const [dueDate, setDueDate] = useState<string>('')
   const [datePickerAnchor, setDatePickerAnchor] = useState<DOMRect | null>(null)
   const dateTriggerRef = useRef<HTMLButtonElement>(null)
@@ -234,6 +233,11 @@ export default function CreateProjectModal({
       description: description || undefined,
       color: customHex ?? color,
       status,
+      // Pass the org explicitly. The shells already wire orgId from
+      // `useActiveOrg`; without forwarding it here, createProject falls
+      // back to "user's single org" and errors out for multi-org users.
+      org_id: orgId ?? undefined,
+      due_date: dueDate || null,
       members: memberIds.map((uid) => {
         const r = memberRoles[uid] ?? 'editor'
         return {

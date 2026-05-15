@@ -47,8 +47,9 @@ export type ProjectWithStats = ProjectRow & {
    *  Used by health logic ("at-risk if a deadline is within 7 days"); do
    *  not surface as the project's "Due" — that's `dueDate` below. */
   nextDueDate: string | null
-  /** Latest task due_date — used as a proxy for "project end date" since
-   *  the schema has no dedicated project.due_date column (YYYY-MM-DD), or null. */
+  /** The project's "Due" label. Prefers the explicit `projects.due_date`
+   *  column when set; otherwise falls back to the latest task due_date as a
+   *  legacy heuristic for projects created before due_date existed. */
   dueDate: string | null
 }
 
@@ -81,7 +82,7 @@ export async function getUserProjects(
   // 2. Fetch the projects themselves
   let q = supabase
     .from('projects')
-    .select('id, name, description, org_id, lead_id, status, color, budget, created_at')
+    .select('id, name, description, org_id, lead_id, status, color, budget, due_date, created_at')
     .in('id', projectIds)
   if (opts?.statuses && opts.statuses.length > 0) {
     q = q.in('status', opts.statuses)
@@ -162,7 +163,9 @@ export async function getUserProjects(
       tasksTotal: total,
       tasksDone: done,
       nextDueDate: counts?.nextDueDate ?? null,
-      dueDate: counts?.dueDate ?? null,
+      // Prefer the project's explicit due_date; fall back to the latest
+      // task due_date for legacy projects without one.
+      dueDate: p.due_date ?? counts?.dueDate ?? null,
     }
   })
 }
@@ -180,7 +183,7 @@ export async function getOrgProjects(
   let q = supabase
     .from('projects')
     .select(
-      'id, name, description, org_id, lead_id, status, color, budget, created_at'
+      'id, name, description, org_id, lead_id, status, color, budget, due_date, created_at'
     )
     .eq('org_id', orgId)
   if (opts?.statuses && opts.statuses.length > 0) {
@@ -268,7 +271,9 @@ export async function getOrgProjects(
       tasksTotal: total,
       tasksDone: done,
       nextDueDate: counts?.nextDueDate ?? null,
-      dueDate: counts?.dueDate ?? null,
+      // Prefer the project's explicit due_date; fall back to the latest
+      // task due_date for legacy projects without one.
+      dueDate: p.due_date ?? counts?.dueDate ?? null,
     }
   })
 }
@@ -286,6 +291,8 @@ export type NewProjectInput = {
    */
   org_id?: string
   status?: ProjectRow['status']
+  /** Optional project due date (YYYY-MM-DD). */
+  due_date?: string | null
   /** Members to add (besides the lead, who is auto-added by trigger as admin). */
   members?: { user_id: string; role: import('./types').ProjectRoleDb }[]
   /** Email-only invites (user not yet registered). */
@@ -341,6 +348,7 @@ export async function createProject(
       ...(input.color ? { color: input.color } : {}),
       // status omitted → DB default 'planned' applies
       ...(input.status ? { status: input.status } : {}),
+      ...(input.due_date !== undefined ? { due_date: input.due_date } : {}),
     })
     .select('id')
     .single()
@@ -546,6 +554,7 @@ export type ProjectPatch = Partial<{
   color: string
   status: import('./types').ProjectStatusDb
   lead_id: string | null
+  due_date: string | null
 }>
 
 export async function updateProject(
@@ -1240,7 +1249,7 @@ export async function getProject(projectId: string): Promise<ProjectRow | null> 
   // deleted / RLS-hidden project).
   const { data, error } = await supabase
     .from('projects')
-    .select('id, name, description, org_id, lead_id, status, color, budget, created_at')
+    .select('id, name, description, org_id, lead_id, status, color, budget, due_date, created_at')
     .eq('id', projectId)
     .maybeSingle()
   if (error) {

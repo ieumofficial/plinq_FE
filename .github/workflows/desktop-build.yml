@@ -1,0 +1,88 @@
+name: Build desktop app (mac + windows)
+
+# Repo: ieumofficial/plinq_FE  (this repo's root IS the Nextron app)
+#
+# How to run:
+#   • Manual:  Actions tab → "Build desktop app" → Run workflow
+#   • Release: push a tag like v1.0.0 → builds + attaches installers to a
+#              GitHub Release automatically.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   NEXT_PUBLIC_SUPABASE_URL
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY
+#   NEXT_PUBLIC_PLINQ_AI_URL
+# These are inlined into the renderer at build time. The service-role key is
+# intentionally NOT used here — it must never ship inside the desktop client.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            # Universal binary → runs on both Apple Silicon and Intel.
+            build_args: --mac --universal
+          - os: windows-latest
+            build_args: --win --x64
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write renderer/.env.local
+        # Next inlines NEXT_PUBLIC_* at build time, and Next only reads
+        # renderer/.env.local (not the repo-root .env.local).
+        shell: bash
+        run: |
+          cat > renderer/.env.local <<EOF
+          NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_PLINQ_AI_URL=${{ secrets.NEXT_PUBLIC_PLINQ_AI_URL }}
+          EOF
+
+      - name: Build (${{ matrix.os }})
+        shell: bash
+        env:
+          # Unsigned build — don't let electron-builder hunt for a cert and
+          # fail the job. (Add signing later for public distribution.)
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx nextron build ${{ matrix.build_args }} --publish never
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: plinq-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest*.yml
+
+      - name: Attach to Release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest*.yml

@@ -33,7 +33,7 @@ async function authHeaders(): Promise<Record<string, string>> {
 
 export async function aiFetch(
   path: string,
-  init: { method?: string; body?: unknown } = {},
+  init: { method?: string; body?: unknown; signal?: AbortSignal } = {},
 ): Promise<Response> {
   const headers: Record<string, string> = {
     ...(await authHeaders()),
@@ -43,6 +43,7 @@ export async function aiFetch(
     method: init.method ?? 'POST',
     headers,
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+    signal: init.signal,
   })
 }
 

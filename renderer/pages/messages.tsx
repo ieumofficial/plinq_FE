@@ -16,6 +16,11 @@ import ChatComposer, {
 } from '../components/ui/ChatComposer'
 import CreateChatSessionModal from '../components/CreateChatSessionModal'
 import ChatSearchPanel from '../components/ChatSearchPanel'
+import ChatSuggestions from '../components/ui/ChatSuggestions'
+import {
+  getChatSuggestions,
+  type ChatSuggestion,
+} from '../lib/chatSuggest'
 import {
   useChatMessages,
   useChatSessionMembers,
@@ -380,10 +385,90 @@ function MessagesBody() {
     return { groups: g, dms: d }
   }, [sessionGroups, dms, filter, search])
 
+  // ─── AI suggested replies ──────────────────────────────────────────────
+  // `aiOn` is the composer chip toggle. `suggestions` is what's currently
+  // shown above the composer; `lastSuggestedAfterId` blocks repeat fetches
+  // while we sit on the same incoming message.
+  const [aiOn, setAiOn] = useState(true)
+  const [suggestions, setSuggestions] = useState<ChatSuggestion[]>([])
+  const [suggestLoading, setSuggestLoading] = useState(false)
+  const [sendingSuggestionIndex, setSendingSuggestionIndex] = useState<
+    number | null
+  >(null)
+  // Held in a ref (not state) so updating it after a fetch doesn't re-trigger
+  // the effect — that would cause our own cleanup to cancel the in-flight
+  // request and we'd never call setSuggestions, leaving the UI stuck on the
+  // loading skeleton.
+  const lastSuggestedAfterIdRef = useRef<string | null>(null)
+
+  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null
+  const lastIsFromOther = !!lastMessage && lastMessage.author_id !== user?.id
+
+  // Reset suggestion state when switching sessions so we don't carry over
+  // a previous channel's drafts to a new one.
+  useEffect(() => {
+    setSuggestions([])
+    setSuggestLoading(false)
+    setSendingSuggestionIndex(null)
+    lastSuggestedAfterIdRef.current = null
+  }, [activeSessionId])
+
+  // Auto-fetch suggestions when:
+  //   - AI is on
+  //   - the conversation is not empty AND last message is from someone else
+  //   - the user hasn't typed anything yet (draft empty — we don't want to
+  //     wipe their typing)
+  //   - we haven't already drafted for this exact incoming message
+  useEffect(() => {
+    if (!aiOn) return
+    if (!activeSessionId) return
+    if (!lastIsFromOther || !lastMessage) return
+    if (draft.trim()) return
+    if (lastSuggestedAfterIdRef.current === lastMessage.id) return
+
+    let cancelled = false
+    setSuggestLoading(true)
+    setSuggestions([])
+    lastSuggestedAfterIdRef.current = lastMessage.id
+    console.log('[messages] requesting suggestions', {
+      sessionId: activeSessionId,
+      afterMessageId: lastMessage.id,
+    })
+    void getChatSuggestions(activeSessionId, { n: 3 })
+      .then((res) => {
+        if (cancelled) return
+        console.log('[messages] suggestions received', res.length)
+        setSuggestions(res)
+      })
+      .catch((e) => {
+        // eslint-disable-next-line no-console
+        console.warn('[messages] suggestion fetch failed', e)
+        // Allow re-fetch on the next incoming message — this round's
+        // afterId is now poisoned otherwise.
+        if (!cancelled) lastSuggestedAfterIdRef.current = null
+      })
+      .finally(() => {
+        // Always clear the spinner — even if the effect was cleaned up
+        // mid-flight, otherwise the UI sticks on "Drafting…" forever
+        // when the messages array reference changes during the fetch.
+        setSuggestLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // lastMessage?.id keeps deps stable — the array reference can change
+    // while pointing at the same final message; we only care about the id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiOn, activeSessionId, lastIsFromOther, lastMessage?.id, draft])
+
   const submitDraft = async () => {
     if (!activeSessionId || !draft.trim() || !user) return
     const body = draft
     setDraft('')
+    // After we send, suggestions become stale — clear them and let the next
+    // incoming message re-trigger the fetch.
+    setSuggestions([])
+    lastSuggestedAfterIdRef.current = null
 
     // Optimistically insert the message into the local cache so it appears
     // instantly. The server round-trip becomes background work, and our own
@@ -576,8 +661,80 @@ function MessagesBody() {
               )}
             </div>
 
-            {/* Composer */}
-            <div className="p-[15px]">
+            {/* Composer (with optional Suggested replies strip on top) */}
+            <div className="p-[15px] flex flex-col gap-[10px]">
+              {aiOn && (
+                <ChatSuggestions
+                  suggestions={suggestions}
+                  loading={suggestLoading}
+                  sendingIndex={sendingSuggestionIndex}
+                  onEdit={(s) => {
+                    // Drop into the composer so the user can tweak before sending.
+                    setDraft(s.body)
+                    setSuggestions([])
+                  }}
+                  onSend={async (s) => {
+                    if (!activeSessionId || !user) return
+                    const i = suggestions.findIndex(
+                      (x) => x.body === s.body && x.label === s.label,
+                    )
+                    setSendingSuggestionIndex(i >= 0 ? i : 0)
+                    try {
+                      const tempId = `temp-${Date.now()}`
+                      const optimistic: ChatMessageWithAuthor = {
+                        id: tempId,
+                        session_id: activeSessionId,
+                        author_id: user.id,
+                        body: s.body,
+                        reply_to_id: null,
+                        pinned_at: null,
+                        pinned_by: null,
+                        edited_at: null,
+                        created_at: new Date().toISOString(),
+                        author: user,
+                      }
+                      const messagesKey = queryKeys.chat.messages(activeSessionId)
+                      queryClient.setQueryData<ChatMessageWithAuthor[]>(
+                        messagesKey,
+                        (prev = []) => [...prev, optimistic],
+                      )
+                      const result = await sendChatMessage({
+                        session_id: activeSessionId,
+                        body: s.body,
+                      })
+                      if ('error' in result) {
+                        queryClient.setQueryData<ChatMessageWithAuthor[]>(
+                          messagesKey,
+                          (prev = []) => prev.filter((m) => m.id !== tempId),
+                        )
+                        return
+                      }
+                      queryClient.setQueryData<ChatMessageWithAuthor[]>(
+                        messagesKey,
+                        (prev = []) =>
+                          prev.map((m) =>
+                            m.id === tempId ? { ...m, id: result.id } : m,
+                          ),
+                      )
+                      setSuggestions([])
+                      lastSuggestedAfterIdRef.current = null
+                      if (orgId) {
+                        queryClient.invalidateQueries({
+                          queryKey: queryKeys.chat.sessions(user.id, orgId),
+                        })
+                      }
+                    } finally {
+                      setSendingSuggestionIndex(null)
+                    }
+                  }}
+                  onDismiss={() => {
+                    setSuggestions([])
+                    // Don't clear lastSuggestedAfterId — user dismissed *this*
+                    // round; we shouldn't re-fetch immediately for the same
+                    // incoming message.
+                  }}
+                />
+              )}
               <ChatComposer
                 value={draft}
                 onChange={setDraft}
@@ -589,9 +746,21 @@ function MessagesBody() {
                 }
                 scopeChips={
                   <>
-                    <ChatComposerChip icon={<ComposerIcons.Sparkle />}>
-                      AI on · drafts replies
-                    </ChatComposerChip>
+                    <button
+                      type="button"
+                      onClick={() => setAiOn((v) => !v)}
+                      className={`rounded-[10px] px-[7px] py-[3px] inline-flex items-center gap-[5px] transition-colors ${
+                        aiOn
+                          ? 'bg-primary-dark text-white'
+                          : 'bg-white-item text-gray-main hover:bg-gray-extra-light'
+                      }`}
+                      title={aiOn ? 'Click to turn AI suggestions off' : 'Click to turn AI suggestions on'}
+                    >
+                      <ComposerIcons.Sparkle />
+                      <span className="text-[10px] leading-[1.5] whitespace-nowrap">
+                        {aiOn ? 'AI on · drafts replies' : 'AI off'}
+                      </span>
+                    </button>
                     {activeSession.kind === 'channel' && (
                       <ChatComposerChip icon={<ComposerIcons.OrgChart />}>
                         {activeSession.scope === 'org_wide'

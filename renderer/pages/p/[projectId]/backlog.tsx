@@ -63,6 +63,7 @@ const PRIORITY_RANK: Record<TaskPriorityDb, number> = {
   high: 1,
   medium: 2,
   low: 3,
+  lowest: 4,
 }
 
 const STATUS_RANK: Record<TaskStatusDb, number> = {

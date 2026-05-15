@@ -13,7 +13,10 @@ import type { Member } from '../components/ui/UserGroup'
 // ─── DB enums (mirror of Postgres enums) ─────────────────────────────────────
 
 export type TaskStatusDb = 'planned' | 'in_progress' | 'review' | 'blocked' | 'done'
-export type TaskPriorityDb = 'low' | 'medium' | 'high' | 'urgent'
+// 'lowest' requires the task_priority enum to be extended — see
+// supabase/migrations/*_add_task_priority_lowest.sql. The TaskDetailModal
+// probes for it at runtime and only offers it once the enum has the value.
+export type TaskPriorityDb = 'lowest' | 'low' | 'medium' | 'high' | 'urgent'
 export type ProjectStatusDb = 'planned' | 'in_progress' | 'review' | 'blocked' | 'done'
 
 // ─── Row shapes ──────────────────────────────────────────────────────────────
@@ -142,6 +145,8 @@ export function dbPriorityToUi(p: TaskPriorityDb): Priority {
       return 'medium'
     case 'low':
       return 'low'
+    case 'lowest':
+      return 'lowest'
   }
 }
 

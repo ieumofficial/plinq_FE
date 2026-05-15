@@ -60,6 +60,7 @@ const PRIORITY_ORDER: Record<TaskPriorityDb, number> = {
   high: 1,
   medium: 2,
   low: 3,
+  lowest: 4,
 }
 
 const COLS: Column[] = [

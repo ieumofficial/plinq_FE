@@ -186,7 +186,6 @@ export default function AskAiPanel({
   const convListEnabledForFallback = !conversationId && !restored
   const convListQuery = useAgentConversations({
     orgId: scope.orgId,
-    projectId: scope.projectId,
     enabled: convListEnabledForFallback || view === 'sessions',
   })
   useEffect(() => {

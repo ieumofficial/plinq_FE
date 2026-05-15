@@ -8,7 +8,7 @@ import Input from '../../../components/ui/Input'
 import Button from '../../../components/ui/Button'
 import UserGroup from '../../../components/ui/UserGroup'
 import FilterChecklist from '../../../components/ui/FilterChecklist'
-import Table, {
+import {
   TableHeader,
   TableRow,
   TableCell,
@@ -166,11 +166,6 @@ function BacklogBody({ projectId }: { projectId: string }) {
   const filterRef = useClickOutside(filterOpen, () => setFilterOpen(false))
 
   // Counts shown next to each filter row — unfiltered totals.
-  const statusCounts = useMemo(() => {
-    const m = new Map<TaskStatusDb, number>()
-    for (const t of tasks) m.set(t.status, (m.get(t.status) ?? 0) + 1)
-    return m
-  }, [tasks])
   const priorityCounts = useMemo(() => {
     const m = new Map<TaskPriorityDb, number>()
     for (const t of tasks) m.set(t.priority, (m.get(t.priority) ?? 0) + 1)

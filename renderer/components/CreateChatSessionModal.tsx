@@ -38,8 +38,6 @@ function memberLabel(u: UserRow) {
 
 // ─── Radio option ──────────────────────────────────────────────────────────
 
-type IconName = 'Folder' | 'People' | 'Person'
-
 function ModeOption({
   iconName,
   title,
@@ -70,7 +68,7 @@ function ModeOption({
         }`}
       >
         <Icon
-          name={renderedIcon as IconName extends 'Person' ? 'People' : IconName}
+          name={renderedIcon}
           size={15}
           className={selected ? 'text-black' : 'text-gray-main'}
         />

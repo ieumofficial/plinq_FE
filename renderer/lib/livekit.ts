@@ -31,3 +31,25 @@ export async function fetchLiveKitToken(meetingId: string): Promise<LiveKitJoinI
   }
   return (await r.json()) as LiveKitJoinInfo
 }
+
+/** Idempotently start the room's RoomCompositeEgress. Server returns the
+ *  egress id (existing or new). LiveKit will broadcast `RecordingStatusChanged`
+ *  to every participant, so we don't have to push anything client-side. */
+export async function startMeetingRecording(meetingId: string): Promise<string> {
+  const r = await aiFetch(
+    `/meetings/${encodeURIComponent(meetingId)}/start-recording`,
+    { method: 'POST', body: {} },
+  )
+  if (!r.ok) {
+    let detail = `HTTP ${r.status}`
+    try {
+      const j = await r.json()
+      detail = typeof j.detail === 'string' ? j.detail : detail
+    } catch {
+      /* keep status */
+    }
+    throw new Error(detail)
+  }
+  const j = (await r.json()) as { egress_id: string }
+  return j.egress_id
+}

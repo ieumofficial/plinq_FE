@@ -19,7 +19,7 @@ import {
   type Participant,
 } from 'livekit-client'
 import Button from './ui/Button'
-import { fetchLiveKitToken } from '../lib/livekit'
+import { fetchLiveKitToken, startMeetingRecording } from '../lib/livekit'
 
 type Props = {
   meetingId: string
@@ -43,6 +43,9 @@ export default function MeetingRoom({ meetingId, meetingName, onLeave }: Props) 
   const [error, setError] = useState<string | null>(null)
   const [participants, setParticipants] = useState<ParticipantState[]>([])
   const [muted, setMuted] = useState(false)
+  const [recording, setRecording] = useState(false)
+  const [startingRecording, setStartingRecording] = useState(false)
+  const [recError, setRecError] = useState<string | null>(null)
 
   // Connect on mount, leave on unmount.
   useEffect(() => {
@@ -80,6 +83,13 @@ export default function MeetingRoom({ meetingId, meetingName, onLeave }: Props) 
       .on(RoomEvent.TrackMuted, rebuildParticipants)
       .on(RoomEvent.TrackUnmuted, rebuildParticipants)
       .on(RoomEvent.LocalTrackPublished, rebuildParticipants)
+      // LiveKit broadcasts recording state to every participant — using
+      // this means whoever clicked "Start recording" doesn't need to
+      // tell the others; they all see the REC indicator together.
+      .on(RoomEvent.RecordingStatusChanged, (active: boolean) => {
+        if (cancelled) return
+        setRecording(active)
+      })
       .on(RoomEvent.TrackSubscribed, (track, _pub, participant: RemoteParticipant) => {
         // Audio tracks attach to a hidden <audio> so we can hear them.
         if (track.kind === Track.Kind.Audio) {
@@ -108,6 +118,8 @@ export default function MeetingRoom({ meetingId, meetingName, onLeave }: Props) 
         await room.localParticipant.setMicrophoneEnabled(true)
         if (cancelled) return
         setStatus('connected')
+        // Pick up an already-running recording on first connect.
+        setRecording(room.isRecording)
         rebuildParticipants()
       } catch (e) {
         if (cancelled) return
@@ -136,6 +148,21 @@ export default function MeetingRoom({ meetingId, meetingName, onLeave }: Props) 
     setMuted(next)
   }
 
+  async function startRecording() {
+    if (recording || startingRecording) return
+    setStartingRecording(true)
+    setRecError(null)
+    try {
+      await startMeetingRecording(meetingId)
+      // No need to setRecording(true) here — LiveKit's RecordingStatusChanged
+      // event fires for every participant (us included) within ~1s.
+    } catch (e) {
+      setRecError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setStartingRecording(false)
+    }
+  }
+
   function leave() {
     void roomRef.current?.disconnect()
     onLeave?.()
@@ -152,21 +179,29 @@ export default function MeetingRoom({ meetingId, meetingName, onLeave }: Props) 
             {meetingName ?? 'Meeting'}
           </h3>
         </div>
-        <span
-          className={`text-[10px] uppercase tracking-[1.5px] ${
-            status === 'connected'
-              ? 'text-green-main'
-              : status === 'error'
-                ? 'text-red-main'
-                : 'text-gray-secondary'
-          }`}
-        >
-          {status === 'connecting' && 'Connecting…'}
-          {status === 'connected' && 'Live'}
-          {status === 'left' && 'Disconnected'}
-          {status === 'error' && 'Error'}
-          {status === 'idle' && 'Idle'}
-        </span>
+        <div className="flex items-center gap-[8px]">
+          {recording && (
+            <span className="inline-flex items-center gap-[5px] text-[10px] font-semibold uppercase tracking-[1.5px] text-red-main">
+              <span className="size-[8px] animate-pulse rounded-full bg-red-main" />
+              REC
+            </span>
+          )}
+          <span
+            className={`text-[10px] uppercase tracking-[1.5px] ${
+              status === 'connected'
+                ? 'text-green-main'
+                : status === 'error'
+                  ? 'text-red-main'
+                  : 'text-gray-secondary'
+            }`}
+          >
+            {status === 'connecting' && 'Connecting…'}
+            {status === 'connected' && 'Live'}
+            {status === 'left' && 'Disconnected'}
+            {status === 'error' && 'Error'}
+            {status === 'idle' && 'Idle'}
+          </span>
+        </div>
       </div>
 
       {error && (
@@ -199,13 +234,34 @@ export default function MeetingRoom({ meetingId, meetingName, onLeave }: Props) 
               </li>
             ))}
           </ul>
-          <div className="flex items-center justify-end gap-[8px] pt-[5px]">
-            <Button variant="secondary" size="compact" onClick={toggleMute}>
-              {muted ? 'Unmute' : 'Mute'}
-            </Button>
-            <Button variant="primary" size="compact" onClick={leave}>
-              Leave
-            </Button>
+          {recError && (
+            <p className="rounded-[6px] border border-red-med/40 bg-red-light px-[8px] py-[5px] text-[11px] text-red-main">
+              {recError}
+            </p>
+          )}
+          <div className="flex items-center justify-between gap-[8px] pt-[5px]">
+            {recording ? (
+              <span className="text-[11px] text-gray-main">
+                Recording — AI will summarize once everyone leaves.
+              </span>
+            ) : (
+              <Button
+                variant="primary"
+                size="compact"
+                onClick={() => void startRecording()}
+                disabled={startingRecording}
+              >
+                {startingRecording ? 'Starting…' : '● Start recording'}
+              </Button>
+            )}
+            <div className="flex items-center gap-[8px]">
+              <Button variant="secondary" size="compact" onClick={toggleMute}>
+                {muted ? 'Unmute' : 'Mute'}
+              </Button>
+              <Button variant="tertiary" size="compact" onClick={leave}>
+                Leave
+              </Button>
+            </div>
           </div>
         </>
       )}

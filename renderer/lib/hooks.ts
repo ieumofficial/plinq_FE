@@ -17,6 +17,7 @@ import {
   dismissAllNotifications,
   dismissNotification,
   dismissNotificationsForSession,
+  getDmSharedContext,
   getNotifications,
   // toggleDocPin removed — pin state lives in localStorage for now (see lib/pinPref.ts)
   getChatMessages,
@@ -32,6 +33,7 @@ import {
   getProject,
   getProjectCounts,
   getProjectDocs,
+  getKnowledgeDocSignedUrl,
   getProjectMeetings,
   getProjectMembers,
   getProjectMembersWithRoles,
@@ -57,6 +59,7 @@ import type {
   UserRow,
 } from './types'
 import { aiFetch } from './aiClient'
+import { getCatchMeUp } from './chatSuggest'
 
 // ─── User / org ─────────────────────────────────────────────────────────────
 
@@ -669,6 +672,22 @@ export function useProjectDocs(projectId: string | null | undefined) {
   })
 }
 
+/** Resolves a knowledge-doc's stored object path to a signed URL for
+ *  in-app viewing/download. Refetched well before the 1h signature
+ *  expiry so an open preview never points at a dead link. */
+export function useKnowledgeDocUrl(
+  docId: string | null | undefined,
+  filePath: string | null | undefined
+) {
+  return useQuery({
+    queryKey: ['knowledgeDocUrl', docId ?? ''],
+    queryFn: () => getKnowledgeDocSignedUrl(filePath!),
+    enabled: !!docId && !!filePath,
+    staleTime: 50 * 60 * 1000,
+    gcTime: 55 * 60 * 1000,
+  })
+}
+
 // ─── Chat ───────────────────────────────────────────────────────────────────
 
 export function useChatSessions(
@@ -839,6 +858,37 @@ export function useDeleteAgentConversation() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.agentChats.all })
     },
+  })
+}
+
+/**
+ * AI "Catch me up" summary for a chat session. Cached per session so the
+ * panel doesn't re-fire the (slow, ~10s) Sonnet call on every re-render or
+ * incoming message — opening the session once is the intent of catch-up.
+ * Long staleTime keeps it stable while the user reads; switching sessions
+ * uses a different key so it refreshes naturally.
+ */
+export function useCatchMeUp(sessionId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['catchMeUp', sessionId ?? null] as const,
+    queryFn: () => getCatchMeUp(sessionId!),
+    enabled: !!sessionId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: 0, // the BE already degrades gracefully; don't hammer it
+  })
+}
+
+/** Channels + knowledge docs ME shares with the other person of a DM. */
+export function useDmSharedContext(
+  meId: string | null | undefined,
+  otherId: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: ['dmShared', meId ?? null, otherId ?? null] as const,
+    queryFn: () => getDmSharedContext(meId!, otherId!),
+    enabled: !!meId && !!otherId,
+    staleTime: 60 * 1000,
   })
 }
 

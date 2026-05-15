@@ -7,12 +7,15 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import Icon from './Icon'
+import { PRESENCE_DOT, type Presence } from '../../lib/presencePref'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export type ChatFilterKey = 'all' | 'unread' | 'mentions' | 'sessions' | 'dms'
 
-export type ChatPresence = 'online' | 'away' | 'offline'
+/** Aliased to the app-wide `users.status` enum so the dot beside a DM name
+ *  matches the same green/amber/red used in the header and members page. */
+export type ChatPresence = Presence
 
 export type ChatSessionItem = {
   id: string
@@ -253,12 +256,6 @@ function ContextMenu({
   )
 }
 
-const PRESENCE_DOT: Record<ChatPresence, string> = {
-  online: 'bg-green-main',
-  away: 'bg-brown-med',
-  offline: 'bg-gray-secondary',
-}
-
 function DmRow({
   item,
   active,
@@ -298,7 +295,9 @@ function DmRow({
             </span>
             {item.presence && (
               <span
-                className={`size-[5px] rounded-full shrink-0 ${PRESENCE_DOT[item.presence]}`}
+                aria-hidden
+                className="size-[5px] rounded-full shrink-0"
+                style={{ backgroundColor: PRESENCE_DOT[item.presence] }}
               />
             )}
           </span>

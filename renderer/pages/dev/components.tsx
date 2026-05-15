@@ -119,11 +119,11 @@ const SAMPLE_CHAT_SESSIONS: ChatSessionGroup[] = [
 ]
 
 const SAMPLE_CHAT_DMS: ChatDmItem[] = [
-  { id: 'mira-1', name: 'Mira Chen', presence: 'online', preview: 'Yes — staging flake reproduced.', timeLabel: '2m', unreadCount: 2 },
-  { id: 'mira-2', name: 'Mira Chen', presence: 'online', preview: 'You: Sounds good!', timeLabel: '2m' },
-  { id: 'mira-3', name: 'Mira Chen', presence: 'away', preview: 'Yes — staging flake reproduced.', timeLabel: '2m' },
-  { id: 'mira-4', name: 'Mira Chen', presence: 'away', preview: 'Yes — staging flake reproduced.', timeLabel: '2m' },
-  { id: 'mira-5', name: 'Mira Chen', presence: 'offline', preview: 'Yes — staging flake reproduced.', timeLabel: '2m', unreadCount: 2 },
+  { id: 'mira-1', name: 'Mira Chen', presence: 'available', preview: 'Yes — staging flake reproduced.', timeLabel: '2m', unreadCount: 2 },
+  { id: 'mira-2', name: 'Mira Chen', presence: 'available', preview: 'You: Sounds good!', timeLabel: '2m' },
+  { id: 'mira-3', name: 'Mira Chen', presence: 'in_meeting', preview: 'Yes — staging flake reproduced.', timeLabel: '2m' },
+  { id: 'mira-4', name: 'Mira Chen', presence: 'in_meeting', preview: 'Yes — staging flake reproduced.', timeLabel: '2m' },
+  { id: 'mira-5', name: 'Mira Chen', presence: 'unavailable', preview: 'Yes — staging flake reproduced.', timeLabel: '2m', unreadCount: 2 },
 ]
 
 const SAMPLE_CAL_EVENTS: CalendarEvent[] = [

@@ -18,6 +18,7 @@ import {
 import {
   useCurrentUser,
   useDeleteKnowledgeDoc,
+  useKnowledgeDocUrl,
   useProject,
   useProjectDocs,
   useProjectMembersWithRoles,
@@ -485,6 +486,11 @@ function DocPreviewModal({
   }, [onClose])
 
   const cat = SOURCE_TO_CATEGORY[doc.source]
+  const hasFile = !!doc.file_url
+  const { data: fileUrl, isLoading: urlLoading } = useKnowledgeDocUrl(
+    doc.id,
+    doc.file_url
+  )
 
   return (
     <div
@@ -522,6 +528,21 @@ function DocPreviewModal({
             </div>
           </div>
           <div className="flex items-center gap-[5px] shrink-0">
+            {hasFile && (
+              <button
+                type="button"
+                disabled={!fileUrl}
+                onClick={() => {
+                  if (fileUrl) window.open(fileUrl, '_blank')
+                }}
+                aria-label="Open file"
+                title={fileUrl ? 'Open in new window' : 'Preparing file…'}
+                className="inline-flex items-center gap-[5px] px-[10px] h-[28px] rounded-[5px] border border-solid text-[12px] transition-colors bg-blue-main text-white border-blue-main hover:bg-blue-main/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Icon name="File" size={13} />
+                <span>Open</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onTogglePin}
@@ -547,47 +568,35 @@ function DocPreviewModal({
           </div>
         </div>
 
-        {/* Preview body — blind placeholder until real file rendering ships */}
-        <div className="relative flex-1 min-h-0 bg-white-main p-[20px] overflow-auto flex items-center justify-center">
-          <div
-            aria-hidden
-            className="w-full max-w-[480px] aspect-[3/4] bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-sm flex flex-col p-[30px] gap-[10px] overflow-hidden"
-            style={{
-              filter: 'blur(4px)',
-              userSelect: 'none',
-              pointerEvents: 'none',
-            }}
-          >
-            <div className="h-[18px] w-[60%] bg-gray-extra-light rounded-[3px]" />
-            <div className="h-[10px] w-[40%] bg-gray-extra-light rounded-[3px]" />
-            <div className="mt-[20px] flex flex-col gap-[8px]">
-              {Array.from({ length: 12 }, (_, i) => (
-                <div
-                  key={i}
-                  className="h-[8px] bg-gray-extra-light rounded-[3px]"
-                  style={{ width: `${65 + ((i * 13) % 30)}%` }}
-                />
-              ))}
+        {/* Preview body */}
+        <div className="relative flex-1 min-h-0 bg-white-main overflow-hidden flex items-center justify-center">
+          {!hasFile ? (
+            <div className="flex flex-col items-center gap-[8px] text-center px-[20px]">
+              <Icon name="File" size={28} className="text-gray-secondary" />
+              <p className="text-gray-main text-[13px] font-medium">
+                No file attached
+              </p>
+              <p className="text-gray-secondary text-[11px] max-w-[320px]">
+                This entry only records a title and category. Attach a file
+                when creating the doc to make it viewable here.
+              </p>
             </div>
-            <div className="mt-[15px] h-[100px] bg-gray-extra-light rounded-[3px]" />
-            <div className="mt-[10px] flex flex-col gap-[8px]">
-              {Array.from({ length: 6 }, (_, i) => (
-                <div
-                  key={i}
-                  className="h-[8px] bg-gray-extra-light rounded-[3px]"
-                  style={{ width: `${50 + ((i * 17) % 35)}%` }}
-                />
-              ))}
+          ) : urlLoading ? (
+            <p className="text-gray-main text-[12px]">Preparing preview…</p>
+          ) : !fileUrl ? (
+            <div className="flex flex-col items-center gap-[8px] text-center px-[20px]">
+              <Icon name="Warning" size={24} className="text-red-main" />
+              <p className="text-gray-main text-[12px]">
+                Couldn&apos;t load this file. It may have been removed.
+              </p>
             </div>
-          </div>
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <p
-              className="text-gray-main text-[12px] bg-white-white/90 px-[14px] py-[8px] rounded-[5px] border border-gray-border-light shadow-sm tracking-[0.5px]"
-              style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
-            >
-              Preview
-            </p>
-          </div>
+          ) : (
+            <iframe
+              title={doc.name}
+              src={fileUrl}
+              className="w-full h-full border-0 bg-white-white"
+            />
+          )}
         </div>
       </div>
     </div>

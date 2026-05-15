@@ -153,10 +153,11 @@ const STATUS_PILL: Record<string, { bg: string; text: string; label: string }> =
 }
 
 const PRIORITY_PILL: Record<string, { bg: string; text: string; label: string }> = {
-  low: { bg: 'bg-gray-extra-light', text: 'text-gray-main', label: 'Low' },
-  medium: { bg: 'bg-blue-light', text: 'text-blue-main', label: 'Medium' },
-  high: { bg: 'bg-brown-light', text: 'text-brown-med', label: 'High' },
-  urgent: { bg: 'bg-red-light', text: 'text-red-main', label: 'Urgent' },
+  lowest: { bg: 'bg-blue-light', text: 'text-blue-main', label: 'Lowest' },
+  low: { bg: 'bg-blue-light', text: 'text-blue-main', label: 'Low' },
+  medium: { bg: 'bg-brown-light', text: 'text-brown-med', label: 'Medium' },
+  high: { bg: 'bg-red-light', text: 'text-red-main', label: 'High' },
+  highest: { bg: 'bg-red-light', text: 'text-red-main', label: 'Highest' },
 }
 
 function StatusPill({ status }: { status: string }) {

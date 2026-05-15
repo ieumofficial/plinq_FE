@@ -19,7 +19,6 @@ type Props = {
   loading?: boolean
   onEdit: (s: ChatSuggestion) => void
   onSend: (s: ChatSuggestion) => Promise<void> | void
-  onDismiss: () => void
   /** Index currently being sent — that one card shows "Sending…" while
    *  the others stay disabled. */
   sendingIndex?: number | null
@@ -30,14 +29,13 @@ export default function ChatSuggestions({
   loading = false,
   onEdit,
   onSend,
-  onDismiss,
   sendingIndex = null,
 }: Props) {
   if (!loading && suggestions.length === 0) return null
   return (
     <div className="border-t border-solid border-gray-border-light pt-[10px] flex flex-col gap-[5px] w-full">
-      {/* Header: chip + hint  +  Dismiss */}
-      <div className="flex items-center justify-between w-full">
+      {/* Header: chip + hint */}
+      <div className="flex items-center w-full">
         <div className="flex gap-[5px] items-center">
           <span className="bg-primary-dark rounded-[10px] px-[7px] py-[3px] inline-flex items-center gap-[5px]">
             <Icon name="Sparkle" size={12} className="text-white" />
@@ -51,14 +49,6 @@ export default function ChatSuggestions({
               : 'Pick one to edit, or send as-is'}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          disabled={sendingIndex !== null}
-          className="text-black text-[12px] hover:opacity-70 disabled:opacity-50"
-        >
-          Dismiss
-        </button>
       </div>
 
       {/* Cards row — fixed 3 slots; while loading we show 3 skeletons so

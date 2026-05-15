@@ -50,12 +50,9 @@ const PRIORITIES: {
   { key: 'lowest', label: 'Lowest', iconName: 'Lowest', activeBg: 'bg-blue-light', activeText: 'text-blue-main' },
 ]
 
-// UI 5단계 → DB 4단계
-function uiPriorityToDb(p: Priority): 'low' | 'medium' | 'high' | 'urgent' {
-  if (p === 'highest') return 'urgent'
-  if (p === 'high') return 'high'
-  if (p === 'medium') return 'medium'
-  return 'low' // low + lowest 둘 다
+// DB enum is now the same 5-value set as the UI — identity pass-through.
+function uiPriorityToDb(p: Priority): Priority {
+  return p
 }
 
 function memberLabel(u: UserRow) {

@@ -425,22 +425,6 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
                   </button>
                 </div>
               ))}
-
-              {/* Suggestion footer */}
-              <div className="flex items-center gap-[5px] px-[10px] py-[8px] bg-white-item">
-                <span aria-hidden>💡</span>
-                <span className="text-gray-main text-[10px]">
-                  Suggested from past work:
-                </span>
-                <button
-                  type="button"
-                  disabled
-                  title="Suggestions aren't wired up yet."
-                  className="text-gray-secondary text-[10px] cursor-not-allowed"
-                >
-                  + Sam Lee, + Riley Wong
-                </button>
-              </div>
             </div>
           </div>
         </div>

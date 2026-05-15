@@ -519,13 +519,6 @@ export default function CreateOrganizationModal({ open, onClose, onCreated }: Pr
                   ))}
                 </div>
               )}
-
-              {/* Suggestion footer */}
-              <div className="bg-white-item border-t border-gray-border-light px-[10px] py-[5px] flex items-center gap-[5px] text-[10px] leading-[1.3]">
-                <span className="text-[12px]">💡</span>
-                <span className="text-gray-main">Suggested from past work: </span>
-                <span className="text-black font-semibold">(none yet)</span>
-              </div>
             </div>
           </div>
 

@@ -761,11 +761,6 @@ export default function CreateProjectModal({
                   })}
                 </div>
               )}
-
-              {/* Suggestions placeholder */}
-              <div className="px-3 py-2 text-[11px] text-gray-main bg-white-item">
-                💡 Suggested from past work: <span className="text-gray-secondary">(none yet)</span>
-              </div>
             </div>
           </div>
 

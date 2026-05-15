@@ -20,6 +20,11 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  # Required so the tag build can create a GitHub Release and upload the
+  # installers as release assets (softprops/action-gh-release).
+  contents: write
+
 jobs:
   build:
     strategy:

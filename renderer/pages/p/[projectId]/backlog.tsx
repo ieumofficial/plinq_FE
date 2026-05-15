@@ -44,10 +44,11 @@ const PROGRESS_FILTERS: { key: TaskStatusDb; label: string; chipClass: string }[
 ]
 
 const PRIORITY_OPTIONS: { key: TaskPriorityDb; label: string; color: string }[] = [
-  { key: 'urgent', label: 'Highest', color: '#9B3838' },
+  { key: 'highest', label: 'Highest', color: '#9B3838' },
   { key: 'high', label: 'High', color: '#9B3838' },
   { key: 'medium', label: 'Medium', color: '#B68A48' },
   { key: 'low', label: 'Low', color: '#2D5A9E' },
+  { key: 'lowest', label: 'Lowest', color: '#2D5A9E' },
 ]
 
 type SortKey = 'id' | 'due' | 'priority' | 'progress'
@@ -59,10 +60,11 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 ]
 
 const PRIORITY_RANK: Record<TaskPriorityDb, number> = {
-  urgent: 0,
+  highest: 0,
   high: 1,
   medium: 2,
   low: 3,
+  lowest: 4,
 }
 
 const STATUS_RANK: Record<TaskStatusDb, number> = {

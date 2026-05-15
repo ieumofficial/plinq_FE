@@ -33,6 +33,7 @@ import {
   getProject,
   getProjectCounts,
   getProjectDocs,
+  getKnowledgeDocSignedUrl,
   getProjectMeetings,
   getProjectMembers,
   getProjectMembersWithRoles,
@@ -590,6 +591,22 @@ export function useProjectDocs(projectId: string | null | undefined) {
     queryKey: queryKeys.project.docs(projectId ?? ''),
     queryFn: () => getProjectDocs(projectId!),
     enabled: !!projectId,
+  })
+}
+
+/** Resolves a knowledge-doc's stored object path to a signed URL for
+ *  in-app viewing/download. Refetched well before the 1h signature
+ *  expiry so an open preview never points at a dead link. */
+export function useKnowledgeDocUrl(
+  docId: string | null | undefined,
+  filePath: string | null | undefined
+) {
+  return useQuery({
+    queryKey: ['knowledgeDocUrl', docId ?? ''],
+    queryFn: () => getKnowledgeDocSignedUrl(filePath!),
+    enabled: !!docId && !!filePath,
+    staleTime: 50 * 60 * 1000,
+    gcTime: 55 * 60 * 1000,
   })
 }
 

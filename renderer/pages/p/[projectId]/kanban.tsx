@@ -32,10 +32,11 @@ const COLUMNS: {
 ]
 
 const PRIORITY_OPTIONS: { key: TaskPriorityDb; label: string; color: string }[] = [
-  { key: 'urgent', label: 'Highest', color: '#9B3838' },
+  { key: 'highest', label: 'Highest', color: '#9B3838' },
   { key: 'high', label: 'High', color: '#9B3838' },
   { key: 'medium', label: 'Medium', color: '#B68A48' },
   { key: 'low', label: 'Low', color: '#2D5A9E' },
+  { key: 'lowest', label: 'Lowest', color: '#2D5A9E' },
 ]
 
 function ticketId(projectName: string, idx: number): string {

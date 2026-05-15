@@ -77,7 +77,7 @@ type ChatItem =
       error?: string | null
     }
 
-const PRIORITY_CYCLE = ['urgent', 'high', 'medium', 'low'] as const
+const PRIORITY_CYCLE = ['highest', 'high', 'medium', 'low', 'lowest'] as const
 
 type Props = {
   /** Close (✕) — parent toggles the panel mount. */
@@ -1468,9 +1468,12 @@ function PriorityPill({
 }
 
 function priorityTone(value: string): string {
-  if (value === 'urgent') return 'bg-red-med/30 text-red-light border-red-med/40'
-  if (value === 'high') return 'bg-brown-med/25 text-brown-light border-brown-med/40'
-  if (value === 'low') return 'bg-blue-med/20 text-blue-light border-blue-med/40'
+  if (value === 'highest' || value === 'high')
+    return 'bg-red-med/30 text-red-light border-red-med/40'
+  if (value === 'medium')
+    return 'bg-brown-med/25 text-brown-light border-brown-med/40'
+  if (value === 'low' || value === 'lowest')
+    return 'bg-blue-med/20 text-blue-light border-blue-med/40'
   return 'bg-white/10 text-primary-light border-white/15'
 }
 

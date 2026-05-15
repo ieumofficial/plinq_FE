@@ -161,7 +161,7 @@ function buildDmItems(sessions: ChatSessionWithMeta[]): ChatDmItem[] {
       preview: s.last_message_body ?? undefined,
       timeLabel: formatRelative(s.last_message_at) ?? undefined,
       unreadCount: s.unread_count,
-      presence: 'online' as const,
+      presence: s.other_user!.status ?? 'available',
     }))
 }
 

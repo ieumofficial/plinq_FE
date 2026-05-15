@@ -13,6 +13,7 @@ import type {
   MeetingRow,
   UserRow,
   TaskStatusDb,
+  TaskPriorityDb,
   ChatSessionRow,
   ChatSessionPrivacy,
   ChatMessageRow,
@@ -589,7 +590,7 @@ export type NewTaskInput = {
   description?: string
   project_id: string
   status?: TaskStatusDb
-  priority?: 'low' | 'medium' | 'high' | 'urgent'
+  priority?: TaskPriorityDb
   due_date?: string | null
   /** User IDs to assign (each becomes a contributor). */
   assigneeIds?: string[]
@@ -1479,6 +1480,41 @@ export type NewDocInput = {
   source?: ProjectDoc['source']
   file_url?: string | null
   file_type?: string | null
+  /** Optional attachment. When present it's uploaded to the
+   *  `knowledge-docs` Storage bucket and its object path is stored in
+   *  file_url (the bucket is private — readers mint a signed URL). */
+  file?: File | null
+}
+
+const KNOWLEDGE_BUCKET = 'knowledge-docs'
+
+function fileExt(file: File): string {
+  const fromName = file.name.includes('.')
+    ? file.name.split('.').pop()!.toLowerCase()
+    : ''
+  if (fromName) return fromName.slice(0, 12)
+  const mime = file.type
+  if (mime === 'application/pdf') return 'pdf'
+  if (mime === 'text/plain') return 'txt'
+  if (mime === 'text/markdown') return 'md'
+  if (mime.startsWith('image/')) return mime.split('/')[1] || 'img'
+  return 'bin'
+}
+
+/** Short-lived signed URL for a stored knowledge-doc object. Null if the
+ *  doc has no attachment or the object is gone. */
+export async function getKnowledgeDocSignedUrl(
+  path: string | null | undefined
+): Promise<string | null> {
+  if (!path) return null
+  const { data, error } = await supabase.storage
+    .from(KNOWLEDGE_BUCKET)
+    .createSignedUrl(path, 60 * 60)
+  if (error) {
+    console.error('[queries] getKnowledgeDocSignedUrl', error)
+    return null
+  }
+  return data?.signedUrl ?? null
 }
 
 export async function deleteKnowledgeDoc(
@@ -1503,14 +1539,33 @@ export async function createKnowledgeDoc(
   } = await supabase.auth.getUser()
   if (!user) return { error: 'Not signed in' }
 
+  let fileUrl = input.file_url ?? null
+  let fileType = input.file_type ?? null
+
+  if (input.file) {
+    const ext = fileExt(input.file)
+    const path = `${input.project_id}/${crypto.randomUUID()}.${ext}`
+    const { error: upErr } = await supabase.storage
+      .from(KNOWLEDGE_BUCKET)
+      .upload(path, input.file, {
+        contentType: input.file.type || 'application/octet-stream',
+      })
+    if (upErr) {
+      console.error('[queries] createKnowledgeDoc upload', upErr)
+      return { error: `Upload failed: ${upErr.message}` }
+    }
+    fileUrl = path
+    fileType = ext
+  }
+
   const { data, error } = await supabase
     .from('knowledge_documents')
     .insert({
       project_id: input.project_id,
       name: input.name.trim(),
       source: input.source ?? 'uploaded',
-      file_url: input.file_url ?? null,
-      file_type: input.file_type ?? null,
+      file_url: fileUrl,
+      file_type: fileType,
       uploaded_by: user.id,
     })
     .select('id')

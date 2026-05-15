@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Input from './ui/Input'
 import Button from './ui/Button'
 import Icon from './ui/Icon'
@@ -35,6 +35,12 @@ const SOURCE_OPTIONS: {
   },
 ]
 
+function humanSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 export default function NewDocModal({
   open,
   projectId,
@@ -44,13 +50,18 @@ export default function NewDocModal({
 }: Props) {
   const [name, setName] = useState('')
   const [source, setSource] = useState<ProjectDoc['source']>('uploaded')
+  const [file, setFile] = useState<File | null>(null)
+  const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const { mutate, isPending } = useCreateKnowledgeDoc()
 
   useEffect(() => {
     if (!open) return
     setName('')
     setSource('uploaded')
+    setFile(null)
+    setDragOver(false)
     setError('')
   }, [open])
 
@@ -63,7 +74,7 @@ export default function NewDocModal({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, name, source])
+  }, [open, name, source, file])
 
   const submit = () => {
     if (!name.trim()) {
@@ -76,6 +87,7 @@ export default function NewDocModal({
         project_id: projectId,
         name,
         source,
+        file,
       },
       {
         onSuccess: (r) => {
@@ -106,8 +118,7 @@ export default function NewDocModal({
             Add to knowledge base
           </h2>
           <p className="text-gray-main text-[12px] mt-1">
-            File upload isn't wired up yet — paste a link or just record the
-            title for now.
+            Attach a file the team can open, or just record the title for now.
           </p>
         </div>
 
@@ -151,37 +162,69 @@ export default function NewDocModal({
             </div>
           </div>
 
-          {/* File upload + Link — disabled placeholders until storage / link
-              parsing ships. */}
-          <div className="grid grid-cols-2 gap-[15px]">
-            <div className="flex flex-col gap-[5px]">
-              <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                File
-              </label>
-              <div
-                title="File upload is not available yet"
-                className="bg-gray-extra-light border border-dashed border-gray-border rounded-[5px] px-[12px] py-[10px] flex items-center gap-[8px] text-gray-secondary text-[12px] cursor-not-allowed"
+          <div className="flex flex-col gap-[5px]">
+            <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
+              File
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null
+                if (f) setFile(f)
+                // allow re-selecting the same file later
+                e.target.value = ''
+              }}
+            />
+            {file ? (
+              <div className="bg-white-item border border-solid border-gray-border-light rounded-[5px] px-[12px] py-[10px] flex items-center gap-[8px]">
+                <Icon name="File" size={14} className="text-blue-main shrink-0" />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-black text-[12px] truncate">
+                    {file.name}
+                  </span>
+                  <span className="block text-gray-secondary text-[10px]">
+                    {humanSize(file.size)}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFile(null)}
+                  aria-label="Remove file"
+                  className="text-gray-main hover:bg-white-white rounded p-1 transition-colors shrink-0"
+                >
+                  <Icon name="Cross" size={12} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setDragOver(true)
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setDragOver(false)
+                  const f = e.dataTransfer.files?.[0] ?? null
+                  if (f) setFile(f)
+                }}
+                className={`border border-dashed rounded-[5px] px-[12px] py-[14px] flex items-center justify-center gap-[8px] text-[12px] transition-colors ${
+                  dragOver
+                    ? 'border-blue-main bg-blue-light/20 text-blue-main'
+                    : 'border-gray-border text-gray-main hover:bg-white-item'
+                }`}
               >
                 <Icon name="File" size={13} />
-                <span className="flex-1">Drop file or click to upload</span>
-              </div>
-              <p className="text-gray-secondary text-[10px]">Not available yet</p>
-            </div>
-            <div className="flex flex-col gap-[5px]">
-              <label className="text-gray-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                Link
-              </label>
-              <input
-                type="url"
-                placeholder="https://…"
-                disabled
-                value=""
-                onChange={() => {}}
-                title="Link attachments are not available yet"
-                className="bg-gray-extra-light border border-solid border-gray-border rounded-[5px] px-[12px] py-[10px] text-[12px] text-gray-secondary cursor-not-allowed disabled:cursor-not-allowed"
-              />
-              <p className="text-gray-secondary text-[10px]">Not available yet</p>
-            </div>
+                <span>Drop file or click to upload</span>
+              </button>
+            )}
+            <p className="text-gray-secondary text-[10px]">
+              Optional · stored privately, viewable by project members
+            </p>
           </div>
 
           {error && <p className="text-red-main text-[12px]">{error}</p>}

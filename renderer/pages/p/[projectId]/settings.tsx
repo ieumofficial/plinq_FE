@@ -550,15 +550,6 @@ function SettingsBody({ projectId }: { projectId: string }) {
               ))
             )}
           </div>
-
-          {/* Suggested footer */}
-          <div className="bg-white-main border border-solid border-gray-border-light rounded-[8px] px-[12px] py-[8px] flex items-center gap-[8px] text-[11px] text-gray-main">
-            <span>💡</span>
-            <span className="text-gray-secondary uppercase tracking-[0.5px] text-[10px]">
-              Suggested from past work:
-            </span>
-            <span className="text-gray-secondary">Coming soon</span>
-          </div>
         </div>
 
         {error && <p className="text-red-main text-[12px]">{error}</p>}

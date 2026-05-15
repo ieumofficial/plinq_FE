@@ -17,6 +17,7 @@ import {
   dismissAllNotifications,
   dismissNotification,
   dismissNotificationsForSession,
+  getDmSharedContext,
   getNotifications,
   // toggleDocPin removed — pin state lives in localStorage for now (see lib/pinPref.ts)
   getChatMessages,
@@ -32,6 +33,7 @@ import {
   getProject,
   getProjectCounts,
   getProjectDocs,
+  getKnowledgeDocSignedUrl,
   getProjectMeetings,
   getProjectMembers,
   getProjectMembersWithRoles,
@@ -49,8 +51,15 @@ import {
 } from './queries'
 import { supabase } from './supabase'
 import { queryKeys } from './queryKeys'
-import type { OrgRoleDb, ProjectRoleDb, ProjectRow, TaskStatusDb } from './types'
+import type {
+  OrgRoleDb,
+  ProjectRoleDb,
+  ProjectRow,
+  TaskStatusDb,
+  UserRow,
+} from './types'
 import { aiFetch } from './aiClient'
+import { getCatchMeUp } from './chatSuggest'
 
 // ─── User / org ─────────────────────────────────────────────────────────────
 
@@ -280,6 +289,78 @@ export function useUpdateTask() {
       qc.invalidateQueries({ queryKey: queryKeys.tasks.all })
       qc.invalidateQueries({ queryKey: queryKeys.calendar.all })
       qc.invalidateQueries({ queryKey: queryKeys.projects.all })
+      qc.invalidateQueries({ queryKey: ['project'] })
+    },
+  })
+}
+
+const taskAssigneesKey = (taskId: string | null | undefined) =>
+  ['task', 'assignees', taskId ?? ''] as const
+
+/** A task's assignees, fetched by task id so callers that don't pre-load
+ *  `task.assignees` (e.g. the personal action-items list) still render the
+ *  real assignee. `task_assignees` has two FKs to `users` (user_id,
+ *  assigned_by) — alias `users:user_id` so PostgREST follows the right one. */
+export function useTaskAssignees(taskId: string | null | undefined) {
+  return useQuery({
+    queryKey: taskAssigneesKey(taskId),
+    queryFn: async (): Promise<UserRow[]> => {
+      const { data, error } = await supabase
+        .from('task_assignees')
+        .select(
+          'users:user_id(id, email, first_name, last_name, nickname, job_title, status)'
+        )
+        .eq('task_id', taskId!)
+      if (error) {
+        console.error('[hooks] useTaskAssignees', error)
+        return []
+      }
+      const out: UserRow[] = []
+      for (const row of data ?? []) {
+        const u = (row as { users: UserRow | UserRow[] | null }).users
+        if (!u) continue
+        if (Array.isArray(u)) out.push(...u)
+        else out.push(u)
+      }
+      return out
+    },
+    enabled: !!taskId,
+    staleTime: 30 * 1000,
+  })
+}
+
+/** Replace a task's assignee with a single user (or clear it when passed
+ *  null). The details panel only exposes one assignee slot, so this does a
+ *  full delete-then-insert rather than a diff. */
+export function useSetTaskAssignee(taskId: string | null | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (userId: string | null) => {
+      if (!taskId) throw new Error('taskId required')
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      const { error: delErr } = await supabase
+        .from('task_assignees')
+        .delete()
+        .eq('task_id', taskId)
+      if (delErr) throw new Error(delErr.message)
+      if (userId) {
+        const { error: insErr } = await supabase
+          .from('task_assignees')
+          .insert({
+            task_id: taskId,
+            user_id: userId,
+            role: 'contributor' as const,
+            assigned_by: user?.id ?? userId,
+          })
+        if (insErr) throw new Error(insErr.message)
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: taskAssigneesKey(taskId) })
+      qc.invalidateQueries({ queryKey: queryKeys.tasks.all })
+      qc.invalidateQueries({ queryKey: queryKeys.members.all })
       qc.invalidateQueries({ queryKey: ['project'] })
     },
   })
@@ -591,6 +672,22 @@ export function useProjectDocs(projectId: string | null | undefined) {
   })
 }
 
+/** Resolves a knowledge-doc's stored object path to a signed URL for
+ *  in-app viewing/download. Refetched well before the 1h signature
+ *  expiry so an open preview never points at a dead link. */
+export function useKnowledgeDocUrl(
+  docId: string | null | undefined,
+  filePath: string | null | undefined
+) {
+  return useQuery({
+    queryKey: ['knowledgeDocUrl', docId ?? ''],
+    queryFn: () => getKnowledgeDocSignedUrl(filePath!),
+    enabled: !!docId && !!filePath,
+    staleTime: 50 * 60 * 1000,
+    gcTime: 55 * 60 * 1000,
+  })
+}
+
 // ─── Chat ───────────────────────────────────────────────────────────────────
 
 export function useChatSessions(
@@ -761,6 +858,37 @@ export function useDeleteAgentConversation() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.agentChats.all })
     },
+  })
+}
+
+/**
+ * AI "Catch me up" summary for a chat session. Cached per session so the
+ * panel doesn't re-fire the (slow, ~10s) Sonnet call on every re-render or
+ * incoming message — opening the session once is the intent of catch-up.
+ * Long staleTime keeps it stable while the user reads; switching sessions
+ * uses a different key so it refreshes naturally.
+ */
+export function useCatchMeUp(sessionId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['catchMeUp', sessionId ?? null] as const,
+    queryFn: () => getCatchMeUp(sessionId!),
+    enabled: !!sessionId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: 0, // the BE already degrades gracefully; don't hammer it
+  })
+}
+
+/** Channels + knowledge docs ME shares with the other person of a DM. */
+export function useDmSharedContext(
+  meId: string | null | undefined,
+  otherId: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: ['dmShared', meId ?? null, otherId ?? null] as const,
+    queryFn: () => getDmSharedContext(meId!, otherId!),
+    enabled: !!meId && !!otherId,
+    staleTime: 60 * 1000,
   })
 }
 

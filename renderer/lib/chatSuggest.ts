@@ -15,6 +15,37 @@ export type ChatSuggestion = {
   body: string
 }
 
+export type CatchMeUpActionItem = {
+  title: string
+  project_key: string | null
+}
+
+export type CatchMeUpResult = {
+  summary: string
+  action_items: CatchMeUpActionItem[]
+  /** False = user has no unread messages → FE hides the whole card. */
+  has_unread?: boolean
+  /** True = served from the BE cache (no Sonnet call). Diagnostic. */
+  cached?: boolean
+}
+
+/** AI summary of recent activity in a chat session. Used by the right-side
+ *  ChatDetails panel — the summary text supports `**bold**` person names. */
+export async function getCatchMeUp(
+  sessionId: string,
+  opts?: { signal?: AbortSignal },
+): Promise<CatchMeUpResult> {
+  const res = await aiFetch(`/chat/sessions/${sessionId}/catch-me-up`, {
+    body: {},
+    signal: opts?.signal,
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`catch-me-up failed: ${res.status} ${text}`)
+  }
+  return (await res.json()) as CatchMeUpResult
+}
+
 export async function getChatSuggestions(
   sessionId: string,
   opts?: { n?: number; draft?: string | null; timeoutMs?: number },

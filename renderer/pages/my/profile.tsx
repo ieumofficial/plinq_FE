@@ -305,57 +305,6 @@ function OrgRow({
   )
 }
 
-// ─── AI summary card (placeholder copy) ────────────────────────────────────
-
-function AiSummaryCard() {
-  return (
-    <div
-      className="rounded-[10px] p-[14px] flex flex-col gap-[12px] items-start"
-      style={{
-        backgroundImage:
-          'linear-gradient(168deg, rgb(46, 67, 78) 0%, rgb(31, 47, 56) 100%)',
-      }}
-    >
-      <div className="flex flex-col gap-[5px] w-full">
-        <div className="flex items-start gap-[10px]">
-          <Icon name="Sparkle" size={13} className="text-white shrink-0 mt-[1px]" />
-          <p className="flex-1 text-white text-[12px] font-semibold leading-tight">
-            Let AI write a one-line summary of your work for teammates.
-          </p>
-        </div>
-        <p className="text-[#b5c2cc] text-[10px] leading-[1.5]">
-          Pulled from your last 14 days of activity across your organizations.
-        </p>
-      </div>
-      <div
-        className="rounded-[5px] px-[10px] py-[5px] w-full"
-        style={{
-          backgroundColor: 'rgba(255,255,255,0.1)',
-          border: '2.65px solid rgba(0,0,0,0)',
-          boxShadow: '0px 2.65px 2.65px 0px rgba(22,36,46,0.03)',
-        }}
-      >
-        <p
-          className="text-[#f8f9fa] text-[10px] italic leading-[1.4]"
-          style={{ fontFamily: 'Inter, ui-sans-serif, sans-serif' }}
-        >
-          “Driving Apollo&apos;s auth migration at Strato Lab while moonlighting on
-          Arclight&apos;s brand refresh. Strongest with system-level design and
-          cross-org rollouts.”
-        </p>
-      </div>
-      <button
-        type="button"
-        disabled
-        title="AI regeneration isn't wired up yet."
-        className="bg-gray-disabled border border-solid border-gray-border-light rounded-[5px] px-[15px] py-[7px] text-gray-secondary text-[12px] cursor-not-allowed"
-      >
-        Regenerate
-      </button>
-    </div>
-  )
-}
-
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function MyProfilePage() {
@@ -440,8 +389,7 @@ export default function MyProfilePage() {
         }
       >
         <div className="flex-1 min-h-0 p-[30px] flex flex-col gap-[10px] overflow-y-auto">
-          <div className="flex gap-[30px] items-start">
-            {/* LEFT COLUMN */}
+          <div className="flex items-start">
             <div className="flex-1 min-w-0 flex flex-col gap-[10px]">
               {/* Profile + form card */}
               <div className="bg-white-white border border-solid border-gray-border-light rounded-[10px] p-[25px] flex flex-col gap-[25px]">
@@ -550,53 +498,6 @@ export default function MyProfilePage() {
                 >
                   {updateUser.isPending ? 'Saving…' : 'Save changes'}
                 </Button>
-              </div>
-            </div>
-
-            {/* RIGHT COLUMN */}
-            <div className="w-[268px] shrink-0 flex flex-col gap-[10px]">
-              <AiSummaryCard />
-              <div className="bg-white-white border border-solid border-gray-border-light rounded-[10px] px-[20px] py-[15px] flex flex-col gap-[15px]">
-                <div className="flex flex-col gap-[10px]">
-                  <p className="text-red-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                    danger zone
-                  </p>
-                  <p className="text-gray-main text-[12px]">
-                    Leave organizations, or permanently delete your account.
-                  </p>
-                </div>
-                <div className="flex flex-col gap-[10px]">
-                  <button
-                    type="button"
-                    disabled
-                    title="Leaving organizations isn't wired up yet."
-                    className="border border-solid border-gray-border-light rounded-[5px] px-[14px] py-[10px] flex items-center justify-between bg-gray-disabled cursor-not-allowed"
-                  >
-                    <span className="text-gray-secondary text-[14px] font-semibold">
-                      Leave organizations…
-                    </span>
-                    <Icon
-                      name="ArrowRight"
-                      size={15}
-                      className="text-gray-secondary"
-                    />
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    title="Account deletion isn't wired up yet."
-                    className="border border-solid border-gray-border-light rounded-[5px] px-[14px] py-[10px] flex items-center justify-between bg-gray-disabled cursor-not-allowed"
-                  >
-                    <span className="text-gray-secondary text-[14px] font-semibold">
-                      Delete account
-                    </span>
-                    <Icon
-                      name="ArrowRight"
-                      size={15}
-                      className="text-gray-secondary"
-                    />
-                  </button>
-                </div>
               </div>
             </div>
           </div>

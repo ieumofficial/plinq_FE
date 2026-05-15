@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Head from 'next/head'
 import { useQueryClient } from '@tanstack/react-query'
 import PersonalAppShell from '../components/PersonalAppShell'
@@ -24,6 +24,7 @@ import {
 import {
   useChatMessages,
   useChatSessionMembers,
+  useDmSharedContext,
   useChatSessions,
   useCurrentUser,
   useDeleteChatSession,
@@ -160,7 +161,7 @@ function buildDmItems(sessions: ChatSessionWithMeta[]): ChatDmItem[] {
       preview: s.last_message_body ?? undefined,
       timeLabel: formatRelative(s.last_message_at) ?? undefined,
       unreadCount: s.unread_count,
-      presence: 'online' as const,
+      presence: s.other_user!.status ?? 'available',
     }))
 }
 
@@ -243,6 +244,11 @@ function MessagesBody() {
 
   const { data: messages = [] } = useChatMessages(activeSessionId)
   const { data: sessionMembers = [] } = useChatSessionMembers(activeSessionId)
+  // For DM ChatDetails — fetch only when this session is a DM with a known
+  // other party. The hook bails out via enabled when otherId is null.
+  const dmOtherId =
+    activeSession?.kind === 'dm' ? activeSession.other_user?.id ?? null : null
+  const { data: dmShared } = useDmSharedContext(user?.id, dmOtherId)
 
   // Auto-scroll the messages pane to the bottom when entering a session or
   // when new messages arrive.
@@ -259,16 +265,29 @@ function MessagesBody() {
   // conversation is the user "consuming" them.
   useEffect(() => {
     if (!activeSessionId) return
-    void markChatSessionRead(activeSessionId).then(() => {
-      if (user?.id && orgId) {
+    const sid = activeSessionId
+    // Defer mark-read by ~1.5s so the catch-me-up endpoint (fired on mount
+    // by CatchMeUpCard) gets to read the OLD last_read_at first and decide
+    // there ARE unread messages. If we flipped last_read_at to now()
+    // immediately, catch-me-up would see zero unread and the card would
+    // never appear on first open. Its DB lookups are sub-ms, so 1.5s is a
+    // generous safety margin; the sidebar unread badge clearing 1.5s late
+    // is unnoticeable.
+    const t = setTimeout(() => {
+      void markChatSessionRead(sid).then(() => {
+        if (user?.id && orgId) {
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.chat.sessions(user.id, orgId),
+          })
+        }
+      })
+      void dismissNotificationsForSession(sid).then(() => {
         queryClient.invalidateQueries({
-          queryKey: queryKeys.chat.sessions(user.id, orgId),
+          queryKey: queryKeys.notifications.all,
         })
-      }
-    })
-    void dismissNotificationsForSession(activeSessionId).then(() => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all })
-    })
+      })
+    }, 1500)
+    return () => clearTimeout(t)
   }, [activeSessionId, messages.length, user?.id, orgId, queryClient])
 
   // Realtime: subscribe to INSERTs on the active session's chat_messages so
@@ -395,16 +414,19 @@ function MessagesBody() {
   // `aiOn` is the composer chip toggle. `suggestions` is what's currently
   // shown above the composer; `lastSuggestedAfterId` blocks repeat fetches
   // while we sit on the same incoming message.
-  const [aiOn, setAiOn] = useState(true)
+  // Default OFF — drafting is opt-in. Turning it on triggers a single draft
+  // for the current incoming message; it won't re-draft until the
+  // conversation moves on (a new message arrives) — see the effect below.
+  const [aiOn, setAiOn] = useState(false)
   const [suggestions, setSuggestions] = useState<ChatSuggestion[]>([])
   const [suggestLoading, setSuggestLoading] = useState(false)
   const [sendingSuggestionIndex, setSendingSuggestionIndex] = useState<
     number | null
   >(null)
-  // Held in a ref (not state) so updating it after a fetch doesn't re-trigger
-  // the effect — that would cause our own cleanup to cancel the in-flight
-  // request and we'd never call setSuggestions, leaving the UI stuck on the
-  // loading skeleton.
+  // Per-(session, lastMessage) guard against duplicate network calls while
+  // the user stays in the session. Real persistence is the BE cache
+  // (chat_draft_suggestions) — on reload this ref resets, the effect fires
+  // once, and the BE returns the *stored* drafts instead of regenerating.
   const lastSuggestedAfterIdRef = useRef<string | null>(null)
 
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null
@@ -419,49 +441,41 @@ function MessagesBody() {
     lastSuggestedAfterIdRef.current = null
   }, [activeSessionId])
 
-  // Auto-fetch suggestions when:
+  const runSuggest = useCallback(async () => {
+    if (!activeSessionId || !lastMessage) return
+    setSuggestLoading(true)
+    setSuggestions([])
+    lastSuggestedAfterIdRef.current = lastMessage.id
+    try {
+      // BE serves from chat_draft_suggestions when this is the same
+      // incoming message as a previous run — no Sonnet call, just the
+      // remembered drafts.
+      const res = await getChatSuggestions(activeSessionId, { n: 3 })
+      setSuggestions(res)
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[messages] suggestion fetch failed', e)
+      // Poison the guard so the next incoming message can re-trigger.
+      lastSuggestedAfterIdRef.current = null
+    } finally {
+      setSuggestLoading(false)
+    }
+  }, [activeSessionId, lastMessage?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch suggestions when:
   //   - AI is on
   //   - the conversation is not empty AND last message is from someone else
   //   - the user hasn't typed anything yet (draft empty — we don't want to
   //     wipe their typing)
-  //   - we haven't already drafted for this exact incoming message
+  //   - we haven't already fetched for this exact incoming message *this
+  //     session view* (the BE still de-dupes via its cache on reload)
   useEffect(() => {
     if (!aiOn) return
     if (!activeSessionId) return
     if (!lastIsFromOther || !lastMessage) return
     if (draft.trim()) return
     if (lastSuggestedAfterIdRef.current === lastMessage.id) return
-
-    let cancelled = false
-    setSuggestLoading(true)
-    setSuggestions([])
-    lastSuggestedAfterIdRef.current = lastMessage.id
-    console.log('[messages] requesting suggestions', {
-      sessionId: activeSessionId,
-      afterMessageId: lastMessage.id,
-    })
-    void getChatSuggestions(activeSessionId, { n: 3 })
-      .then((res) => {
-        if (cancelled) return
-        console.log('[messages] suggestions received', res.length)
-        setSuggestions(res)
-      })
-      .catch((e) => {
-        // eslint-disable-next-line no-console
-        console.warn('[messages] suggestion fetch failed', e)
-        // Allow re-fetch on the next incoming message — this round's
-        // afterId is now poisoned otherwise.
-        if (!cancelled) lastSuggestedAfterIdRef.current = null
-      })
-      .finally(() => {
-        // Always clear the spinner — even if the effect was cleaned up
-        // mid-flight, otherwise the UI sticks on "Drafting…" forever
-        // when the messages array reference changes during the fetch.
-        setSuggestLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
+    void runSuggest()
     // lastMessage?.id keeps deps stable — the array reference can change
     // while pointing at the same final message; we only care about the id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -733,12 +747,6 @@ function MessagesBody() {
                       setSendingSuggestionIndex(null)
                     }
                   }}
-                  onDismiss={() => {
-                    setSuggestions([])
-                    // Don't clear lastSuggestedAfterId — user dismissed *this*
-                    // round; we shouldn't re-fetch immediately for the same
-                    // incoming message.
-                  }}
                 />
               )}
               <ChatComposer
@@ -752,21 +760,45 @@ function MessagesBody() {
                 }
                 scopeChips={
                   <>
-                    <button
-                      type="button"
-                      onClick={() => setAiOn((v) => !v)}
-                      className={`rounded-[10px] px-[7px] py-[3px] inline-flex items-center gap-[5px] transition-colors ${
-                        aiOn
-                          ? 'bg-primary-dark text-white'
-                          : 'bg-white-item text-gray-main hover:bg-gray-extra-light'
-                      }`}
-                      title={aiOn ? 'Click to turn AI suggestions off' : 'Click to turn AI suggestions on'}
-                    >
-                      <ComposerIcons.Sparkle />
-                      <span className="text-[10px] leading-[1.5] whitespace-nowrap">
-                        {aiOn ? 'AI on · drafts replies' : 'AI off'}
-                      </span>
-                    </button>
+                    {(() => {
+                      // Draft only makes sense when the newest message is from
+                      // someone else (something to reply to). If it's mine or
+                      // the thread is empty, the toggle is unavailable.
+                      const aiUnavailable = !lastIsFromOther
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (aiUnavailable) return
+                            setAiOn((v) => !v)
+                          }}
+                          disabled={aiUnavailable}
+                          className={`rounded-[10px] px-[7px] py-[3px] inline-flex items-center gap-[5px] transition-colors ${
+                            aiUnavailable
+                              ? 'bg-white-item text-gray-light cursor-not-allowed opacity-60'
+                              : aiOn
+                                ? 'bg-primary-dark text-white'
+                                : 'bg-white-item text-gray-main hover:bg-gray-extra-light'
+                          }`}
+                          title={
+                            aiUnavailable
+                              ? 'No new message to reply to — AI draft unavailable'
+                              : aiOn
+                                ? 'Click to turn AI suggestions off'
+                                : 'Click to turn AI suggestions on'
+                          }
+                        >
+                          <ComposerIcons.Sparkle />
+                          <span className="text-[10px] leading-[1.5] whitespace-nowrap">
+                            {aiUnavailable
+                              ? 'AI draft · unavailable'
+                              : aiOn
+                                ? 'AI on · drafts replies'
+                                : 'AI off'}
+                          </span>
+                        </button>
+                      )
+                    })()}
                     {activeSession.kind === 'channel' && (
                       <ChatComposerChip icon={<ComposerIcons.OrgChart />}>
                         {activeSession.scope === 'org_wide'
@@ -801,6 +833,7 @@ function MessagesBody() {
             })) as ChatChannelMember[]
           }
           memberCount={sessionMembers.length}
+          sessionId={activeSession.id}
         />
       )}
       {activeSession?.kind === 'dm' && activeSession.other_user && (
@@ -809,6 +842,29 @@ function MessagesBody() {
           member={userToMember(activeSession.other_user)}
           jobTitle={activeSession.other_user.job_title ?? undefined}
           orgName={activeOrg?.name ?? undefined}
+          sharedSessions={(dmShared?.sessions ?? []).map((s) => ({
+            id: s.id,
+            name: s.kind === 'channel' ? `#${s.name}` : s.name,
+            subtitle:
+              s.scope === 'project' && s.project_name
+                ? `Project · ${s.project_name}`
+                : s.scope === 'org_wide'
+                  ? 'Org-wide'
+                  : s.scope === 'member_group'
+                    ? 'Member group'
+                    : undefined,
+          }))}
+          sharedFiles={(dmShared?.files ?? []).map((f) => ({
+            id: f.id,
+            name: f.name,
+            meta: f.project_name
+              ? `${f.project_name} · ${new Date(f.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+              : new Date(f.uploaded_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                }),
+          }))}
+          sessionId={activeSession.id}
         />
       )}
 

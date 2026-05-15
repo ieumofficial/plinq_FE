@@ -13,7 +13,10 @@ import type { Member } from '../components/ui/UserGroup'
 // ─── DB enums (mirror of Postgres enums) ─────────────────────────────────────
 
 export type TaskStatusDb = 'planned' | 'in_progress' | 'review' | 'blocked' | 'done'
-export type TaskPriorityDb = 'low' | 'medium' | 'high' | 'urgent'
+// DB enum (task_priority) is now the same 5-value set as the UI picker,
+// so the DB type is just the UI Priority. Kept as a named alias so the
+// many `TaskPriorityDb` call sites don't all need to change.
+export type TaskPriorityDb = Priority
 export type ProjectStatusDb = 'planned' | 'in_progress' | 'review' | 'blocked' | 'done'
 
 // ─── Row shapes ──────────────────────────────────────────────────────────────
@@ -132,17 +135,10 @@ export function dbStatusToUi(s: TaskStatusDb): Status {
   }
 }
 
+// DB and UI priority enums are unified — this is now an identity pass-through
+// kept for call-site stability.
 export function dbPriorityToUi(p: TaskPriorityDb): Priority {
-  switch (p) {
-    case 'urgent':
-      return 'highest'
-    case 'high':
-      return 'high'
-    case 'medium':
-      return 'medium'
-    case 'low':
-      return 'low'
-  }
+  return p
 }
 
 export function userToMember(

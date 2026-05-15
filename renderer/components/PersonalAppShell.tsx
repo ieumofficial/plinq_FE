@@ -9,7 +9,14 @@ import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
 import CreateChatSessionModal from './CreateChatSessionModal'
-import { useActiveOrg, useCurrentUser, useMyOrgRole } from '../lib/hooks'
+import {
+  useActiveOrg,
+  useChatSessions,
+  useCurrentUser,
+  useMyOrgRole,
+  useUserActionItems,
+  useUserProjects,
+} from '../lib/hooks'
 import { useSidebarPref, useSpaceTransition } from '../lib/sidebarPref'
 import { useAskAiOpen } from '../lib/askAiOpenStore'
 
@@ -106,11 +113,33 @@ export default function PersonalAppShell({
   const orgName = org?.name ?? null
   const isOrgOwner = myOrgRole === 'owner'
 
+  // Sidebar count badges. These read the same React Query caches the
+  // Projects / Tasks / Messages pages use, so deleting a task/project or
+  // reading messages (which invalidate those keys) refreshes the badge
+  // automatically — no extra wiring needed here.
+  const { data: projects = [] } = useUserProjects(user?.id, { orgId })
+  const { data: actionItems = [] } = useUserActionItems(user?.id, { orgId })
+  const { data: chatSessions = [] } = useChatSessions(user?.id, orgId)
+
+  const unreadCount = chatSessions.reduce(
+    (sum, s) => sum + (s.unread_count ?? 0),
+    0
+  )
+  // `|| undefined` → a zero count renders as a hidden (opacity-0) badge in
+  // MenuItem, keeping the rail clean when there's nothing to show.
+  const countByKey: Partial<Record<ActiveKey, number | undefined>> = {
+    projects: projects.length || undefined,
+    messages: unreadCount || undefined,
+    tasks: actionItems.length || undefined,
+  }
+
   // Owner-only entry: hide the "Organization" rail item from non-owners.
   // Build a per-render copy so the constant stays unchanged for callers.
-  const railItems = isOrgOwner
-    ? NAV_ITEMS
-    : NAV_ITEMS.filter((it) => it.key !== 'organization')
+  const railItems = (
+    isOrgOwner
+      ? NAV_ITEMS
+      : NAV_ITEMS.filter((it) => it.key !== 'organization')
+  ).map((it) => ({ ...it, count: countByKey[it.key as ActiveKey] }))
   const { collapsed: stackedSidebar, toggle: toggleSidebar } = useSidebarPref()
   useSpaceTransition('personal')
 

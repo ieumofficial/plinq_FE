@@ -34,6 +34,7 @@ import {
   type UserRow,
 } from '../../../lib/types'
 import { resolveProjectColor } from '../../../lib/projectColors'
+import { taskTicketId } from '../../../lib/ticket'
 
 const PROGRESS_FILTERS: { key: TaskStatusDb; label: string; chipClass: string }[] = [
   { key: 'planned', label: 'Planned', chipClass: 'bg-[#E6ECEF] text-black' },
@@ -44,10 +45,11 @@ const PROGRESS_FILTERS: { key: TaskStatusDb; label: string; chipClass: string }[
 ]
 
 const PRIORITY_OPTIONS: { key: TaskPriorityDb; label: string; color: string }[] = [
-  { key: 'urgent', label: 'Highest', color: '#9B3838' },
+  { key: 'highest', label: 'Highest', color: '#9B3838' },
   { key: 'high', label: 'High', color: '#9B3838' },
   { key: 'medium', label: 'Medium', color: '#B68A48' },
   { key: 'low', label: 'Low', color: '#2D5A9E' },
+  { key: 'lowest', label: 'Lowest', color: '#2D5A9E' },
 ]
 
 type SortKey = 'id' | 'due' | 'priority' | 'progress'
@@ -59,10 +61,11 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 ]
 
 const PRIORITY_RANK: Record<TaskPriorityDb, number> = {
-  urgent: 0,
+  highest: 0,
   high: 1,
   medium: 2,
   low: 3,
+  lowest: 4,
 }
 
 const STATUS_RANK: Record<TaskStatusDb, number> = {
@@ -83,15 +86,6 @@ const COLS: Column[] = [
   { key: 'delete', label: '', width: 'w-[40px]' },
 ]
 
-function ticketId(projectName: string, idx: number): string {
-  const prefix = projectName
-    .split(/\s+/)
-    .map((w) => w.charAt(0))
-    .join('')
-    .slice(0, 3)
-    .toUpperCase()
-  return `${prefix || 'TSK'}-${(idx + 100).toString().padStart(3, '0')}`
-}
 
 function memberLabel(u: UserRow): string {
   return u.nickname || `${u.first_name} ${u.last_name}`.trim() || u.email
@@ -491,7 +485,7 @@ function BacklogBody({ projectId }: { projectId: string }) {
             <div className="flex flex-col gap-[3px] min-w-0">
               <p className="text-gray-secondary text-[10px] tracking-[0.5px]">
                 {(project?.name ?? 'Project')} ·{' '}
-                {ticketId(project?.name ?? 'TSK', tasks.findIndex((x) => x.id === deletingTask.id))}
+                {taskTicketId(project?.name ?? 'TSK', tasks, deletingTask.id) ?? ''}
               </p>
               <p className="text-black text-[12px] font-semibold truncate">
                 {deletingTask.title}
@@ -518,7 +512,7 @@ function BacklogBody({ projectId }: { projectId: string }) {
 
       {/* Table — shrinks to content when rows are few, scrolls internally when overflowing */}
       <div className="min-h-0 bg-white-white rounded-[10px] border border-gray-border-light flex flex-col overflow-hidden">
-        <TableHeader columns={COLS} className="shrink-0" />
+        <TableHeader columns={COLS} className="shrink-0 !gap-[12px] !px-[16px]" />
         <div className="min-h-0 overflow-y-auto">
         {sorted.length === 0 ? (
           <div className="px-4 py-8 text-center text-gray-secondary text-[12px]">
@@ -532,6 +526,7 @@ function BacklogBody({ projectId }: { projectId: string }) {
                 key={t.id}
                 isLast={i === sorted.length - 1}
                 onClick={() => setOpenTask({ task: t, idx: i })}
+                className="!gap-[12px] !px-[16px]"
               >
                 <TableCell width="w-[80px]">
                   <span
@@ -540,12 +535,12 @@ function BacklogBody({ projectId }: { projectId: string }) {
                     }`}
                     style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
                   >
-                    {ticketId(project?.name ?? 'TSK', i)}
+                    {taskTicketId(project?.name ?? 'TSK', tasks, t.id) ?? ''}
                   </span>
                 </TableCell>
                 <TableCell width="flex-1">
                   <span
-                    className={`text-[14px] ${
+                    className={`text-[12px] ${
                       isDone ? 'text-gray-secondary line-through' : 'text-black'
                     }`}
                   >
@@ -610,7 +605,8 @@ function BacklogBody({ projectId }: { projectId: string }) {
         projectName={project?.name ?? 'Project'}
         ticketId={
           openTask
-            ? ticketId(project?.name ?? 'TSK', openTask.idx)
+            ? taskTicketId(project?.name ?? 'TSK', tasks, openTask.task.id) ??
+              ''
             : ''
         }
         onClose={() => setOpenTask(null)}

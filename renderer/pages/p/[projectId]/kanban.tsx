@@ -10,6 +10,7 @@ import TaskDetailModal from '../../../components/TaskDetailModal'
 import { useProject, useProjectTasks, useUpdateTaskStatus } from '../../../lib/hooks'
 import type { ProjectTask } from '../../../lib/queries'
 import { resolveProjectColor } from '../../../lib/projectColors'
+import { taskTicketId } from '../../../lib/ticket'
 import {
   dbPriorityToUi,
   formatShortDate,
@@ -32,21 +33,13 @@ const COLUMNS: {
 ]
 
 const PRIORITY_OPTIONS: { key: TaskPriorityDb; label: string; color: string }[] = [
-  { key: 'urgent', label: 'Highest', color: '#9B3838' },
+  { key: 'highest', label: 'Highest', color: '#9B3838' },
   { key: 'high', label: 'High', color: '#9B3838' },
   { key: 'medium', label: 'Medium', color: '#B68A48' },
   { key: 'low', label: 'Low', color: '#2D5A9E' },
+  { key: 'lowest', label: 'Lowest', color: '#2D5A9E' },
 ]
 
-function ticketId(projectName: string, idx: number): string {
-  const prefix = projectName
-    .split(/\s+/)
-    .map((w) => w.charAt(0))
-    .join('')
-    .slice(0, 3)
-    .toUpperCase()
-  return `${prefix || 'TSK'}-${(idx + 100).toString().padStart(3, '0')}`
-}
 
 /** Close popover on outside-click + Escape. */
 function useClickOutside(open: boolean, onClose: () => void) {
@@ -369,7 +362,7 @@ function KanbanBody({ projectId }: { projectId: string }) {
                         }`}
                       >
                         <Task
-                          id={ticketId(project?.name ?? 'TSK', t._idx)}
+                          id={taskTicketId(project?.name ?? 'TSK', tasks, t.id) ?? ''}
                           title={t.title}
                           status={c.status}
                           priority={dbPriorityToUi(t.priority)}
@@ -405,7 +398,8 @@ function KanbanBody({ projectId }: { projectId: string }) {
         projectName={project?.name ?? 'Project'}
         ticketId={
           openTask
-            ? ticketId(project?.name ?? 'TSK', openTask.idx)
+            ? taskTicketId(project?.name ?? 'TSK', tasks, openTask.task.id) ??
+              ''
             : ''
         }
         onClose={() => setOpenTask(null)}

@@ -1,16 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
+import { useQueryClient } from '@tanstack/react-query'
 import OrganizationAppShell from '../../../components/OrganizationAppShell'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import UserGroup from '../../../components/ui/UserGroup'
 import Icon from '../../../components/ui/Icon'
+import InviteByEmailModal from '../../../components/InviteByEmailModal'
 import {
   useCurrentUser,
-  useMyOrg,
+  useInviteToOrg,
+  useMyOrgsWithStats,
   useOrgMembers,
 } from '../../../lib/hooks'
+import { queryKeys } from '../../../lib/queryKeys'
+import { supabase } from '../../../lib/supabase'
+import { useToast } from '../../../lib/toast'
 import { userToMember } from '../../../lib/types'
 
 type OrgColorKey =
@@ -53,33 +59,95 @@ export default function OrgSettingsPage() {
 
 function OrgSettingsBody({ orgId }: { orgId: string }) {
   const { data: user } = useCurrentUser()
-  const { data: org } = useMyOrg(user?.id)
+  // Resolve the org from the URL's orgId — NOT useMyOrg (which returns the
+  // user's *primary* org and would show the wrong org's name here).
+  const { data: orgs = [] } = useMyOrgsWithStats(user?.id)
+  const org = orgs.find((o) => o.id === orgId) ?? null
   const { data: members = [] } = useOrgMembers(orgId)
+  const queryClient = useQueryClient()
+  const toast = useToast()
 
-  // Local form state — there's no updateOrg mutation yet, so changes stay
-  // client-side. The Save bar at the bottom hooks up to whatever mutation
-  // gets wired later (placeholder no-op for now).
+  // `color` is interactive but client-only: the `organizations` table has no
+  // colour column yet, so it can't persist. Name persists; see onSave.
+  const inviteOrg = useInviteToOrg(orgId)
+
   const [name, setName] = useState('')
   const [color, setColor] = useState<string>('blue')
   const [memberSearch, setMemberSearch] = useState('')
   const [pickedMemberIds, setPickedMemberIds] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [inviteOpen, setInviteOpen] = useState(false)
+  // Set true once we confirm `organizations.color` exists (migration applied).
+  // Until then the colour picker works locally but can't persist.
+  const [colorColumnReady, setColorColumnReady] = useState(false)
+  // The colour currently persisted in the DB — used to detect a dirty change.
+  const [savedColor, setSavedColor] = useState<string | null>(null)
+  // Org creation timestamp (real data — replaces the old static "2019").
+  const [createdAt, setCreatedAt] = useState<string | null>(null)
 
+  // Real org-created date. `organizations.created_at` exists today; there's no
+  // per-membership join timestamp in the schema, so this is the only truthful
+  // date we can show. Separate from the colour probe so a 42703 there doesn't
+  // also lose this read.
   useEffect(() => {
-    if (org) {
-      setName(org.name)
-      // No color field on org yet — default to blue.
-      setColor('blue')
+    let cancelled = false
+    supabase
+      .from('organizations')
+      .select('created_at')
+      .eq('id', orgId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled || error) return
+        const ts = (data as { created_at: string | null } | null)?.created_at
+        if (ts) setCreatedAt(ts)
+      })
+    return () => {
+      cancelled = true
     }
-  }, [org])
+  }, [orgId])
 
-  // Pre-populate picked members with the first few from the org so the
-  // mock card matches the Figma's "5 added" feel.
+  // Resilient colour read: the `organizations.color` column only exists after
+  // the migration in supabase/migrations is applied. Probe it directly; if
+  // Postgres reports 42703 (undefined column) we silently keep the default
+  // and leave persistence disabled rather than breaking the page.
   useEffect(() => {
-    if (pickedMemberIds.size === 0 && members.length > 0) {
-      const initial = new Set(members.slice(0, Math.min(3, members.length)).map((m) => m.id))
-      setPickedMemberIds(initial)
+    let cancelled = false
+    supabase
+      .from('organizations')
+      .select('color')
+      .eq('id', orgId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) return // 42703 (no column) or RLS — leave default
+        setColorColumnReady(true)
+        const c = (data as { color: string | null } | null)?.color
+        if (c) {
+          setColor(c)
+          setSavedColor(c)
+        } else {
+          setSavedColor('blue')
+        }
+      })
+    return () => {
+      cancelled = true
     }
-  }, [members, pickedMemberIds.size])
+  }, [orgId])
+
+  // Sync the editable name from the canonical org name. Keyed on id+name (not
+  // the object) so typing isn't clobbered every render, and so a post-save
+  // refetch with the same name is a harmless no-op.
+  useEffect(() => {
+    if (org) setName(org.name)
+  }, [org?.id, org?.name])
+
+  // Keep the visible list in sync with the org's REAL membership so the count
+  // always matches the sidebar's "N members total" — including right after an
+  // invite (useInviteToOrg invalidates the members cache → this refetches).
+  useEffect(() => {
+    setPickedMemberIds(new Set(members.map((m) => m.id)))
+  }, [members])
 
   const pickedMembers = useMemo(
     () => members.filter((m) => pickedMemberIds.has(m.id)),
@@ -107,14 +175,58 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
     })
   }
 
-  function onSave() {
-    // TODO: wire up to a real updateOrg mutation once it exists. For now this
-    // is a visual stub so the design layout is in place.
-    console.log('[org/settings] save', { name, color, members: Array.from(pickedMemberIds) })
+  const trimmedName = name.trim()
+  const nameDirty = !!org && trimmedName.length > 0 && trimmedName !== org.name
+  // Baseline colour: the persisted value if we have one, else the 'blue'
+  // default. A colour change ALWAYS counts as dirty so Save enables even for
+  // a colour-only edit — independent of whether the DB column exists yet.
+  const baselineColor = savedColor ?? 'blue'
+  const colorDirty = color !== baselineColor
+  const isDirty = nameDirty || colorDirty
+  const canSave = isDirty && !saving
+
+  async function onSave() {
+    if (!canSave || !org) return
+    setSaving(true)
+    setSaveError('')
+    // Only include `color` when the column exists, so a pre-migration save
+    // still persists the name instead of failing the whole update with 42703.
+    const patch: { name: string; color?: string } = { name: trimmedName }
+    if (colorColumnReady) patch.color = color
+    const { error } = await supabase
+      .from('organizations')
+      .update(patch)
+      .eq('id', orgId)
+    setSaving(false)
+    if (error) {
+      setSaveError(error.message)
+      toast.error('Error saving changes', error.message)
+      return
+    }
+    // Sync the baseline so the form returns to a clean (Save-disabled) state.
+    // When the column exists this reflects real persistence; when it doesn't,
+    // the colour is session-local — the inline hint by the picker makes that
+    // explicit so the cleared state isn't misleading.
+    setSavedColor(color)
+    // Refresh everything that renders the org name (sidebar header, org
+    // switcher, this page's title). useMyOrgsWithStats keys under 'myOrgs';
+    // useMyOrg (used elsewhere) keys under queryKeys.myOrg.
+    queryClient.invalidateQueries({ queryKey: ['myOrgs'] })
+    queryClient.invalidateQueries({ queryKey: queryKeys.myOrg(user?.id) })
+    toast.success('Changes saved')
   }
 
   const initialLetter = (name || org?.name || '?').charAt(0).toUpperCase()
   const orgName = org?.name ?? 'Organization'
+  const selectedHex =
+    PALETTE.find((p) => p.key === color)?.hex ?? PALETTE[0].hex
+  const createdLabel = createdAt
+    ? `Created · ${new Date(createdAt).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })}`
+    : 'Created · —'
 
   return (
     <div className="flex-1 min-h-0 p-[50px] flex flex-col gap-[15px] overflow-y-auto">
@@ -140,8 +252,9 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
           {/* Header — big avatar + name + joined */}
           <div className="flex items-center gap-[15px]">
             <span
-              className="w-[65px] h-[65px] inline-flex items-center justify-center rounded-[10px] bg-red-light text-red-main"
+              className="w-[65px] h-[65px] inline-flex items-center justify-center rounded-[10px] text-white transition-colors"
               style={{
+                backgroundColor: selectedHex,
                 fontFamily: 'Geist Mono, ui-monospace, monospace',
                 fontSize: '42px',
                 fontWeight: 700,
@@ -158,7 +271,7 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
                 className="text-gray-secondary text-[12px]"
                 style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
               >
-                Joined · Mar 14, 2019
+                {createdLabel}
               </span>
             </div>
           </div>
@@ -205,6 +318,12 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
                   )
                 })}
               </div>
+              {!colorColumnReady && (
+                <p className="text-gray-secondary text-[10px] leading-[1.4] max-w-[280px]">
+                  Colour changes apply locally for now. They’ll persist once the
+                  one-time database migration is applied.
+                </p>
+              )}
             </div>
             <Button
               size="compact"
@@ -229,6 +348,7 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
               </div>
               <button
                 type="button"
+                onClick={() => setInviteOpen(true)}
                 className="inline-flex items-center gap-[5px] text-black text-[10px] font-medium uppercase tracking-[1.5px] hover:text-primary-main"
               >
                 <Icon name="Add" size={13} />
@@ -309,41 +429,41 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
                   </button>
                 </div>
               ))}
-
-              {/* Suggestion footer */}
-              <div className="flex items-center gap-[5px] px-[10px] py-[8px] bg-white-item">
-                <span aria-hidden>💡</span>
-                <span className="text-gray-main text-[10px]">
-                  Suggested from past work:
-                </span>
-                <button
-                  type="button"
-                  disabled
-                  title="Suggestions aren't wired up yet."
-                  className="text-gray-secondary text-[10px] cursor-not-allowed"
-                >
-                  + Sam Lee, + Riley Wong
-                </button>
-              </div>
             </div>
           </div>
         </div>
 
         {/* SAVE BAR */}
         <div className="shrink-0 bg-white-white border border-gray-border-light rounded-[15px] px-[20px] py-[20px] flex items-center justify-end gap-[15px]">
-          <span className="text-gray-secondary text-[12px]">
-            {pickedMembers.length} members
-          </span>
-          <Button
-            size="default"
-            onClick={onSave}
-            disabled
-            title="Org settings save isn't wired up yet."
-          >
-            Save changes
+          {saveError ? (
+            <span className="text-red-main text-[12px]">{saveError}</span>
+          ) : (
+            <span className="text-gray-secondary text-[12px]">
+              {saving
+                ? 'Saving…'
+                : isDirty
+                  ? 'Unsaved changes'
+                  : `${pickedMembers.length} members`}
+            </span>
+          )}
+          <Button size="default" onClick={onSave} disabled={!canSave}>
+            {saving ? 'Saving…' : 'Save changes'}
           </Button>
         </div>
       </div>
+
+      <InviteByEmailModal
+        open={inviteOpen}
+        variant="meeting"
+        onClose={() => setInviteOpen(false)}
+        onSubmit={async ({ email }) => {
+          // Org roles are owner/admin/member (the modal's 'project' roles
+          // don't apply) — invite as a plain member. useInviteToOrg throws a
+          // friendly message for not_found / already_member, which the modal
+          // catches and surfaces inline; on success the modal closes itself.
+          await inviteOrg.mutateAsync({ email, role: 'member' })
+        }}
+      />
     </div>
   )
 }

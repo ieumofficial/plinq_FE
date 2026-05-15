@@ -1,14 +1,36 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from './ui/Icon'
 import PriorityTag from './ui/PriorityTag'
-import { useUpdateTask } from '../lib/hooks'
+import DatePicker from './ui/DatePicker'
+import { supabase } from '../lib/supabase'
+import {
+  useProjectMembers,
+  useProjectTasks,
+  useSetTaskAssignee,
+  useTaskAssignees,
+  useUpdateTask,
+} from '../lib/hooks'
+import { taskTicketId } from '../lib/ticket'
+import { useToast } from '../lib/toast'
 import {
   dbPriorityToUi,
-  userToMember,
+  type TaskPriorityDb,
   type TaskStatusDb,
   type UserRow,
   type TaskRow,
 } from '../lib/types'
+
+const PRIORITY_KEYS_BASE: TaskPriorityDb[] = ['urgent', 'high', 'medium', 'low']
+// 'lowest' is only offered once the task_priority enum has the value (see the
+// runtime probe in TaskDetailModal) — selecting it otherwise would 22P02.
+const PRIORITY_KEYS_WITH_LOWEST: TaskPriorityDb[] = [
+  ...PRIORITY_KEYS_BASE,
+  'lowest',
+]
+
+function memberName(u: UserRow): string {
+  return u.nickname || `${u.first_name} ${u.last_name}`.trim() || u.email
+}
 
 /** Minimum shape this modal needs — accepts both ProjectTask and
  *  TaskWithProject from the Personal action items page (which doesn't pre-load
@@ -187,6 +209,172 @@ function StatusDropdown({
   )
 }
 
+/** Generic outside-click/Esc popover wrapper for the small detail editors. */
+function Popover({
+  open,
+  onClose,
+  children,
+}: {
+  open: boolean
+  onClose: () => void
+  children: React.ReactNode
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onClose()
+      }
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open, onClose])
+  if (!open) return null
+  return (
+    <div
+      ref={ref}
+      className="absolute right-0 top-[26px] z-20 bg-white-white border border-solid border-gray-border-light rounded-[5px] shadow-md p-[5px] flex flex-col gap-[2px] min-w-[160px] max-h-[220px] overflow-y-auto"
+    >
+      {children}
+    </div>
+  )
+}
+
+function Avatar({ name }: { name: string }) {
+  return (
+    <span className="bg-primary-main text-white rounded-full w-[20px] h-[20px] inline-flex items-center justify-center text-[10px] font-semibold uppercase shrink-0">
+      {name.charAt(0)}
+    </span>
+  )
+}
+
+function AssigneeEditor({
+  members,
+  value,
+  fallbackUser,
+  onChange,
+}: {
+  members: UserRow[]
+  value: string | null
+  /** The current assignee as fetched directly, used for display when they
+   *  aren't (yet) in the project-members list so we never wrongly show
+   *  "Unassigned" for an assigned task. */
+  fallbackUser?: UserRow | null
+  onChange: (next: string | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const selected =
+    members.find((m) => m.id === value) ??
+    (fallbackUser && fallbackUser.id === value ? fallbackUser : null)
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((s) => !s)}
+        className="flex items-center gap-[5px] min-w-0 rounded-[3px] px-[5px] -mx-[5px] py-[2px] hover:bg-white-item transition-colors"
+      >
+        {selected ? (
+          <>
+            <Avatar name={memberName(selected)} />
+            <span className="text-black text-[12px] font-semibold truncate max-w-[110px]">
+              {memberName(selected)}
+            </span>
+          </>
+        ) : (
+          <span className="text-gray-secondary text-[12px]">— Unassigned</span>
+        )}
+      </button>
+      <Popover open={open} onClose={() => setOpen(false)}>
+        <button
+          type="button"
+          onClick={() => {
+            onChange(null)
+            setOpen(false)
+          }}
+          className={`flex items-center gap-[5px] px-[10px] py-[7px] rounded-[3px] hover:bg-white-item text-left ${
+            value === null ? 'bg-white-item' : ''
+          }`}
+        >
+          <span className="text-gray-secondary text-[12px]">Unassigned</span>
+        </button>
+        {members.length === 0 ? (
+          <p className="px-[10px] py-[7px] text-gray-secondary text-[11px]">
+            No project members.
+          </p>
+        ) : (
+          members.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => {
+                onChange(m.id)
+                setOpen(false)
+              }}
+              className={`flex items-center gap-[5px] px-[10px] py-[7px] rounded-[3px] hover:bg-white-item text-left ${
+                m.id === value ? 'bg-white-item' : ''
+              }`}
+            >
+              <Avatar name={memberName(m)} />
+              <span className="text-black text-[12px] truncate">
+                {memberName(m)}
+              </span>
+            </button>
+          ))
+        )}
+      </Popover>
+    </div>
+  )
+}
+
+function PriorityEditor({
+  value,
+  keys,
+  onChange,
+}: {
+  value: TaskPriorityDb
+  keys: TaskPriorityDb[]
+  onChange: (next: TaskPriorityDb) => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((s) => !s)}
+        className="rounded-[3px] px-[3px] -mx-[3px] py-[1px] hover:bg-white-item transition-colors"
+      >
+        <PriorityTag priority={dbPriorityToUi(value)} />
+      </button>
+      <Popover open={open} onClose={() => setOpen(false)}>
+        {keys.map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => {
+              onChange(k)
+              setOpen(false)
+            }}
+            className={`px-[7px] py-[5px] rounded-[3px] hover:bg-white-item text-left ${
+              k === value ? 'bg-white-item' : ''
+            }`}
+          >
+            <PriorityTag priority={dbPriorityToUi(k)} />
+          </button>
+        ))}
+      </Popover>
+    </div>
+  )
+}
+
 export default function TaskDetailModal({
   open,
   task,
@@ -196,17 +384,72 @@ export default function TaskDetailModal({
   onClose,
 }: Props) {
   const updateTask = useUpdateTask()
+  const toast = useToast()
+  const setAssigneeMut = useSetTaskAssignee(task?.id ?? null)
+  const { data: fetchedAssignees = [] } = useTaskAssignees(task?.id ?? null)
+  const { data: projectMembers = [] } = useProjectMembers(
+    task?.project_id ?? null
+  )
+  // Derive the ticket id ourselves from the task's creation rank within its
+  // project, so it's identical on every page that opens this modal. The
+  // `ticketId` prop is only a fallback while the project tasks load (or for
+  // project-less personal tasks, which have no project code).
+  const { data: projectTasks = [] } = useProjectTasks(
+    task?.project_id ?? null
+  )
+
+  // Probe whether the task_priority enum has 'lowest' (added by
+  // supabase/migrations/*_add_task_priority_lowest.sql). Only offer it once
+  // the value exists — selecting it otherwise would 22P02 and fail the save.
+  const [lowestSupported, setLowestSupported] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('tasks')
+      .select('id')
+      .eq('priority', 'lowest')
+      .limit(1)
+      .then(({ error }) => {
+        // 22P02 = invalid enum value → not migrated yet. Any other result
+        // (rows or empty) means the enum accepts it.
+        if (!cancelled && !error) setLowestSupported(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const priorityKeys = lowestSupported
+    ? PRIORITY_KEYS_WITH_LOWEST
+    : PRIORITY_KEYS_BASE
 
   // Local edit state — initialised from `task` whenever a new one opens.
   const [status, setStatus] = useState<TaskStatusDb>('planned')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [priority, setPriority] = useState<TaskPriorityDb>('medium')
+  const [dueDate, setDueDate] = useState<string | null>(null)
+  const [datePickerAnchor, setDatePickerAnchor] = useState<DOMRect | null>(null)
+  const dateTriggerRef = useRef<HTMLButtonElement>(null)
+  // Assignee uses an override: `undefined` = "untouched, follow the fetched
+  // baseline"; an explicit string|null = a user edit. Reset per task so a
+  // late-arriving assignees fetch doesn't clobber an in-progress edit.
+  const [assigneeOverride, setAssigneeOverride] = useState<
+    string | null | undefined
+  >(undefined)
+
+  const baselineAssigneeId = fetchedAssignees[0]?.id ?? null
+  const assigneeId =
+    assigneeOverride === undefined ? baselineAssigneeId : assigneeOverride
 
   useEffect(() => {
     if (task) {
       setStatus(task.status)
       setTitle(task.title)
       setDescription(task.description ?? '')
+      setPriority(task.priority)
+      setDueDate(task.due_date ?? null)
+      setAssigneeOverride(undefined)
+      setDatePickerAnchor(null)
     }
   }, [task?.id]) // re-init only when the task identity changes
 
@@ -216,43 +459,62 @@ export default function TaskDetailModal({
       if (e.key === 'Escape') onClose()
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
-        save()
+        void save()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, task, status, title, description])
+  }, [open, task, status, title, description, priority, dueDate, assigneeId])
 
   if (!open || !task) return null
 
+  const assigneeDirty = assigneeId !== baselineAssigneeId
   const isDirty =
     status !== task.status ||
     title.trim() !== task.title ||
-    (description ?? '') !== (task.description ?? '')
+    (description ?? '') !== (task.description ?? '') ||
+    priority !== task.priority ||
+    (dueDate ?? null) !== (task.due_date ?? null) ||
+    assigneeDirty
 
-  function save() {
-    if (!task || !isDirty) return
+  const saving = updateTask.isPending || setAssigneeMut.isPending
+
+  async function save() {
+    if (!task || !isDirty || saving) return
     const trimmedTitle = title.trim()
     if (!trimmedTitle) return
-    updateTask.mutate(
-      {
+    try {
+      await updateTask.mutateAsync({
         taskId: task.id,
         patch: {
           status,
           title: trimmedTitle,
           description: description.trim() === '' ? null : description,
+          priority,
+          due_date: dueDate,
         },
-      },
-      { onSuccess: () => onClose() }
-    )
+      })
+      if (assigneeDirty) {
+        await setAssigneeMut.mutateAsync(assigneeId)
+      }
+      toast.success('Changes saved')
+      onClose()
+    } catch (e) {
+      console.error('[TaskDetailModal] save failed', e)
+      toast.error(
+        'Error saving changes',
+        e instanceof Error ? e.message : undefined
+      )
+    }
   }
 
-  const assignee = task.assignees?.[0]
-    ? userToMember(task.assignees[0])
-    : null
-  const dueText = formatDueDate(task.due_date)
-  const dueDeltaText = dueDelta(task.due_date)
+  const dueText = formatDueDate(dueDate)
+  const dueDeltaText = dueDelta(dueDate)
+  // Stable, page-independent ticket id; fall back to the prop while the
+  // project tasks load or when the task has no project.
+  const ticket =
+    taskTicketId(projectName, projectTasks, task.id) ?? ticketId
 
   return (
     <div
@@ -274,7 +536,7 @@ export default function TaskDetailModal({
                 className="text-black text-[12px] font-bold"
                 style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
               >
-                {ticketId}
+                {ticket}
               </span>
             </div>
             <span
@@ -302,7 +564,7 @@ export default function TaskDetailModal({
           <div className="flex-1 min-w-0 p-[20px] flex flex-col gap-[15px]">
             <div className="flex flex-col gap-[5px] items-start">
               <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                task · {ticketId.toLowerCase()}
+                task · {ticket.toLowerCase()}
               </p>
               <input
                 type="text"
@@ -348,39 +610,59 @@ export default function TaskDetailModal({
                 Details
               </p>
               <div className="bg-white-white border border-solid border-gray-border-light rounded-[5px] p-[15px] flex flex-col gap-[15px]">
-                <div className="flex items-center gap-[35px]">
-                  <p className="text-gray-main text-[12px] w-[55px]">
+                <div className="flex items-center justify-between gap-[15px]">
+                  <p className="text-gray-main text-[12px] w-[55px] shrink-0">
                     Assignee
                   </p>
-                  {assignee ? (
-                    <div className="flex items-center gap-[5px] min-w-0">
-                      <span className="bg-primary-main text-white rounded-full w-[20px] h-[20px] inline-flex items-center justify-center text-[10px] font-semibold uppercase shrink-0">
-                        {assignee.name.charAt(0)}
-                      </span>
-                      <span className="text-black text-[12px] font-semibold truncate">
-                        {assignee.name}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-gray-secondary text-[12px]">—</span>
-                  )}
+                  <AssigneeEditor
+                    members={projectMembers}
+                    value={assigneeId}
+                    fallbackUser={fetchedAssignees[0] ?? null}
+                    onChange={setAssigneeOverride}
+                  />
                 </div>
-                <div className="flex items-center gap-[35px]">
-                  <p className="text-gray-main text-[12px] w-[55px]">Priority</p>
-                  <PriorityTag priority={dbPriorityToUi(task.priority)} />
+                <div className="flex items-center justify-between gap-[15px]">
+                  <p className="text-gray-main text-[12px] w-[55px] shrink-0">
+                    Priority
+                  </p>
+                  <PriorityEditor
+                    value={priority}
+                    keys={priorityKeys}
+                    onChange={setPriority}
+                  />
                 </div>
-                <div className="flex items-center gap-[35px]">
-                  <p className="text-gray-main text-[12px] w-[55px]">Due date</p>
-                  {dueText ? (
-                    <span className="flex items-center gap-[5px]">
-                      <Icon name="Calendar" size={15} className="text-gray-main" />
+                <div className="flex items-center justify-between gap-[15px]">
+                  <p className="text-gray-main text-[12px] w-[55px] shrink-0">
+                    Due date
+                  </p>
+                  <button
+                    ref={dateTriggerRef}
+                    type="button"
+                    onClick={() =>
+                      setDatePickerAnchor((cur) =>
+                        cur
+                          ? null
+                          : dateTriggerRef.current?.getBoundingClientRect() ??
+                            null
+                      )
+                    }
+                    className="flex items-center gap-[5px] rounded-[3px] px-[5px] -mx-[5px] py-[2px] hover:bg-white-item transition-colors"
+                  >
+                    <Icon
+                      name="Calendar"
+                      size={15}
+                      className="text-gray-main shrink-0"
+                    />
+                    {dueText ? (
                       <span className="text-black text-[12px] font-semibold">
                         {dueText}
                       </span>
-                    </span>
-                  ) : (
-                    <span className="text-gray-secondary text-[12px]">—</span>
-                  )}
+                    ) : (
+                      <span className="text-gray-secondary text-[12px]">
+                        Set date
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
@@ -411,7 +693,7 @@ export default function TaskDetailModal({
             <button
               type="button"
               onClick={onClose}
-              disabled={updateTask.isPending}
+              disabled={saving}
               className="bg-white-white border border-solid border-gray-border-light rounded-[5px] px-[15px] py-[10px] text-black text-[12px] hover:bg-white-item transition-colors disabled:opacity-60"
             >
               Cancel
@@ -419,13 +701,22 @@ export default function TaskDetailModal({
             <button
               type="button"
               onClick={save}
-              disabled={!isDirty || updateTask.isPending}
+              disabled={!isDirty || saving}
               className="bg-primary-main rounded-[5px] px-[15px] py-[10px] text-white-main text-[12px] font-semibold hover:bg-primary-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {updateTask.isPending ? 'Saving…' : 'Save changes'}
+              {saving ? 'Saving…' : 'Save changes'}
             </button>
           </div>
         </div>
+
+        {/* Floating due-date picker — rendered inside the card so its clicks
+            don't bubble to the overlay's close handler. */}
+        <DatePicker
+          anchorRect={datePickerAnchor}
+          value={dueDate}
+          onChange={(next) => setDueDate(next)}
+          onClose={() => setDatePickerAnchor(null)}
+        />
       </div>
     </div>
   )

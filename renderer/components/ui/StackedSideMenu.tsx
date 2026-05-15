@@ -127,27 +127,55 @@ export default function StackedSideMenu({
               <p className="text-primary-main text-[10px] font-medium uppercase tracking-[1.5px]">
                 {sectionLabel}
               </p>
-              <button
-                type="button"
-                onClick={header.onSwitch}
-                className="flex items-center gap-[5px] h-[19.32px] -mx-[2px] px-[2px] rounded hover:bg-white-white/60"
-              >
-                <ProjectLabel
-                  name={header.initial}
-                  color={header.color}
-                  size="sm"
-                />
-                <span className="text-black text-[14px] font-semibold">
-                  {header.name}
-                </span>
-                <Icon
-                  name="ArrowRight"
-                  size={11}
-                  className={`text-black transition-transform ${
-                    header.switchOpen ? '-rotate-90' : 'rotate-90'
-                  }`}
-                />
-              </button>
+              {isProject ? (
+                <button
+                  type="button"
+                  onClick={header.onSwitch}
+                  className="flex items-start gap-[5px] -mx-[2px] px-[2px] py-[1px] rounded hover:bg-white-white/60 text-left"
+                >
+                  <span className="shrink-0 mt-[1px]">
+                    <ProjectLabel
+                      name={header.initial}
+                      color={header.color}
+                      size="sm"
+                    />
+                  </span>
+                  <span className="flex-1 min-w-0 break-words text-black text-[14px] font-semibold leading-tight">
+                    {header.name}
+                  </span>
+                  <Icon
+                    name="ArrowRight"
+                    size={11}
+                    className={`shrink-0 mt-[3px] text-black transition-transform ${
+                      header.switchOpen ? '-rotate-90' : 'rotate-90'
+                    }`}
+                  />
+                </button>
+              ) : (
+                // Org header: static, non-interactive — no switcher, no
+                // chevron. Solid org-colour badge (white letter) so it matches
+                // the header + settings treatment. #2D5A9E is the shared org
+                // colour placeholder until the organizations.color migration
+                // lands and this becomes DB-driven.
+                <div className="flex items-start gap-[5px]">
+                  <span
+                    className="inline-flex items-center justify-center font-bold uppercase text-white shrink-0 mt-[1px]"
+                    style={{
+                      width: 20,
+                      height: 20,
+                      fontSize: '12px',
+                      borderRadius: '3px',
+                      backgroundColor: '#2D5A9E',
+                      fontFamily: 'Geist Mono, ui-monospace, monospace',
+                    }}
+                  >
+                    {(header.initial?.charAt(0) ?? '?').toUpperCase()}
+                  </span>
+                  <span className="flex-1 min-w-0 break-words text-black text-[14px] font-semibold leading-tight">
+                    {header.name}
+                  </span>
+                </div>
+              )}
               {header.subtitle && (
                 <p className="text-gray-secondary text-[10px] leading-[1.5]">
                   {header.subtitle}

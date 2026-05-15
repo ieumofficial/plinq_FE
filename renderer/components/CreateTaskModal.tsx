@@ -11,6 +11,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { createTask } from '../lib/queries'
 import { useActiveOrg, useCurrentUser, useProjectMembers, useUserProjects } from '../lib/hooks'
 import { queryKeys } from '../lib/queryKeys'
+import { useToast } from '../lib/toast'
 import { userToMember, type TaskStatusDb, type UserRow } from '../lib/types'
 
 type Props = {
@@ -49,12 +50,9 @@ const PRIORITIES: {
   { key: 'lowest', label: 'Lowest', iconName: 'Lowest', activeBg: 'bg-blue-light', activeText: 'text-blue-main' },
 ]
 
-// UI 5단계 → DB 4단계
-function uiPriorityToDb(p: Priority): 'low' | 'medium' | 'high' | 'urgent' {
-  if (p === 'highest') return 'urgent'
-  if (p === 'high') return 'high'
-  if (p === 'medium') return 'medium'
-  return 'low' // low + lowest 둘 다
+// DB enum is now the same 5-value set as the UI — identity pass-through.
+function uiPriorityToDb(p: Priority): Priority {
+  return p
 }
 
 function memberLabel(u: UserRow) {
@@ -360,6 +358,7 @@ export default function CreateTaskModal({
     orgId: activeOrg?.id ?? null,
   })
   const queryClient = useQueryClient()
+  const toast = useToast()
   const [title, setTitle] = useState('')
   const [projectId, setProjectId] = useState<string | null>(defaultProjectId ?? null)
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
@@ -680,6 +679,7 @@ export default function CreateTaskModal({
     setSubmitting(false)
     if ('error' in result) {
       setError(result.error)
+      toast.error('Couldn’t create task', result.error)
       return
     }
     // Await invalidations so the lists refetch BEFORE we close the modal —
@@ -694,6 +694,7 @@ export default function CreateTaskModal({
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all }),
       queryClient.invalidateQueries({ queryKey: ['project'] }),
     ])
+    toast.success('Task created', `“${title.trim()}” was added.`)
     onCreated?.(result.id)
     onClose()
   }

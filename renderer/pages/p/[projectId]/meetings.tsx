@@ -12,7 +12,6 @@ import ZoomConnectButton from '../../../components/ZoomConnectButton'
 import { useProject, useProjectMeetings } from '../../../lib/hooks'
 import { queryKeys } from '../../../lib/queryKeys'
 import { supabase } from '../../../lib/supabase'
-import { deleteMeeting as deleteMeetingRow } from '../../../lib/queries'
 import { parseSummary } from '../../../lib/aiAnalyze'
 import { userToMember, type MeetingType } from '../../../lib/types'
 import MeetingTypeLabel from '../../../components/ui/MeetingTypeLabel'
@@ -76,6 +75,7 @@ export default function MeetingsPage() {
 
 function MeetingsBody({ projectId }: { projectId: string }) {
   const { open } = useCreateNew()
+  const router = useRouter()
   const { data: project } = useProject(projectId)
   const { data: meetings = [] } = useProjectMeetings(projectId)
   const [search, setSearch] = useState('')
@@ -86,21 +86,6 @@ function MeetingsBody({ projectId }: { projectId: string }) {
   const [analyzeState, setAnalyzeState] = useState<
     Record<string, { analyzing: boolean; error: string | null }>
   >({})
-  async function handleDelete(meetingId: string, meetingName: string) {
-    const ok = window.confirm(
-      `Delete "${meetingName}" and all its minutes? This can't be undone.`,
-    )
-    if (!ok) return
-    const result = await deleteMeetingRow(meetingId)
-    if ('error' in result) {
-      window.alert(`Delete failed: ${result.error}`)
-      return
-    }
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.project.meetings(projectId),
-    })
-  }
-
   async function handleAnalyzeFile(meetingId: string, file: File) {
     setAnalyzeState((prev) => ({
       ...prev,
@@ -268,7 +253,27 @@ function MeetingsBody({ projectId }: { projectId: string }) {
                 return (
                   <div key={m.id} className="flex flex-col gap-[10px]">
                   <article
-                    className="bg-white-white border border-gray-border-light rounded-[10px] p-[15px] flex items-center gap-[15px]"
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      // Whole card opens the meeting — but let inner controls
+                      // (Join, recorder, the title link) handle their own
+                      // clicks instead of also navigating.
+                      if (
+                        (e.target as HTMLElement).closest(
+                          'button, a, input, textarea'
+                        )
+                      )
+                        return
+                      router.push(`/p/${projectId}/meetings/${m.id}`)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        router.push(`/p/${projectId}/meetings/${m.id}`)
+                      }
+                    }}
+                    className="bg-white-white border border-gray-border-light rounded-[10px] p-[15px] flex items-center gap-[15px] cursor-pointer hover:border-blue-main transition-colors"
                   >
                     {/* Date block — 60×50 */}
                     <div
@@ -441,21 +446,21 @@ function MeetingsBody({ projectId }: { projectId: string }) {
                           {m.attendees.length > 0 && (
                             <UserGroup
                               members={m.attendees.slice(0, 5).map(userToMember)}
-                              size={15}
+                              size={28}
                             />
                           )}
                         </div>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void handleDelete(m.id, m.name)}
-                      title="Delete meeting"
-                      aria-label="Delete meeting"
-                      className="self-start text-gray-secondary hover:text-red-main text-[18px] leading-none px-1 -mt-1"
+                    {/* Open-affordance — the whole card navigates; this is a
+                        non-interactive indicator so it doesn't intercept the
+                        card click. */}
+                    <span
+                      aria-hidden
+                      className="self-center text-gray-secondary shrink-0"
                     >
-                      ×
-                    </button>
+                      <Icon name="ArrowRight" size={18} />
+                    </span>
                   </article>
                   </div>
                 )

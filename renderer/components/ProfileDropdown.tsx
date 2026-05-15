@@ -104,7 +104,7 @@ export default function ProfileDropdown({
 
   if (!anchorRect || typeof window === 'undefined') return null
 
-  const POPUP_W = 220
+  const POPUP_W = 280
   const style: React.CSSProperties =
     placement === 'right'
       ? {
@@ -157,24 +157,24 @@ export default function ProfileDropdown({
         className="flex items-center justify-between px-[7px] py-[9px] hover:bg-white/5 rounded-t-[10px] transition-colors"
       >
         <span className="flex items-center gap-[5px]">
-          <span className="bg-primary-main text-white rounded-full w-[28px] h-[28px] inline-flex items-center justify-center text-[12px] font-semibold uppercase shrink-0">
+          <span className="bg-primary-main text-white rounded-full w-[34px] h-[34px] inline-flex items-center justify-center text-[14px] font-semibold uppercase shrink-0">
             {userInitials}
           </span>
           <span className="flex flex-col items-start gap-[2px]">
-            <span className="text-primary-light text-[12px] font-semibold leading-none">
+            <span className="text-primary-light text-[14px] font-semibold leading-none">
               My Page
             </span>
-            <span className="text-primary-light text-[8px] leading-[1.5]">
+            <span className="text-primary-light text-[10px] leading-[1.5]">
               {userName ? `${userName} · profile` : 'Overview · profile'}
             </span>
           </span>
         </span>
-        <Icon name="ArrowRight" size={11} className="text-primary-light" />
+        <Icon name="ArrowRight" size={13} className="text-primary-light" />
       </button>
 
       {/* Set status */}
       <div className="border-t border-b border-solid border-gray-main flex flex-col gap-[5px] p-[10px]">
-        <p className="text-gray-secondary text-[10px] font-medium uppercase tracking-[1.5px]">
+        <p className="text-gray-secondary text-[12px] font-medium uppercase tracking-[1.5px]">
           set status
         </p>
         {ORDER.map((p) => {
@@ -192,17 +192,17 @@ export default function ProfileDropdown({
             >
               <span className="flex items-center gap-[5px]">
                 <span
-                  className="w-[6px] h-[6px] rounded-full shrink-0"
+                  className="w-[8px] h-[8px] rounded-full shrink-0"
                   style={{ backgroundColor: meta.dot }}
                 />
                 <span
-                  className="text-[10px] font-semibold leading-none"
+                  className="text-[12px] font-semibold leading-none"
                   style={{ color: meta.text }}
                 >
                   {PRESENCE_LABEL[p]}
                 </span>
               </span>
-              <span className="text-black text-[8px] leading-[1.5]">
+              <span className="text-black text-[10px] leading-[1.5]">
                 {meta.description}
               </span>
             </button>
@@ -217,13 +217,13 @@ export default function ProfileDropdown({
         className="flex items-center gap-[7px] px-[15px] py-[10px] rounded-b-[10px] hover:bg-white/5 transition-colors text-left"
       >
         <span
-          className="rounded-[5px] w-[28px] h-[28px] inline-flex items-center justify-center shrink-0"
+          className="rounded-[5px] w-[34px] h-[34px] inline-flex items-center justify-center shrink-0"
           style={{ backgroundColor: '#F2DEDE', color: '#9B3838' }}
         >
           {/* Logout glyph — door with arrow pointing out */}
           <svg
-            width="14"
-            height="14"
+            width="17"
+            height="17"
             viewBox="0 0 15 15"
             fill="none"
             aria-hidden
@@ -245,11 +245,11 @@ export default function ProfileDropdown({
           </svg>
         </span>
         <span className="flex flex-col gap-[2px] min-w-0 flex-1">
-          <span className="text-primary-light text-[12px] font-semibold leading-none">
+          <span className="text-primary-light text-[14px] font-semibold leading-none">
             Sign out
           </span>
           {userEmail && (
-            <span className="text-primary-light text-[8px] leading-[1.5] truncate">
+            <span className="text-primary-light text-[10px] leading-[1.5] truncate">
               {userEmail}
             </span>
           )}

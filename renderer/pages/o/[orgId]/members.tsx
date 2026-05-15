@@ -389,7 +389,7 @@ function OrgMembersBody({ orgId }: { orgId: string }) {
 
       {/* TABLE — hugs content; scrolls only if it can't fit. */}
       <Table className="min-h-0 flex flex-col overflow-hidden">
-        <TableHeader className="shrink-0" columns={COLS} />
+        <TableHeader className="shrink-0 !gap-[12px] !px-[16px]" columns={COLS} />
         <div className="min-h-0 overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="px-[25px] py-[20px] text-gray-secondary text-[12px]">
@@ -401,11 +401,15 @@ function OrgMembersBody({ orgId }: { orgId: string }) {
                 m.nickname || `${m.first_name} ${m.last_name}`.trim()
               const projectCount = projectsByMember.get(m.id) ?? 0
               return (
-                <TableRow key={m.id} isLast={i === filtered.length - 1}>
+                <TableRow
+                  key={m.id}
+                  isLast={i === filtered.length - 1}
+                  className="!gap-[12px] !px-[16px]"
+                >
                   <TableCell width="flex-[2]">
                     <UserGroup members={[userToMember(m)]} size={25} />
                     <div className="flex flex-col min-w-0">
-                      <span className="text-black text-[14px] font-semibold truncate">
+                      <span className="text-black text-[12px] font-semibold truncate">
                         {displayName}
                       </span>
                       <span className="text-gray-secondary text-[11px] truncate">

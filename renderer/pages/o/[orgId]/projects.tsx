@@ -562,7 +562,7 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
 
       {/* TABLE — hugs content when short, scrolls internally when overflowing */}
       <Table className="min-h-0 flex flex-col overflow-hidden">
-        <TableHeader className="shrink-0" columns={COLS} />
+        <TableHeader className="shrink-0 !gap-[12px] !px-[16px]" columns={COLS} />
         <div className="min-h-0 overflow-y-auto">
           {sortedProjects.length === 0 ? (
             <div className="px-[25px] py-[20px] text-gray-secondary text-[12px]">
@@ -581,11 +581,11 @@ function OrgProjectsBody({ orgId }: { orgId: string }) {
                   key={p.id}
                   isLast={i === sortedProjects.length - 1}
                   onClick={() => preview.open(p.id)}
-                  className="group"
+                  className="group !gap-[12px] !px-[16px]"
                 >
                   <TableCell width="flex-[2]">
                     <ProjectLabel name={p.name} color={p.color ?? 'blue'} size="sm" />
-                    <span className="text-black text-[14px] font-semibold truncate">
+                    <span className="text-black text-[12px] font-semibold truncate">
                       {p.name}
                     </span>
                     {/* Pin — filled when pinned, empty on row hover. */}

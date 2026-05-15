@@ -300,7 +300,7 @@ function KnowledgeBody({ projectId }: { projectId: string }) {
           </span>
         </div>
         <div className="min-h-0 bg-white-white rounded-[10px] border border-gray-border-light flex flex-col overflow-hidden">
-          <TableHeader columns={COLS} className="!gap-[20px] shrink-0" />
+          <TableHeader columns={COLS} className="!gap-[12px] !px-[16px] shrink-0" />
           <div className="min-h-0 overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="px-4 py-8 text-center text-gray-secondary text-[12px]">
@@ -315,7 +315,7 @@ function KnowledgeBody({ projectId }: { projectId: string }) {
                   key={d.id}
                   isLast={i === filtered.length - 1}
                   onClick={() => setPreviewDoc(d)}
-                  className="!gap-[20px]"
+                  className="!gap-[12px] !px-[16px]"
                 >
                   <TableCell width="flex-[2]">
                     <span className="flex items-center gap-[10px] min-w-0">
@@ -327,11 +327,11 @@ function KnowledgeBody({ projectId }: { projectId: string }) {
                           className="text-gray-main shrink-0"
                         />
                       )}
-                      <span className="text-[14px] text-black truncate">{d.name}</span>
+                      <span className="text-[12px] text-black truncate">{d.name}</span>
                     </span>
                   </TableCell>
                   <TableCell width="w-[120px]">
-                    <span className="text-[14px] text-gray-main">
+                    <span className="text-[12px] text-gray-main">
                       {d.file_type ?? 'Doc'}
                     </span>
                   </TableCell>

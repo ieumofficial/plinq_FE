@@ -127,27 +127,41 @@ export default function StackedSideMenu({
               <p className="text-primary-main text-[10px] font-medium uppercase tracking-[1.5px]">
                 {sectionLabel}
               </p>
-              <button
-                type="button"
-                onClick={header.onSwitch}
-                className="flex items-center gap-[5px] h-[19.32px] -mx-[2px] px-[2px] rounded hover:bg-white-white/60"
-              >
-                <ProjectLabel
-                  name={header.initial}
-                  color={header.color}
-                  size="sm"
-                />
-                <span className="text-black text-[14px] font-semibold">
-                  {header.name}
-                </span>
-                <Icon
-                  name="ArrowRight"
-                  size={11}
-                  className={`text-black transition-transform ${
-                    header.switchOpen ? '-rotate-90' : 'rotate-90'
-                  }`}
-                />
-              </button>
+              {isProject ? (
+                <button
+                  type="button"
+                  onClick={header.onSwitch}
+                  className="flex items-center gap-[5px] h-[19.32px] -mx-[2px] px-[2px] rounded hover:bg-white-white/60"
+                >
+                  <ProjectLabel
+                    name={header.initial}
+                    color={header.color}
+                    size="sm"
+                  />
+                  <span className="text-black text-[14px] font-semibold">
+                    {header.name}
+                  </span>
+                  <Icon
+                    name="ArrowRight"
+                    size={11}
+                    className={`text-black transition-transform ${
+                      header.switchOpen ? '-rotate-90' : 'rotate-90'
+                    }`}
+                  />
+                </button>
+              ) : (
+                // Org header: static, non-interactive — no switcher, no chevron.
+                <div className="flex items-center gap-[5px] h-[19.32px]">
+                  <ProjectLabel
+                    name={header.initial}
+                    color={header.color}
+                    size="sm"
+                  />
+                  <span className="text-black text-[14px] font-semibold">
+                    {header.name}
+                  </span>
+                </div>
+              )}
               {header.subtitle && (
                 <p className="text-gray-secondary text-[10px] leading-[1.5]">
                   {header.subtitle}

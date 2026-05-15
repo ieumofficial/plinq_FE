@@ -333,7 +333,7 @@ function MembersBody({ projectId }: { projectId: string }) {
 
       {/* Table — shrinks to content when rows are few, scrolls internally when overflowing */}
       <div className="min-h-0 bg-white-white rounded-[10px] border border-gray-border-light flex flex-col overflow-hidden">
-        <TableHeader columns={COLS} className="shrink-0" />
+        <TableHeader columns={COLS} className="shrink-0 !gap-[12px] !px-[16px]" />
         <div className="min-h-0 overflow-y-auto">
         {filtered.length === 0 ? (
           <div className="px-4 py-8 text-center text-gray-secondary text-[12px]">
@@ -347,22 +347,23 @@ function MembersBody({ projectId }: { projectId: string }) {
                 key={m.id}
                 isLast={i === filtered.length - 1}
                 onClick={() => setDetailMember(m)}
+                className="!gap-[12px] !px-[16px]"
               >
                 <TableCell width="flex-[2]">
                   <span className="flex items-center gap-[10px]">
                     <UserGroup members={[userToMember(m)]} size={28} />
-                    <span className="text-black text-[14px] font-semibold">
+                    <span className="text-black text-[12px] font-semibold">
                       {memberDisplayName(m)}
                     </span>
                   </span>
                 </TableCell>
                 <TableCell width="flex-1">
-                  <span className="text-[14px] text-gray-main">
+                  <span className="text-[12px] text-gray-main">
                     {m.job_title ?? '—'}
                   </span>
                 </TableCell>
                 <TableCell width="flex-1">
-                  <span className="text-[14px] text-gray-main">{m.email}</span>
+                  <span className="text-[12px] text-gray-main">{m.email}</span>
                 </TableCell>
                 <TableCell width="w-[120px]">
                   <button

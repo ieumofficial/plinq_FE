@@ -365,7 +365,7 @@ function ActionItemsBody() {
                 {/* Table card */}
                 {!isCollapsed && (
                   <Table>
-                    <TableHeader columns={COLS} />
+                    <TableHeader columns={COLS} className="!gap-[12px] !px-[16px]" />
                     {rows.map((t, i) => {
                       const isDone = t.status === 'done'
                       const overdue = isOverdue(t)
@@ -376,6 +376,7 @@ function ActionItemsBody() {
                           key={t.id}
                           isLast={i === rows.length - 1}
                           onClick={() => setOpenTask(t)}
+                          className="!gap-[12px] !px-[16px]"
                         >
                           <TableCell width="flex-1">
                             <span onClick={(e) => e.stopPropagation()}>
@@ -390,7 +391,7 @@ function ActionItemsBody() {
                               />
                             </span>
                             <span
-                              className={`text-[14px] font-medium truncate min-w-0 ${
+                              className={`text-[12px] font-medium truncate min-w-0 ${
                                 isDone
                                   ? 'text-gray-secondary line-through'
                                   : 'text-black'
@@ -401,7 +402,7 @@ function ActionItemsBody() {
                           </TableCell>
                           <TableCell width="w-[150px]">
                             <span
-                              className={`text-[14px] font-medium truncate ${
+                              className={`text-[12px] font-medium truncate ${
                                 isDone ? 'text-gray-secondary' : 'text-gray-main'
                               }`}
                             >
@@ -416,7 +417,7 @@ function ActionItemsBody() {
                           </TableCell>
                           <TableCell width="w-[70px]">
                             <span
-                              className={`text-[14px] font-semibold tracking-[-0.2px] ${
+                              className={`text-[12px] font-semibold tracking-[-0.2px] ${
                                 isDone
                                   ? 'text-gray-secondary'
                                   : overdue || dueLabel === 'Today'

@@ -67,7 +67,17 @@ function OrgBlock({
       style={noDrag}
       className="flex items-center gap-[5px] -mx-[4px] px-[4px] py-[2px] rounded hover:bg-white/10 transition-colors"
     >
-      <span className="bg-primary-main text-white rounded-[2px] w-[23px] h-[23px] inline-flex items-center justify-center text-[12px] font-semibold uppercase shrink-0">
+      {/* Solid org-colour badge — matches the sidebar + settings treatment.
+         #2D5A9E is the shared org-colour placeholder until the
+         organizations.color migration lands and this becomes DB-driven. */}
+      <span
+        className="text-white w-[23px] h-[23px] inline-flex items-center justify-center text-[12px] font-bold uppercase shrink-0"
+        style={{
+          backgroundColor: '#2D5A9E',
+          borderRadius: '3px',
+          fontFamily: 'Geist Mono, ui-monospace, monospace',
+        }}
+      >
         {orgName.charAt(0)}
       </span>
       <span className="text-white text-[12px] font-semibold capitalize whitespace-nowrap truncate">

@@ -150,13 +150,25 @@ export default function StackedSideMenu({
                   />
                 </button>
               ) : (
-                // Org header: static, non-interactive — no switcher, no chevron.
+                // Org header: static, non-interactive — no switcher, no
+                // chevron. Solid org-colour badge (white letter) so it matches
+                // the header + settings treatment. #2D5A9E is the shared org
+                // colour placeholder until the organizations.color migration
+                // lands and this becomes DB-driven.
                 <div className="flex items-center gap-[5px] h-[19.32px]">
-                  <ProjectLabel
-                    name={header.initial}
-                    color={header.color}
-                    size="sm"
-                  />
+                  <span
+                    className="inline-flex items-center justify-center font-bold uppercase text-white shrink-0"
+                    style={{
+                      width: 20,
+                      height: 20,
+                      fontSize: '12px',
+                      borderRadius: '3px',
+                      backgroundColor: '#2D5A9E',
+                      fontFamily: 'Geist Mono, ui-monospace, monospace',
+                    }}
+                  >
+                    {(header.initial?.charAt(0) ?? '?').toUpperCase()}
+                  </span>
                   <span className="text-black text-[14px] font-semibold">
                     {header.name}
                   </span>

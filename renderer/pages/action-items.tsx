@@ -39,9 +39,10 @@ function resolveProjectColor(color: string | null | undefined): string {
   return PROJECT_PALETTE[color] ?? PROJECT_PALETTE.blue
 }
 
-type SortKey = 'status' | 'priority' | 'due'
+type SortKey = 'recent' | 'status' | 'priority' | 'due'
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'recent', label: 'Recently added' },
   { key: 'status', label: 'Status' },
   { key: 'priority', label: 'Priority' },
   { key: 'due', label: 'Due date' },
@@ -144,7 +145,7 @@ function ActionItemsBody() {
   const { mutate: updateTaskStatus } = useUpdateTaskStatus()
   const deleteTask = useDeleteTask()
   const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState<SortKey>('due')
+  const [sortBy, setSortBy] = useState<SortKey>('recent')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState<TaskWithProject | null>(null)
   const [openTask, setOpenTask] = useState<TaskWithProject | null>(null)
@@ -182,7 +183,11 @@ function ActionItemsBody() {
     }
     // Sort
     const sorted = [...arr]
-    if (sortBy === 'status') {
+    if (sortBy === 'recent') {
+      // Newest first — matches the getUserActionItems query order so a
+      // just-created task lands at the top.
+      sorted.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+    } else if (sortBy === 'status') {
       sorted.sort(
         (a, b) =>
           (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99)

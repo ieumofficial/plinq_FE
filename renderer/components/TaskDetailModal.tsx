@@ -5,10 +5,12 @@ import DatePicker from './ui/DatePicker'
 import { supabase } from '../lib/supabase'
 import {
   useProjectMembers,
+  useProjectTasks,
   useSetTaskAssignee,
   useTaskAssignees,
   useUpdateTask,
 } from '../lib/hooks'
+import { taskTicketId } from '../lib/ticket'
 import {
   dbPriorityToUi,
   type TaskPriorityDb,
@@ -386,6 +388,13 @@ export default function TaskDetailModal({
   const { data: projectMembers = [] } = useProjectMembers(
     task?.project_id ?? null
   )
+  // Derive the ticket id ourselves from the task's creation rank within its
+  // project, so it's identical on every page that opens this modal. The
+  // `ticketId` prop is only a fallback while the project tasks load (or for
+  // project-less personal tasks, which have no project code).
+  const { data: projectTasks = [] } = useProjectTasks(
+    task?.project_id ?? null
+  )
 
   // Probe whether the task_priority enum has 'lowest' (added by
   // supabase/migrations/*_add_task_priority_lowest.sql). Only offer it once
@@ -495,6 +504,10 @@ export default function TaskDetailModal({
 
   const dueText = formatDueDate(dueDate)
   const dueDeltaText = dueDelta(dueDate)
+  // Stable, page-independent ticket id; fall back to the prop while the
+  // project tasks load or when the task has no project.
+  const ticket =
+    taskTicketId(projectName, projectTasks, task.id) ?? ticketId
 
   return (
     <div
@@ -516,7 +529,7 @@ export default function TaskDetailModal({
                 className="text-black text-[12px] font-bold"
                 style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
               >
-                {ticketId}
+                {ticket}
               </span>
             </div>
             <span
@@ -544,7 +557,7 @@ export default function TaskDetailModal({
           <div className="flex-1 min-w-0 p-[20px] flex flex-col gap-[15px]">
             <div className="flex flex-col gap-[5px] items-start">
               <p className="text-blue-main text-[10px] font-medium uppercase tracking-[1.5px]">
-                task · {ticketId.toLowerCase()}
+                task · {ticket.toLowerCase()}
               </p>
               <input
                 type="text"

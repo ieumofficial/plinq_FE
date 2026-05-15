@@ -34,6 +34,7 @@ import {
   type UserRow,
 } from '../../../lib/types'
 import { resolveProjectColor } from '../../../lib/projectColors'
+import { taskTicketId } from '../../../lib/ticket'
 
 const PROGRESS_FILTERS: { key: TaskStatusDb; label: string; chipClass: string }[] = [
   { key: 'planned', label: 'Planned', chipClass: 'bg-[#E6ECEF] text-black' },
@@ -84,15 +85,6 @@ const COLS: Column[] = [
   { key: 'delete', label: '', width: 'w-[40px]' },
 ]
 
-function ticketId(projectName: string, idx: number): string {
-  const prefix = projectName
-    .split(/\s+/)
-    .map((w) => w.charAt(0))
-    .join('')
-    .slice(0, 3)
-    .toUpperCase()
-  return `${prefix || 'TSK'}-${(idx + 100).toString().padStart(3, '0')}`
-}
 
 function memberLabel(u: UserRow): string {
   return u.nickname || `${u.first_name} ${u.last_name}`.trim() || u.email
@@ -492,7 +484,7 @@ function BacklogBody({ projectId }: { projectId: string }) {
             <div className="flex flex-col gap-[3px] min-w-0">
               <p className="text-gray-secondary text-[10px] tracking-[0.5px]">
                 {(project?.name ?? 'Project')} ·{' '}
-                {ticketId(project?.name ?? 'TSK', tasks.findIndex((x) => x.id === deletingTask.id))}
+                {taskTicketId(project?.name ?? 'TSK', tasks, deletingTask.id) ?? ''}
               </p>
               <p className="text-black text-[12px] font-semibold truncate">
                 {deletingTask.title}
@@ -542,7 +534,7 @@ function BacklogBody({ projectId }: { projectId: string }) {
                     }`}
                     style={{ fontFamily: 'Geist Mono, ui-monospace, monospace' }}
                   >
-                    {ticketId(project?.name ?? 'TSK', i)}
+                    {taskTicketId(project?.name ?? 'TSK', tasks, t.id) ?? ''}
                   </span>
                 </TableCell>
                 <TableCell width="flex-1">
@@ -612,7 +604,8 @@ function BacklogBody({ projectId }: { projectId: string }) {
         projectName={project?.name ?? 'Project'}
         ticketId={
           openTask
-            ? ticketId(project?.name ?? 'TSK', openTask.idx)
+            ? taskTicketId(project?.name ?? 'TSK', tasks, openTask.task.id) ??
+              ''
             : ''
         }
         onClose={() => setOpenTask(null)}

@@ -16,6 +16,7 @@ import {
 } from '../../../lib/hooks'
 import { queryKeys } from '../../../lib/queryKeys'
 import { supabase } from '../../../lib/supabase'
+import { useToast } from '../../../lib/toast'
 import { userToMember } from '../../../lib/types'
 
 type OrgColorKey =
@@ -64,6 +65,7 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
   const org = orgs.find((o) => o.id === orgId) ?? null
   const { data: members = [] } = useOrgMembers(orgId)
   const queryClient = useQueryClient()
+  const toast = useToast()
 
   // `color` is interactive but client-only: the `organizations` table has no
   // colour column yet, so it can't persist. Name persists; see onSave.
@@ -198,6 +200,7 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
     setSaving(false)
     if (error) {
       setSaveError(error.message)
+      toast.error('Error saving changes', error.message)
       return
     }
     // Sync the baseline so the form returns to a clean (Save-disabled) state.
@@ -210,6 +213,7 @@ function OrgSettingsBody({ orgId }: { orgId: string }) {
     // useMyOrg (used elsewhere) keys under queryKeys.myOrg.
     queryClient.invalidateQueries({ queryKey: ['myOrgs'] })
     queryClient.invalidateQueries({ queryKey: queryKeys.myOrg(user?.id) })
+    toast.success('Changes saved')
   }
 
   const initialLetter = (name || org?.name || '?').charAt(0).toUpperCase()

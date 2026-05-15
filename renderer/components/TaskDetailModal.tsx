@@ -11,6 +11,7 @@ import {
   useUpdateTask,
 } from '../lib/hooks'
 import { taskTicketId } from '../lib/ticket'
+import { useToast } from '../lib/toast'
 import {
   dbPriorityToUi,
   type TaskPriorityDb,
@@ -383,6 +384,7 @@ export default function TaskDetailModal({
   onClose,
 }: Props) {
   const updateTask = useUpdateTask()
+  const toast = useToast()
   const setAssigneeMut = useSetTaskAssignee(task?.id ?? null)
   const { data: fetchedAssignees = [] } = useTaskAssignees(task?.id ?? null)
   const { data: projectMembers = [] } = useProjectMembers(
@@ -496,9 +498,14 @@ export default function TaskDetailModal({
       if (assigneeDirty) {
         await setAssigneeMut.mutateAsync(assigneeId)
       }
+      toast.success('Changes saved')
       onClose()
     } catch (e) {
       console.error('[TaskDetailModal] save failed', e)
+      toast.error(
+        'Error saving changes',
+        e instanceof Error ? e.message : undefined
+      )
     }
   }
 

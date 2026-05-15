@@ -8,6 +8,7 @@ import { useCurrentUser, useMyOrg, useOrgMembers } from '../lib/hooks'
 import { supabase } from '../lib/supabase'
 import { inviteToOrganization } from '../lib/queries'
 import { queryKeys } from '../lib/queryKeys'
+import { useToast } from '../lib/toast'
 import type { UserRow } from '../lib/types'
 
 type Props = {
@@ -40,6 +41,7 @@ export default function CreateOrganizationModal({ open, onClose, onCreated }: Pr
    *  is the closest available proxy. */
   const { data: candidatePool = [] } = useOrgMembers(currentOrg?.id ?? null)
   const queryClient = useQueryClient()
+  const toast = useToast()
 
   const [name, setName] = useState('')
   const [color, setColor] = useState<ColorKey>('blue')
@@ -185,7 +187,9 @@ export default function CreateOrganizationModal({ open, onClose, onCreated }: Pr
     if (orgError || !orgRow) {
       console.error('[CreateOrganization] insert failed', orgError)
       setSubmitting(false)
-      setError(orgError?.message ?? 'Failed to create organization.')
+      const msg = orgError?.message ?? 'Failed to create organization.'
+      setError(msg)
+      toast.error('Couldn’t create organization', msg)
       return
     }
     const newOrgId = orgRow.id as string
@@ -238,6 +242,12 @@ export default function CreateOrganizationModal({ open, onClose, onCreated }: Pr
         memberFailures,
         inviteFailures,
       })
+      toast.info(
+        'Organization created',
+        'Some members couldn’t be added — you can add them from the org.'
+      )
+    } else {
+      toast.success('Organization created', `“${name.trim()}” is ready.`)
     }
 
     onCreated?.(newOrgId)

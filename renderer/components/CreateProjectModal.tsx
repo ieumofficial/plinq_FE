@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { createProject } from '../lib/queries'
 import { useCurrentUser, useOrgMembers } from '../lib/hooks'
 import { queryKeys } from '../lib/queryKeys'
+import { useToast } from '../lib/toast'
 import type { ProjectRoleDb, ProjectStatusDb, UserRow } from '../lib/types'
 import InviteByEmailModal from './InviteByEmailModal'
 
@@ -65,6 +66,7 @@ export default function CreateProjectModal({
   const me: UserRow | null = meRaw ?? null
   const { data: orgMembers = [] } = useOrgMembers(orgId)
   const queryClient = useQueryClient()
+  const toast = useToast()
 
   const [name, setName] = useState('')
   const [color, setColor] = useState<ColorKey>('blue')
@@ -251,10 +253,12 @@ export default function CreateProjectModal({
     setSubmitting(false)
     if ('error' in result) {
       setError(result.error)
+      toast.error('Couldn’t create project', result.error)
       return
     }
     queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
     queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all })
+    toast.success('Project created', `“${name.trim()}” is ready.`)
     onCreated?.(result.id)
     onClose()
   }

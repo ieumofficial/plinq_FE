@@ -11,6 +11,7 @@ import CreateMeetingModal from './CreateMeetingModal'
 import CreateChatSessionModal from './CreateChatSessionModal'
 import { useCurrentUser, useMyOrg, useMyOrgRole } from '../lib/hooks'
 import { useSidebarPref, useSpaceTransition } from '../lib/sidebarPref'
+import { useAskAiOpen } from '../lib/askAiOpenStore'
 
 // ─── Create New context ─────────────────────────────────────────────────────
 
@@ -121,8 +122,10 @@ export default function PersonalAppShell({
   // Create New flow state
   const [menuOpen, setMenuOpen] = useState(false)
   const [createType, setCreateType] = useState<CreateType | null>(null)
-  // Ask AI panel toggle (right rail).
-  const [askAiOpen, setAskAiOpen] = useState(false)
+  // Ask AI panel toggle (right rail). Lifted to a module-level store so it
+  // persists across page navigation — each shell remounts per page and
+  // useState would otherwise reset to false.
+  const [askAiOpen, setAskAiOpen, toggleAskAi] = useAskAiOpen()
 
   const initials = user
     ? `${user.first_name[0] ?? ''}${user.last_name[0] ?? ''}`.toUpperCase()
@@ -169,7 +172,7 @@ export default function PersonalAppShell({
             onBack={() => router.back()}
             onForward={() => window.history.forward()}
             onCreateNew={openMenu}
-            onAskAi={() => setAskAiOpen((v) => !v)}
+            onAskAi={toggleAskAi}
           />
         }
         sidebar={

@@ -25,6 +25,7 @@ import {
   useStackedSidebarPref,
 } from '../lib/sidebarPref'
 import { dbStatusToUi } from '../lib/types'
+import { useAskAiOpen } from '../lib/askAiOpenStore'
 
 // ─── Create New context ─────────────────────────────────────────────────────
 
@@ -120,7 +121,9 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
   const [menuOpen, setMenuOpen] = useState(false)
   const [createType, setCreateType] = useState<CreateType | null>(null)
   const [createOpts, setCreateOpts] = useState<CreateOpts>({})
-  const [askAiOpen, setAskAiOpen] = useState(false)
+  // Lifted to a module-level store so the panel persists across page nav
+  // (the shell remounts per page; useState would otherwise reset).
+  const [askAiOpen, setAskAiOpen, toggleAskAi] = useAskAiOpen()
 
   const initials = user
     ? `${user.first_name[0] ?? ''}${user.last_name[0] ?? ''}`.toUpperCase()
@@ -190,7 +193,7 @@ export default function ProjectAppShell({ projectId, active, children }: Props) 
             onBack={() => router.back()}
             onForward={() => window.history.forward()}
             onCreateNew={openMenu}
-            onAskAi={() => setAskAiOpen((v) => !v)}
+            onAskAi={toggleAskAi}
           />
         }
         sidebar={

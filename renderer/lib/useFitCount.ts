@@ -16,8 +16,16 @@
  * element (e.g. a "+N more" line) can be tacked on without dropping one of
  * the items. Re-measures on container resize, first-child resize, and child
  * list mutation.
+ *
+ * The returned `ref` is a *callback ref*, not a RefObject. This matters when
+ * the container is rendered conditionally (e.g. behind a loading guard): a
+ * once-on-mount layout effect would run while the element is still null and
+ * never re-attach when it later mounts, leaving the count stuck at the
+ * initial value until an unrelated re-render. A callback ref runs every time
+ * the node attaches/detaches, so measurement happens whenever the list
+ * actually appears.
  */
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 
 export function useFitCount<T extends HTMLElement = HTMLDivElement>(opts: {
   itemHeight: number
@@ -30,54 +38,73 @@ export function useFitCount<T extends HTMLElement = HTMLDivElement>(opts: {
   max?: number
 }) {
   const { itemHeight, gap = 0, min = 0, max } = opts
-  const ref = useRef<T>(null)
-  // Start at `min` so the first render only commits one row — once it's
-  // mounted we can measure its real height and grow the count from there.
+  // Start at `min` (>=1) so the first paint shows a row; the callback ref
+  // measures synchronously on attach and grows it before the browser paints.
   const [state, setState] = useState<{ count: number; free: number }>({
     count: Math.max(min, 1),
     free: 0,
   })
 
-  useLayoutEffect(() => {
-    const el = ref.current
+  // Latest opts, so the stable callback ref always measures with current
+  // values without needing to be re-created (which would thrash attach).
+  const optsRef = useRef({ itemHeight, gap, min, max })
+  optsRef.current = { itemHeight, gap, min, max }
+
+  const elRef = useRef<T | null>(null)
+  const cleanupRef = useRef<(() => void) | null>(null)
+
+  const measure = useCallback(() => {
+    const el = elRef.current
     if (!el) return
+    const { itemHeight, gap, min, max } = optsRef.current
+    const h = el.clientHeight
+    if (h <= 0) return
+    const firstChild = el.firstElementChild as HTMLElement | null
+    const realItemH = firstChild?.getBoundingClientRect().height ?? itemHeight
+    const actual = realItemH > 0 ? realItemH : itemHeight
+    const fit = Math.floor((h + gap) / (actual + gap))
+    const capped = max !== undefined ? Math.min(fit, max) : fit
+    const count = Math.max(min, capped)
+    const used = count > 0 ? count * actual + (count - 1) * gap : 0
+    const free = Math.max(0, h - used)
+    setState((prev) =>
+      prev.count === count && prev.free === free ? prev : { count, free }
+    )
+  }, [])
 
-    const measure = () => {
-      const h = el.clientHeight
-      if (h <= 0) return
-      const firstChild = el.firstElementChild as HTMLElement | null
-      const realItemH =
-        firstChild?.getBoundingClientRect().height ?? itemHeight
-      const actual = realItemH > 0 ? realItemH : itemHeight
-      const fit = Math.floor((h + gap) / (actual + gap))
-      const capped = max !== undefined ? Math.min(fit, max) : fit
-      const count = Math.max(min, capped)
-      // Used height after laying out `count` items with gaps between them.
-      const used = count > 0 ? count * actual + (count - 1) * gap : 0
-      const free = Math.max(0, h - used)
-      setState((prev) =>
-        prev.count === count && prev.free === free ? prev : { count, free }
-      )
-    }
+  const setRef = useCallback(
+    (el: T | null) => {
+      // Tear down observers from a previous node (detach or swap).
+      cleanupRef.current?.()
+      cleanupRef.current = null
+      elRef.current = el
+      if (!el) return
 
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(el)
-    const firstChild = el.firstElementChild
-    if (firstChild) ro.observe(firstChild)
-    const mo = new MutationObserver(() => {
-      ro.disconnect()
-      ro.observe(el)
-      const newFirst = el.firstElementChild
-      if (newFirst) ro.observe(newFirst)
       measure()
-    })
-    mo.observe(el, { childList: true })
-    return () => {
-      ro.disconnect()
-      mo.disconnect()
-    }
-  }, [itemHeight, gap, min, max])
+      const ro = new ResizeObserver(measure)
+      ro.observe(el)
+      const firstChild = el.firstElementChild
+      if (firstChild) ro.observe(firstChild)
+      const mo = new MutationObserver(() => {
+        ro.disconnect()
+        ro.observe(el)
+        const newFirst = el.firstElementChild
+        if (newFirst) ro.observe(newFirst)
+        measure()
+      })
+      mo.observe(el, { childList: true })
+      cleanupRef.current = () => {
+        ro.disconnect()
+        mo.disconnect()
+      }
+    },
+    [measure]
+  )
 
-  return [ref, state.count, state.free] as const
+  // Re-measure if the sizing opts change while a node is attached.
+  useLayoutEffect(() => {
+    measure()
+  }, [itemHeight, gap, min, max, measure])
+
+  return [setRef, state.count, state.free] as const
 }

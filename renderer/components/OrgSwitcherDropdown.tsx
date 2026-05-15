@@ -9,7 +9,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import Icon from './ui/Icon'
 import CreateOrganizationModal from './CreateOrganizationModal'
-import { useCurrentUser, useMyOrg, useMyOrgsWithStats } from '../lib/hooks'
+import { useActiveOrg, useCurrentUser, useMyOrgsWithStats } from '../lib/hooks'
+import { setActiveOrgId } from '../lib/activeOrgStore'
 
 type Props = {
   /** Trigger element's bounding rect. Null = closed. */
@@ -20,7 +21,7 @@ type Props = {
 export default function OrgSwitcherDropdown({ anchorRect, onClose }: Props) {
   const router = useRouter()
   const { data: user } = useCurrentUser()
-  const { data: currentOrg } = useMyOrg(user?.id)
+  const currentOrg = useActiveOrg(user?.id)
   const { data: allOrgs = [] } = useMyOrgsWithStats(user?.id)
 
   const ref = useRef<HTMLDivElement>(null)
@@ -142,6 +143,7 @@ export default function OrgSwitcherDropdown({ anchorRect, onClose }: Props) {
               key={o.id}
               type="button"
               onClick={() => {
+                setActiveOrgId(o.id)
                 router.push(`/o/${o.id}/dashboard`)
                 onClose()
               }}
@@ -170,6 +172,7 @@ export default function OrgSwitcherDropdown({ anchorRect, onClose }: Props) {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={(id) => {
+          setActiveOrgId(id)
           router.push(`/o/${id}/dashboard`)
           onClose()
         }}

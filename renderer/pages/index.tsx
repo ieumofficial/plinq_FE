@@ -38,6 +38,11 @@ export default function LoginPage() {
         router.replace('/choose-org')
       }
     )
+    // Tell main that the listener is now attached. If a deep link arrived
+    // before this mount (cold-start race: app launched by `plinq://auth?...`
+    // but `mainWindow` / Next.js weren't ready yet), main has buffered the
+    // tokens and will replay them in response to this ping.
+    window.ipc.send('auth-ready')
     return cleanup
   }, [router])
 

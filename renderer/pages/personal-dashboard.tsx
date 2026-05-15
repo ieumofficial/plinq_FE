@@ -11,6 +11,7 @@ import Calendar, { type CalendarEvent } from '../components/ui/Calendar'
 import Schedule from '../components/ui/Schedule'
 import Icon from '../components/ui/Icon'
 import {
+  useActiveOrg,
   useCurrentUser,
   useUpdateTaskStatus,
   useUserActionItems,
@@ -102,16 +103,28 @@ export default function PersonalDashboardPage() {
   // space when there's already room for it.
   const TRAILING_PX = 22
 
+  // Personal dashboard is scoped to the user's currently-active org. Without
+  // this, multi-org users see every org's projects/tasks/meetings smashed
+  // together (and the "current org" header label doesn't match the data).
+  const activeOrg = useActiveOrg(user?.id)
+  const activeOrgId = activeOrg?.id ?? null
+  console.log('[personal-dashboard] activeOrg', { id: activeOrgId, name: activeOrg?.name })
+
   const { data: projects = [], isLoading: projectsLoading } = useUserProjects(userId, {
     statuses: ['planned', 'in_progress', 'review'],
     limit: ACTIVE_PROJECTS_LIMIT,
+    orgId: activeOrgId,
   })
   // Separate unfiltered fetch for the mini calendar — we want every project
   // the user belongs to so their due dates show up regardless of status.
-  const { data: allProjects = [] } = useUserProjects(userId)
+  // Still org-scoped so cross-org dots don't bleed in.
+  const { data: allProjects = [] } = useUserProjects(userId, {
+    orgId: activeOrgId,
+  })
 
   const { data: tasks = [], isLoading: tasksLoading } = useUserActionItems(userId, {
     limit: ACTION_ITEMS_LIMIT,
+    orgId: activeOrgId,
   })
   const { mutate: updateTaskStatus } = useUpdateTaskStatus()
 
@@ -121,13 +134,15 @@ export default function PersonalDashboardPage() {
       from: startOfDay(today),
       to: endOfDay(today),
       limit: TODAY_SCHEDULE_LIMIT,
+      orgId: activeOrgId,
     }
   )
 
   const { data: rawEvents } = useUserCalendarEvents(
     userId,
     startOfMonth(calMonth),
-    endOfMonth(calMonth)
+    endOfMonth(calMonth),
+    { orgId: activeOrgId },
   )
 
   const calEvents: CalendarEvent[] = useMemo(() => {

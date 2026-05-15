@@ -13,8 +13,8 @@ import Tag from '../../components/ui/Tag'
 import Checkbox from '../../components/ui/Checkbox'
 import ProfileDropdown from '../../components/ProfileDropdown'
 import {
+  useActiveOrg,
   useCurrentUser,
-  useMyOrg,
   useUserActionItems,
   useUserProjects,
 } from '../../lib/hooks'
@@ -203,14 +203,20 @@ export default function MyOverviewPage() {
   const router = useRouter()
   const preview = useProjectPreview()
   const { data: user, isFetched: userFetched } = useCurrentUser()
-  const { data: org } = useMyOrg(user?.id)
+  const org = useActiveOrg(user?.id)
 
   useEffect(() => {
     if (userFetched && !user) router.push('/')
   }, [userFetched, user, router])
 
-  const { data: actionItems = [] } = useUserActionItems(user?.id, { limit: 50 })
-  const { data: projects = [] } = useUserProjects(user?.id)
+  const activeOrgId = org?.id ?? null
+  const { data: actionItems = [] } = useUserActionItems(user?.id, {
+    limit: 50,
+    orgId: activeOrgId,
+  })
+  const { data: projects = [] } = useUserProjects(user?.id, {
+    orgId: activeOrgId,
+  })
 
   const userInitials = user
     ? `${user.first_name[0] ?? ''}${user.last_name[0] ?? ''}`.toUpperCase()

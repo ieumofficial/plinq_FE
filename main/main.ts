@@ -162,6 +162,29 @@ if (process.defaultApp) {
 
 let mainWindow: BrowserWindow | null = null
 
+// Tokens received from a deep link before the renderer is ready to consume
+// them. Two races make this necessary:
+//   1. Cold-start on macOS: `open-url` can fire before `app.whenReady` resolves
+//      and before `mainWindow` exists — the send call would target nothing.
+//   2. Renderer-not-ready: even with `mainWindow` alive, Next.js may not have
+//      mounted the index page (and its `auth-callback` listener) yet, so
+//      `webContents.send` lands in the void.
+// We buffer the latest tokens here and flush them on either of two signals:
+//   - the renderer pings `auth-ready` when its listener is attached
+//   - mainWindow's `did-finish-load` (covers the cold-start case where the
+//     renderer never explicitly pings, e.g., navigation timing edge cases).
+type AuthTokens = { access_token: string; refresh_token: string }
+let pendingAuthCallback: AuthTokens | null = null
+
+function flushPendingAuth(reason: string) {
+  if (!pendingAuthCallback || !mainWindow) return
+  const tokens = pendingAuthCallback
+  pendingAuthCallback = null
+  mainWindow.webContents.send('auth-callback', tokens)
+  mainWindow.focus()
+  console.log(`[plinq] Auth callback flushed (${reason})`)
+}
+
 function handleDeepLink(url: string) {
   console.log('[plinq] Deep link received:', url)
   try {
@@ -170,15 +193,19 @@ function handleDeepLink(url: string) {
     if (parsed.hostname === 'auth') {
       const accessToken = parsed.searchParams.get('access_token')
       const refreshToken = parsed.searchParams.get('refresh_token')
-      console.log('[plinq] Tokens found:', !!accessToken, !!refreshToken, 'mainWindow:', !!mainWindow)
-      if (accessToken && refreshToken && mainWindow) {
-        mainWindow.webContents.send('auth-callback', {
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        })
-        mainWindow.focus()
-        console.log('[plinq] Auth callback sent to renderer')
+      console.log(
+        '[plinq] Tokens found:', !!accessToken, !!refreshToken,
+        'mainWindow:', !!mainWindow,
+      )
+      if (!accessToken || !refreshToken) return
+      pendingAuthCallback = {
+        access_token: accessToken,
+        refresh_token: refreshToken,
       }
+      // If the renderer is already up and listening, send immediately. The
+      // renderer also pings `auth-ready` on mount, so even if this send
+      // happens "too early," the buffer survives for the replay.
+      flushPendingAuth('deep-link arrival')
     }
   } catch (e) {
     console.error('[plinq] Failed to handle deep link:', e)
@@ -239,6 +266,14 @@ app.on('open-url', (event, url) => {
   mainWindow.on('maximize', broadcastMaximized)
   mainWindow.on('unmaximize', broadcastMaximized)
 
+  // Cold-start safety net: if a deep link arrived before the renderer
+  // attached its `auth-callback` listener, replay it once the page finishes
+  // loading. The renderer also pings `auth-ready` (see ipcMain handler
+  // below), so this is belt-and-suspenders against navigation timing edges.
+  mainWindow.webContents.on('did-finish-load', () => {
+    flushPendingAuth('did-finish-load')
+  })
+
   if (isProd) {
     await mainWindow.loadURL('app://./')
   } else {
@@ -278,6 +313,13 @@ app.on('window-all-closed', () => {
 // IPC: open URL in system browser
 ipcMain.on('open-external', (_event, url: string) => {
   shell.openExternal(url)
+})
+
+// IPC: renderer signals that its `auth-callback` listener is now attached.
+// If a deep link arrived during cold start before the renderer mounted, the
+// tokens are buffered in `pendingAuthCallback` — flush them now.
+ipcMain.on('auth-ready', () => {
+  flushPendingAuth('renderer auth-ready')
 })
 
 // IPC: locate + read the most recent Zoom local recording so the renderer

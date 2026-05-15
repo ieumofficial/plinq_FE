@@ -12,7 +12,7 @@ import CreateMeetingModal from './CreateMeetingModal'
 import CreateChatSessionModal from './CreateChatSessionModal'
 import {
   useCurrentUser,
-  useMyOrg,
+  useActiveOrg,
   useMyOrgRole,
   useOrgMembers,
   useOrgProjects,
@@ -23,6 +23,7 @@ import {
   useStackedSidebarPref,
 } from '../lib/sidebarPref'
 import { useAskAiOpen } from '../lib/askAiOpenStore'
+import { setActiveOrgId } from '../lib/activeOrgStore'
 
 // ─── Create New context ─────────────────────────────────────────────────────
 
@@ -83,7 +84,7 @@ type Props = {
 export default function OrganizationAppShell({ orgId, active, children }: Props) {
   const router = useRouter()
   const { data: user, isFetched: userFetched } = useCurrentUser()
-  const { data: org } = useMyOrg(user?.id)
+  const org = useActiveOrg(user?.id)
   const { data: myOrgRole } = useMyOrgRole(user?.id)
   const { data: members = [] } = useOrgMembers(orgId)
   const { data: orgProjects = [] } = useOrgProjects(orgId)
@@ -101,6 +102,13 @@ export default function OrganizationAppShell({ orgId, active, children }: Props)
   useEffect(() => {
     if (userFetched && !user) router.push('/')
   }, [userFetched, user, router])
+
+  // Sync the URL's org with the global "active org" store so that Personal
+  // Space pages (which don't carry :orgId in the URL) know which org's data
+  // to show.
+  useEffect(() => {
+    if (orgId) setActiveOrgId(orgId)
+  }, [orgId])
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [createType, setCreateType] = useState<CreateType | null>(null)

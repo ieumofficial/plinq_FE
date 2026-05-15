@@ -6,6 +6,7 @@
  *   - mutations can target precise keys for invalidation
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useActiveOrgId } from './activeOrgStore'
 import {
   createKnowledgeDoc,
   deleteChatSession,
@@ -78,6 +79,28 @@ export function useMyOrg(userId: string | undefined) {
   })
 }
 
+/**
+ * The user's currently-active organization — what the header label / org
+ * switcher should highlight, and what Personal Space queries should scope to.
+ *
+ * Resolves activeOrgId (from the global store, set by header switcher and
+ * `/o/[orgId]/*` URL sync) against the user's full org list, falling back to
+ * `useMyOrg` (first row) when no choice has been made yet. Returns the same
+ * { id, name } shape as `useMyOrg` so it's a drop-in replacement.
+ */
+export function useActiveOrg(userId: string | undefined): MyOrg {
+  const { data: orgs = [] } = useMyOrgsWithStats(userId ?? null)
+  const { data: firstOrg } = useMyOrg(userId)
+  const activeId = useActiveOrgId()
+  if (activeId) {
+    const hit = orgs.find((o) => o.id === activeId)
+    if (hit) return { id: hit.id, name: hit.name }
+    // activeId points at an org the user isn't in (e.g., they got removed).
+    // Fall through to firstOrg rather than show a stale label.
+  }
+  return firstOrg ?? null
+}
+
 /** Current user's role in their (single) organization. Returns null if the
  *  user has no org membership yet. Used to gate "owner-only" UI like the
  *  Organization sidebar entry. */
@@ -103,7 +126,11 @@ export function useMyOrgRole(userId: string | undefined) {
 
 export function useUserProjects(
   userId: string | undefined,
-  opts?: { statuses?: ProjectRow['status'][]; limit?: number }
+  opts?: {
+    statuses?: ProjectRow['status'][]
+    limit?: number
+    orgId?: string | null
+  }
 ) {
   return useQuery<ProjectWithStats[]>({
     queryKey: queryKeys.projects.list(userId ?? '', opts),
@@ -143,7 +170,7 @@ export function useDeleteProject() {
 
 export function useUserActionItems(
   userId: string | undefined,
-  opts?: { includeDone?: boolean; limit?: number }
+  opts?: { includeDone?: boolean; limit?: number; orgId?: string | null }
 ) {
   return useQuery({
     queryKey: queryKeys.tasks.actionItems(userId ?? '', opts),
@@ -257,7 +284,7 @@ export function useUpdateTask() {
 
 export function useUserUpcomingMeetings(
   userId: string | undefined,
-  opts?: { from?: Date; to?: Date; limit?: number }
+  opts?: { from?: Date; to?: Date; limit?: number; orgId?: string | null }
 ) {
   const fromIso = opts?.from?.toISOString()
   const toIso = opts?.to?.toISOString()
@@ -266,6 +293,8 @@ export function useUserUpcomingMeetings(
       fromIso,
       toIso,
       limit: opts?.limit,
+      // include orgId in the cache key so switching active org refetches
+      ...(opts?.orgId ? { orgId: opts.orgId } : {}),
     }),
     queryFn: () => getUserUpcomingMeetings(userId!, opts),
     enabled: !!userId,
@@ -277,15 +306,19 @@ export function useUserUpcomingMeetings(
 export function useUserCalendarEvents(
   userId: string | undefined,
   from: Date | null,
-  to: Date | null
+  to: Date | null,
+  opts?: { orgId?: string | null }
 ) {
   return useQuery({
-    queryKey: queryKeys.calendar.range(
-      userId ?? '',
-      from?.toISOString() ?? '',
-      to?.toISOString() ?? ''
-    ),
-    queryFn: () => getUserCalendarEvents(userId!, from!, to!),
+    queryKey: [
+      ...queryKeys.calendar.range(
+        userId ?? '',
+        from?.toISOString() ?? '',
+        to?.toISOString() ?? ''
+      ),
+      opts?.orgId ?? null,
+    ] as const,
+    queryFn: () => getUserCalendarEvents(userId!, from!, to!, opts),
     enabled: !!userId && !!from && !!to,
   })
 }

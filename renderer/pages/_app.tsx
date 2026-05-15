@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { AppProps } from 'next/app'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import '../styles/globals.css'
 import { useTrackNavHistory } from '../lib/navHistory'
 import ProjectPreviewProvider from '../components/ProjectPreviewProvider'
+import { supabase } from '../lib/supabase'
 
 function MyApp({ Component, pageProps }: AppProps) {
   // Create one client per app instance.
@@ -27,6 +28,18 @@ function MyApp({ Component, pageProps }: AppProps) {
 
   // Track in-app navigation history for the header's < > buttons.
   useTrackNavHistory()
+
+  // Force a session refresh once per app boot. The cached JWT in localStorage
+  // may have been signed by an old Supabase signing key (e.g., the project
+  // rotated HS256 → ES256 since we last logged in). PostgREST then silently
+  // treats every request as anonymous and RLS denies writes with 42501 even
+  // though the token's `exp` is still in the future. A refresh hands us a
+  // JWT signed by the *current* key. If there's no session, this is a no-op.
+  useEffect(() => {
+    void supabase.auth.refreshSession().catch((e) => {
+      console.warn('[auth] boot-time refreshSession failed', e)
+    })
+  }, [])
 
   return (
     <QueryClientProvider client={queryClient}>

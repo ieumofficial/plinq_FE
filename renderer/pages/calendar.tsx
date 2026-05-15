@@ -10,6 +10,7 @@ import Button from '../components/ui/Button'
 import { useProjectPreview } from '../components/ProjectPreviewProvider'
 import TaskDetailModal, { type TaskDetailInput } from '../components/TaskDetailModal'
 import {
+  useActiveOrg,
   useCurrentUser,
   useUserCalendarEvents,
   useUserProjects,
@@ -473,16 +474,23 @@ export default function CalendarPage() {
   const today = useMemo(() => new Date(), [])
   const [selectedDate, setSelectedDate] = useState<Date>(today)
 
+  const activeOrg = useActiveOrg(userId)
+  const activeOrgId = activeOrg?.id ?? null
+
   const { data: rawEvents } = useUserCalendarEvents(
     userId,
     startOfMonth(calMonth),
-    endOfMonth(calMonth)
+    endOfMonth(calMonth),
+    { orgId: activeOrgId },
   )
   const { data: dayMeetings = [] } = useUserUpcomingMeetings(userId, {
     from: startOfDay(selectedDate),
     to: endOfDay(selectedDate),
+    orgId: activeOrgId,
   })
-  const { data: allProjects = [] } = useUserProjects(userId)
+  const { data: allProjects = [] } = useUserProjects(userId, {
+    orgId: activeOrgId,
+  })
   const isSelectedToday = isSameDate(selectedDate, today)
   const [detail, setDetail] = useState<DetailItem | null>(null)
   const [openTask, setOpenTask] = useState<TaskDetailInput | null>(null)

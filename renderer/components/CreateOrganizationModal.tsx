@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCurrentUser, useMyOrg, useOrgMembers } from '../lib/hooks'
 import { supabase } from '../lib/supabase'
 import { inviteToOrganization } from '../lib/queries'
+import { queryKeys } from '../lib/queryKeys'
 import type { UserRow } from '../lib/types'
 
 type Props = {
@@ -133,15 +134,56 @@ export default function CreateOrganizationModal({ open, onClose, onCreated }: Pr
     setError('')
     setSubmitting(true)
 
+    // RLS on `organizations` is `WITH CHECK (owner_id = auth.uid())`. We send
+    // the owner_id, but the JWT we hold also has to verify against PostgREST's
+    // *current* signing key — if Supabase rotated keys (e.g. HS256 → ES256)
+    // since this session was issued, PostgREST silently treats the request as
+    // anonymous, `auth.uid()` evaluates to NULL, and RLS rejects it with
+    // 42501 even though the token's `exp` is still in the future.
+    //
+    // Force a refresh first so we always present a JWT signed by the current
+    // key. Refresh is cheap and idempotent; falling back to getSession lets
+    // us still surface a clean "please sign in" error if the refresh fails.
+    let session = (await supabase.auth.refreshSession()).data.session
+    if (!session) {
+      session = (await supabase.auth.getSession()).data.session
+    }
+    if (!session?.user?.id) {
+      console.error('[CreateOrganization] no active session after refresh', {
+        cachedMeId: me.id,
+      })
+      setSubmitting(false)
+      setError('Your session expired. Please sign out and sign back in.')
+      return
+    }
+    const ownerId = session.user.id
+    if (ownerId !== me.id) {
+      // Cached `users` row is for a different uid than the active JWT — likely
+      // an account switch without a full reload. Trust the live session.
+      console.warn('[CreateOrganization] cached me.id differs from auth.uid()', {
+        cachedMeId: me.id,
+        sessionUserId: ownerId,
+      })
+    }
+
     // 1. Create the org. owner_id triggers an auto-membership row server-side
-    // (existing flow in pages/create-org.tsx relies on the same behavior).
+    // via the on_organization_created trigger (SECURITY DEFINER).
+    //
+    // Note on .select() returning RLS errors: PostgREST translates this into
+    // INSERT ... RETURNING, and PostgreSQL evaluates the SELECT USING policy
+    // on the returned row in addition to INSERT WITH CHECK. The
+    // `org_select_member` policy was extended (migration
+    // 20260515000004_org_select_owner.sql) to allow the owner to see their
+    // own org without the membership subquery, so this no longer 42501s on
+    // freshly-created rows.
     const { data: orgRow, error: orgError } = await supabase
       .from('organizations')
-      .insert({ name: name.trim(), owner_id: me.id })
+      .insert({ name: name.trim(), owner_id: ownerId })
       .select('id')
       .single()
 
     if (orgError || !orgRow) {
+      console.error('[CreateOrganization] insert failed', orgError)
       setSubmitting(false)
       setError(orgError?.message ?? 'Failed to create organization.')
       return
@@ -176,7 +218,15 @@ export default function CreateOrganizationModal({ open, onClose, onCreated }: Pr
       }),
     ])
 
+    // Invalidate every cache that lists / counts the user's orgs so the header
+    // switcher and OrganizationAppShell pick up the new row immediately.
+    // - ['myOrgs', 'withStats', userId]  →  org list in switcher
+    // - ['myOrg', userId]                 →  "primary" org used by some shells
+    // - ['myOrgRole', userId]             →  owner-gated UI
+    // - ['members', 'org', newOrgId]      →  member list (we just inserted owner via trigger)
     queryClient.invalidateQueries({ queryKey: ['myOrgs'] })
+    queryClient.invalidateQueries({ queryKey: queryKeys.myOrg(me.id) })
+    queryClient.invalidateQueries({ queryKey: ['myOrgRole', me.id] })
     queryClient.invalidateQueries({ queryKey: ['members', 'org', newOrgId] })
     setSubmitting(false)
 

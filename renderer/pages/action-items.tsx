@@ -10,7 +10,7 @@ import PriorityTag from '../components/ui/PriorityTag'
 import ProjectLabel from '../components/ui/ProjectLabel'
 import Icon from '../components/ui/Icon'
 import Table, { TableHeader, TableRow, TableCell, type Column } from '../components/ui/Table'
-import { useCurrentUser, useDeleteTask, useUpdateTaskStatus, useUserActionItems } from '../lib/hooks'
+import { useActiveOrg, useCurrentUser, useDeleteTask, useUpdateTaskStatus, useUserActionItems } from '../lib/hooks'
 import { type TaskWithProject } from '../lib/queries'
 import { dbStatusToUi, dbPriorityToUi, type TaskPriorityDb } from '../lib/types'
 import DeleteConfirmModal from '../components/DeleteConfirmModal'
@@ -135,7 +135,11 @@ export default function ActionItemsPage() {
 function ActionItemsBody() {
   const createNew = useCreateNew()
   const { data: user } = useCurrentUser()
-  const { data: tasks = [], isLoading } = useUserActionItems(user?.id, { includeDone: true })
+  const activeOrg = useActiveOrg(user?.id)
+  const { data: tasks = [], isLoading } = useUserActionItems(user?.id, {
+    includeDone: true,
+    orgId: activeOrg?.id ?? null,
+  })
   const { mutate: updateTaskStatus } = useUpdateTaskStatus()
   const deleteTask = useDeleteTask()
   const [search, setSearch] = useState('')

@@ -22,7 +22,7 @@ import {
   useChatSessions,
   useCurrentUser,
   useDeleteChatSession,
-  useMyOrg,
+  useActiveOrg,
   useUserProjects,
 } from '../lib/hooks'
 import {
@@ -161,11 +161,11 @@ function buildDmItems(sessions: ChatSessionWithMeta[]): ChatDmItem[] {
 function MessagesBody() {
   const queryClient = useQueryClient()
   const { data: user } = useCurrentUser()
-  const { data: org } = useMyOrg(user?.id)
-  const orgId = org?.id ?? null
+  const activeOrg = useActiveOrg(user?.id)
+  const orgId = activeOrg?.id ?? null
 
   const { data: sessions = [] } = useChatSessions(user?.id, orgId)
-  const { data: projects = [] } = useUserProjects(user?.id)
+  const { data: projects = [] } = useUserProjects(user?.id, { orgId })
   const projectColorMap = useMemo(() => {
     const m = new Map<string, string | null>()
     for (const p of projects) m.set(p.id, p.color ?? null)
@@ -460,7 +460,7 @@ function MessagesBody() {
               {activeSession.kind === 'channel' ? (
                 <ChatHeader
                   variant="channel"
-                  orgName={org?.name ?? ''}
+                  orgName={activeOrg?.name ?? ''}
                   name={activeSession.name ?? '(untitled)'}
                   description={activeSession.description ?? undefined}
                   members={sessionMembers.map(userToMember)}
@@ -478,7 +478,7 @@ function MessagesBody() {
                           #{activeSession.name}
                         </strong>{' '}
                         is the org-wide default channel. Everyone at{' '}
-                        {org?.name ?? 'this organization'} is a member.
+                        {activeOrg?.name ?? 'this organization'} is a member.
                       </>
                     ) : activeSession.scope === 'project' ? (
                       <>
@@ -633,7 +633,7 @@ function MessagesBody() {
           variant="dm"
           member={userToMember(activeSession.other_user)}
           jobTitle={activeSession.other_user.job_title ?? undefined}
-          orgName={org?.name ?? undefined}
+          orgName={activeOrg?.name ?? undefined}
         />
       )}
 

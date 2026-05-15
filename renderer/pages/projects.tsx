@@ -7,7 +7,7 @@ import Button from '../components/ui/Button'
 import Icon, { type IconName } from '../components/ui/Icon'
 import ProjectListCard from '../components/ui/ProjectListCard'
 import FilterChecklist from '../components/ui/FilterChecklist'
-import { useCurrentUser, useDeleteProject, useUserProjects } from '../lib/hooks'
+import { useActiveOrg, useCurrentUser, useDeleteProject, useUserProjects } from '../lib/hooks'
 import { useAllPinnedProjects } from '../lib/pinPref'
 import { useProjectPreview } from '../components/ProjectPreviewProvider'
 import {
@@ -257,7 +257,10 @@ function ProjectsPageBody() {
   const preview = useProjectPreview()
   const createNew = useCreateNew()
   const { data: user } = useCurrentUser()
-  const { data: projects = [], isLoading } = useUserProjects(user?.id)
+  const activeOrg = useActiveOrg(user?.id)
+  const { data: projects = [], isLoading } = useUserProjects(user?.id, {
+    orgId: activeOrg?.id ?? null,
+  })
   const { mutate: deleteProject } = useDeleteProject()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<Set<ProjectStatusDb>>(

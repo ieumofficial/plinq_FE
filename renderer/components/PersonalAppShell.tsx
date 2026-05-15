@@ -9,7 +9,7 @@ import CreateProjectModal from './CreateProjectModal'
 import CreateTaskModal from './CreateTaskModal'
 import CreateMeetingModal from './CreateMeetingModal'
 import CreateChatSessionModal from './CreateChatSessionModal'
-import { useCurrentUser, useMyOrg, useMyOrgRole } from '../lib/hooks'
+import { useActiveOrg, useCurrentUser, useMyOrgRole } from '../lib/hooks'
 import { useSidebarPref, useSpaceTransition } from '../lib/sidebarPref'
 import { useAskAiOpen } from '../lib/askAiOpenStore'
 
@@ -100,7 +100,7 @@ export default function PersonalAppShell({
 }: Props) {
   const router = useRouter()
   const { data: user, isFetched: userFetched } = useCurrentUser()
-  const { data: org } = useMyOrg(user?.id)
+  const org = useActiveOrg(user?.id)
   const { data: myOrgRole } = useMyOrgRole(user?.id)
   const orgId = org?.id ?? null
   const orgName = org?.name ?? null

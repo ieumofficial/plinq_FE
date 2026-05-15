@@ -58,7 +58,13 @@ export type ProjectWithStats = ProjectRow & {
  */
 export async function getUserProjects(
   userId: string,
-  opts?: { statuses?: ProjectRow['status'][]; limit?: number }
+  opts?: {
+    statuses?: ProjectRow['status'][]
+    limit?: number
+    /** Restrict to projects in this org. Personal Space pages pass the
+     *  active-org id so multi-org users don't see cross-org bleed-through. */
+    orgId?: string | null
+  }
 ): Promise<ProjectWithStats[]> {
   // 1. Project ids the user belongs to
   const { data: memberships, error: mErr } = await supabase
@@ -80,6 +86,7 @@ export async function getUserProjects(
   if (opts?.statuses && opts.statuses.length > 0) {
     q = q.in('status', opts.statuses)
   }
+  if (opts?.orgId) q = q.eq('org_id', opts.orgId)
   q = q.order('created_at', { ascending: false })
   if (opts?.limit) q = q.limit(opts.limit)
 
@@ -1042,6 +1049,8 @@ export async function getProjectMembers(projectId: string): Promise<UserRow[]> {
 export type TaskWithProject = TaskRow & {
   project_name: string | null
   project_color: string | null
+  /** org_id of the parent project. null when the task has no project (personal task). */
+  project_org_id: string | null
   source_meeting_name: string | null
   source_meeting_scheduled_at: string | null
   creator_name: string | null
@@ -1053,7 +1062,13 @@ export type TaskWithProject = TaskRow & {
  */
 export async function getUserActionItems(
   userId: string,
-  opts?: { includeDone?: boolean; limit?: number }
+  opts?: {
+    includeDone?: boolean
+    limit?: number
+    /** Restrict to the active org. Tasks with no project (personal tasks)
+     *  always pass through — they aren't tied to any org. */
+    orgId?: string | null
+  }
 ): Promise<TaskWithProject[]> {
   const { data: assignments, error: aErr } = await supabase
     .from('task_assignees')
@@ -1066,15 +1081,47 @@ export async function getUserActionItems(
   const taskIds = (assignments ?? []).map((a) => a.task_id as string)
   if (taskIds.length === 0) return []
 
+  // Org filter must run at the DB level — otherwise applying it in JS after
+  // .limit(N) silently drops most rows when the cross-org top-N happen to
+  // belong to other orgs (e.g., dashboard's limit:7 comes back as 0-2 items
+  // for a user with many tasks in another org).
+  // Allow `project_id IS NULL` (personal tasks) to pass through always.
+  let orgProjectIds: string[] | null = null
+  if (opts?.orgId) {
+    const { data: orgProjects } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('org_id', opts.orgId)
+    orgProjectIds = (orgProjects ?? []).map((p) => p.id as string)
+  }
+  console.log('[getUserActionItems] probe', {
+    userId,
+    orgId: opts?.orgId,
+    assignedTaskIds: taskIds.length,
+    orgProjectIdsVisible: orgProjectIds?.length ?? null,
+  })
+
   let q = supabase
     .from('tasks')
     .select(
-      'id, project_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, source_meeting_id, created_by, created_at, updated_at, projects(name, color), meetings:source_meeting_id(name, scheduled_at), users:created_by(first_name, last_name, nickname, email)'
+      'id, project_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, source_meeting_id, created_by, created_at, updated_at, projects(name, color, org_id), meetings:source_meeting_id(name, scheduled_at), users:created_by(first_name, last_name, nickname, email)'
     )
     .in('id', taskIds)
     .order('due_date', { ascending: true, nullsFirst: false })
 
   if (!opts?.includeDone) q = q.neq('status', 'done')
+  if (orgProjectIds) {
+    // PostgREST `.or` with a parenthesised in-list. Empty IN list would
+    // produce an invalid filter, so when the org has no projects we just
+    // restrict to personal tasks.
+    if (orgProjectIds.length === 0) {
+      q = q.is('project_id', null)
+    } else {
+      q = q.or(
+        `project_id.is.null,project_id.in.(${orgProjectIds.join(',')})`,
+      )
+    }
+  }
   if (opts?.limit) q = q.limit(opts.limit)
 
   const { data, error } = await q
@@ -1084,7 +1131,7 @@ export async function getUserActionItems(
   }
   return (data ?? []).map((row) => {
     const r = row as unknown as TaskRow & {
-      projects: { name: string; color: string | null } | { name: string; color: string | null }[] | null
+      projects: { name: string; color: string | null; org_id: string } | { name: string; color: string | null; org_id: string }[] | null
       meetings: { name: string; scheduled_at: string } | { name: string; scheduled_at: string }[] | null
       users: { first_name: string; last_name: string; nickname: string | null; email: string } | { first_name: string; last_name: string; nickname: string | null; email: string }[] | null
     }
@@ -1098,6 +1145,7 @@ export async function getUserActionItems(
       ...(r as TaskRow),
       project_name: proj?.name ?? null,
       project_color: proj?.color ?? null,
+      project_org_id: proj?.org_id ?? null,
       source_meeting_name: mtg?.name ?? null,
       source_meeting_scheduled_at: mtg?.scheduled_at ?? null,
       creator_name: creatorName,
@@ -1116,7 +1164,7 @@ export type MeetingWithAttendees = MeetingRow & {
  */
 export async function getUserUpcomingMeetings(
   userId: string,
-  opts?: { from?: Date; to?: Date; limit?: number }
+  opts?: { from?: Date; to?: Date; limit?: number; orgId?: string | null }
 ): Promise<MeetingWithAttendees[]> {
   const { data: rows, error: aErr } = await supabase
     .from('meeting_attendees')
@@ -1129,6 +1177,19 @@ export async function getUserUpcomingMeetings(
   const meetingIds = (rows ?? []).map((r) => r.meeting_id as string)
   if (meetingIds.length === 0) return []
 
+  // Org filter: if orgId is given, restrict to meetings whose project is in
+  // that org. Two-step (look up project_ids in the org first, then filter
+  // meetings on that set) keeps the query simple and works without joins.
+  let orgProjectIds: string[] | null = null
+  if (opts?.orgId) {
+    const { data: orgProjects } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('org_id', opts.orgId)
+    orgProjectIds = (orgProjects ?? []).map((p) => p.id as string)
+    if (orgProjectIds.length === 0) return []
+  }
+
   const from = opts?.from ?? new Date()
   let q = supabase
     .from('meetings')
@@ -1136,6 +1197,7 @@ export async function getUserUpcomingMeetings(
     .in('id', meetingIds)
     .gte('scheduled_at', from.toISOString())
     .order('scheduled_at', { ascending: true })
+  if (orgProjectIds) q = q.in('project_id', orgProjectIds)
   if (opts?.to) q = q.lte('scheduled_at', opts.to.toISOString())
   if (opts?.limit) q = q.limit(opts.limit)
 
@@ -1467,7 +1529,8 @@ export type CalendarSourceEvents = {
 export async function getUserCalendarEvents(
   userId: string,
   from: Date,
-  to: Date
+  to: Date,
+  opts?: { orgId?: string | null }
 ): Promise<CalendarSourceEvents> {
   const [meetingsRes, taskAssignRes] = await Promise.all([
     supabase
@@ -1502,6 +1565,31 @@ export async function getUserCalendarEvents(
     if (!t) continue
     if (Array.isArray(t)) tasksWithDue.push(...t)
     else tasksWithDue.push(t)
+  }
+
+  // Org scope: keep only rows whose project belongs to the active org. Tasks
+  // with no project (personal tasks) always pass through.
+  if (opts?.orgId) {
+    const projectIds = new Set<string>()
+    for (const m of meetings) if (m.project_id) projectIds.add(m.project_id)
+    for (const t of tasksWithDue) if (t.project_id) projectIds.add(t.project_id)
+    if (projectIds.size > 0) {
+      const { data: orgProjects } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('org_id', opts.orgId)
+        .in('id', Array.from(projectIds))
+      const inOrg = new Set((orgProjects ?? []).map((p) => p.id as string))
+      const filteredMeetings = meetings.filter(
+        (m) => m.project_id && inOrg.has(m.project_id),
+      )
+      const filteredTasks = tasksWithDue.filter(
+        (t) => !t.project_id || inOrg.has(t.project_id),
+      )
+      return { meetings: filteredMeetings, tasksWithDue: filteredTasks }
+    }
+    // No projects to check; tasks-with-no-project still pass through.
+    return { meetings: [], tasksWithDue: tasksWithDue.filter((t) => !t.project_id) }
   }
 
   return { meetings, tasksWithDue }

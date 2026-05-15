@@ -13,7 +13,7 @@ import CreateMeetingModal from './CreateMeetingModal'
 import CreateChatSessionModal from './CreateChatSessionModal'
 import {
   useCurrentUser,
-  useMyOrg,
+  useActiveOrg,
   useMyOrgRole,
   useProject,
   useProjectCounts,
@@ -26,6 +26,7 @@ import {
 } from '../lib/sidebarPref'
 import { dbStatusToUi } from '../lib/types'
 import { useAskAiOpen } from '../lib/askAiOpenStore'
+import { setActiveOrgId } from '../lib/activeOrgStore'
 
 // ─── Create New context ─────────────────────────────────────────────────────
 
@@ -95,9 +96,14 @@ type Props = {
 export default function ProjectAppShell({ projectId, active, children }: Props) {
   const router = useRouter()
   const { data: user, isFetched: userFetched } = useCurrentUser()
-  const { data: org } = useMyOrg(user?.id)
+  const org = useActiveOrg(user?.id)
   const { data: myOrgRole } = useMyOrgRole(user?.id)
   const { data: project } = useProject(projectId)
+  // Sync the project's parent org with the global "active org" store so
+  // Personal Space pages know which org's data to show.
+  useEffect(() => {
+    if (project?.org_id) setActiveOrgId(project.org_id)
+  }, [project?.org_id])
   const { data: counts } = useProjectCounts(projectId)
   const { data: userProjects = [] } = useUserProjects(user?.id)
   const isOrgOwner = myOrgRole === 'owner'

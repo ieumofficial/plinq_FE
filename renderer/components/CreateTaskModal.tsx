@@ -675,9 +675,18 @@ export default function CreateTaskModal({
       setError(result.error)
       return
     }
-    queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all })
-    queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all })
-    queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
+    // Await invalidations so the lists refetch BEFORE we close the modal —
+    // otherwise the user lands on a stale dashboard and has to refresh.
+    // Also include the per-project key (`['project', projectId]`) used by
+    // ProjectAppShell's tasks/counts hooks, which prefix `['projects']`
+    // does NOT match.
+    console.log('[CreateTaskModal] invalidating after create', { taskId: result.id })
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all }),
+      queryClient.invalidateQueries({ queryKey: ['project'] }),
+    ])
     onCreated?.(result.id)
     onClose()
   }

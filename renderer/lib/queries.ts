@@ -1080,15 +1080,24 @@ export async function getUserActionItems(
     orgId?: string | null
   }
 ): Promise<TaskWithProject[]> {
-  const { data: assignments, error: aErr } = await supabase
-    .from('task_assignees')
-    .select('task_id')
-    .eq('user_id', userId)
-  if (aErr) {
-    console.error('[queries] task_assignees', aErr)
+  // "My tasks" = tasks assigned to me OR created by me. The created-by half
+  // matters because CreateTaskModal doesn't auto-assign the creator, so a
+  // task you just made would otherwise never show in your personal lists.
+  const [assignRes, createdRes] = await Promise.all([
+    supabase.from('task_assignees').select('task_id').eq('user_id', userId),
+    supabase.from('tasks').select('id').eq('created_by', userId),
+  ])
+  if (assignRes.error) {
+    console.error('[queries] task_assignees', assignRes.error)
     return []
   }
-  const taskIds = (assignments ?? []).map((a) => a.task_id as string)
+  if (createdRes.error) {
+    console.error('[queries] tasks created_by', createdRes.error)
+  }
+  const idSet = new Set<string>()
+  for (const a of assignRes.data ?? []) idSet.add(a.task_id as string)
+  for (const t of createdRes.data ?? []) idSet.add(t.id as string)
+  const taskIds = [...idSet]
   if (taskIds.length === 0) return []
 
   // Org filter must run at the DB level — otherwise applying it in JS after
@@ -1117,7 +1126,10 @@ export async function getUserActionItems(
       'id, project_id, parent_task_id, title, description, status, priority, start_date, due_date, kanban_column_id, source_meeting_id, created_by, created_at, updated_at, projects(name, color, org_id), meetings:source_meeting_id(name, scheduled_at), users:created_by(first_name, last_name, nickname, email)'
     )
     .in('id', taskIds)
-    .order('due_date', { ascending: true, nullsFirst: false })
+    // Newest first so a just-created task surfaces at the top of the
+    // personal Tasks / Dashboard lists (the dashboard renders in this order
+    // directly; the Tasks page defaults to a matching client sort).
+    .order('created_at', { ascending: false })
 
   if (!opts?.includeDone) q = q.neq('status', 'done')
   if (orgProjectIds) {

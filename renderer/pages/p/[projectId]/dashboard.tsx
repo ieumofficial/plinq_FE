@@ -15,6 +15,7 @@ import {
   useProjectTasks,
 } from '../../../lib/hooks'
 import { resolveProjectColor } from '../../../lib/projectColors'
+import { taskTicketId } from '../../../lib/ticket'
 import { useFitCount } from '../../../lib/useFitCount'
 import {
   dbPriorityToUi,
@@ -743,20 +744,13 @@ function ProjectDashboardBody({ projectId }: { projectId: string }) {
         task={openTask?.task ?? null}
         projectName={project?.name ?? 'Project'}
         ticketId={
-          openTask ? ticketId(project?.name ?? 'TSK', openTask.idx) : ''
+          openTask
+            ? taskTicketId(project?.name ?? 'TSK', tasks, openTask.task.id) ??
+              ''
+            : ''
         }
         onClose={() => setOpenTask(null)}
       />
     </div>
   )
-}
-
-function ticketId(projectName: string, idx: number): string {
-  const prefix = projectName
-    .split(/\s+/)
-    .map((w) => w.charAt(0))
-    .join('')
-    .slice(0, 3)
-    .toUpperCase()
-  return `${prefix || 'TSK'}-${(idx + 100).toString().padStart(3, '0')}`
 }

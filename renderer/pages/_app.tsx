@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '../styles/globals.css'
 import { useTrackNavHistory } from '../lib/navHistory'
 import ProjectPreviewProvider from '../components/ProjectPreviewProvider'
+import { ToastProvider } from '../lib/toast'
 import { supabase } from '../lib/supabase'
 
 function MyApp({ Component, pageProps }: AppProps) {
@@ -53,9 +54,11 @@ function MyApp({ Component, pageProps }: AppProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ProjectPreviewProvider>
-        <Component {...pageProps} />
-      </ProjectPreviewProvider>
+      <ToastProvider>
+        <ProjectPreviewProvider>
+          <Component {...pageProps} />
+        </ProjectPreviewProvider>
+      </ToastProvider>
     </QueryClientProvider>
   )
 }

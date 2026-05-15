@@ -104,7 +104,7 @@ export type MeetingRow = {
   scheduled_at: string
   duration_min: number
   location_or_url: string | null
-  status: 'planned' | 'recording' | 'processed'
+  status: 'planned' | 'recording' | 'analyzing' | 'processed'
   meeting_type: MeetingType
   recurrence: MeetingRecurrence
   recurrence_until: string | null

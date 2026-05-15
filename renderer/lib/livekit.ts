@@ -53,3 +53,25 @@ export async function startMeetingRecording(meetingId: string): Promise<string> 
   const j = (await r.json()) as { egress_id: string }
   return j.egress_id
 }
+
+/** Stop the active recording. Returns the egress id we asked LiveKit to
+ *  stop, or null when nothing was active. LiveKit emits `egress_ended`
+ *  ~seconds later, which the BE webhook turns into an analyze run. */
+export async function stopMeetingRecording(meetingId: string): Promise<string | null> {
+  const r = await aiFetch(
+    `/meetings/${encodeURIComponent(meetingId)}/stop-recording`,
+    { method: 'POST', body: {} },
+  )
+  if (!r.ok) {
+    let detail = `HTTP ${r.status}`
+    try {
+      const j = await r.json()
+      detail = typeof j.detail === 'string' ? j.detail : detail
+    } catch {
+      /* keep status */
+    }
+    throw new Error(detail)
+  }
+  const j = (await r.json()) as { stopped_egress_id: string | null }
+  return j.stopped_egress_id
+}

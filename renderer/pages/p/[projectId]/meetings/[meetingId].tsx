@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useQueryClient } from '@tanstack/react-query'
+import { supabase } from '../../../../lib/supabase'
 import ProjectAppShell from '../../../../components/ProjectAppShell'
 import Icon from '../../../../components/ui/Icon'
 import MeetingTypeLabel from '../../../../components/ui/MeetingTypeLabel'
@@ -212,6 +213,18 @@ function MeetingDetailBody({
   )
   const insights: ExtractedMeeting | null = parseSummary(minutes?.summary)
 
+  // While the BE pipeline is running, poll meetings + minutes every 5s
+  // so the FE flips from "analyzing" to the topics view automatically.
+  // Placed before the early-return so hook order stays stable.
+  useEffect(() => {
+    if (meeting?.status !== 'analyzing') return
+    const t = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.project.meetings(projectId ?? '') })
+      queryClient.invalidateQueries({ queryKey: meetingMinutesQueryKey(meetingId ?? '') })
+    }, 5000)
+    return () => clearInterval(t)
+  }, [meeting?.status, meetingId, projectId, queryClient])
+
   if (!meeting) {
     return (
       <div className="p-6">
@@ -243,6 +256,8 @@ function MeetingDetailBody({
   const statusBadge = (() => {
     if (meeting.status === 'recording')
       return { label: 'LIVE', dot: 'bg-red-main', text: 'text-[#D9534F]' }
+    if (meeting.status === 'analyzing')
+      return { label: 'ANALYZING', dot: 'bg-blue-med animate-pulse', text: 'text-blue-main' }
     if (meeting.status === 'processed')
       return {
         label: 'FINISHED',
@@ -322,6 +337,30 @@ function MeetingDetailBody({
             Join voice room
           </Button>
         </div>
+      )}
+
+      {/* Analysis-in-progress card — shown after recording stops, until
+          the analyze pipeline finishes and produces meeting_minutes. The
+          status field is `analyzing` while STT + LLM run server-side. */}
+      {meeting.status === 'analyzing' && !insights && (
+        <section className="bg-white-white border border-blue-light rounded-[10px] p-[15px] flex items-center gap-[12px]">
+          <div className="grid size-[28px] grid-cols-2 grid-rows-2 gap-[1.5px]">
+            <div className="size-[12px] animate-pulse rounded-[2px] bg-blue-med" />
+            <div className="size-[12px] animate-pulse rounded-full bg-blue-light [animation-delay:120ms]" />
+            <div className="size-[12px] animate-pulse rounded-[2px] bg-blue-light [animation-delay:240ms]" />
+            <div className="size-[12px] animate-pulse rounded-[2px] bg-blue-med [animation-delay:360ms]" />
+          </div>
+          <div className="flex flex-col gap-[3px]">
+            <p className="text-[14px] font-semibold text-black">
+              AI is analyzing this meeting…
+            </p>
+            <p className="text-[12px] text-gray-main">
+              Transcribing audio, extracting decisions and action items.
+              This usually takes 1–2 minutes — you can leave this page and
+              come back, the result is saved automatically.
+            </p>
+          </div>
+        </section>
       )}
 
       {/* AI Summary card */}
@@ -729,13 +768,27 @@ function AnalyzeUploadCard({
 }
 
 function RecordingCard({ audioUrl }: { audioUrl: string | null }) {
+  // `audioUrl` from meeting_minutes.raw_audio_url is `<bucket>/<key>`,
+  // not a playable URL. The `meeting-audio` bucket is public, so a
+  // direct public URL works (createSignedUrl rejects on public buckets
+  // with 400). If we ever flip the bucket to private we'll need to swap
+  // this for createSignedUrl.
+  const playableUrl = useMemo(() => {
+    if (!audioUrl) return null
+    const sep = audioUrl.indexOf('/')
+    if (sep <= 0) return null
+    const bucket = audioUrl.slice(0, sep)
+    const path = audioUrl.slice(sep + 1)
+    return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl
+  }, [audioUrl])
+
   return (
     <section className="bg-white-white border border-gray-border-light rounded-[10px] p-[15px] flex flex-col gap-[10px]">
       <p className="text-[10px] font-semibold uppercase tracking-[1.5px] text-gray-main">
         Recording
       </p>
-      {audioUrl ? (
-        <audio controls src={audioUrl} className="w-full" />
+      {playableUrl ? (
+        <audio controls src={playableUrl} className="w-full" />
       ) : (
         <p className="text-[12px] text-gray-secondary italic">
           No saved recording yet. Once the post-meeting upload finishes

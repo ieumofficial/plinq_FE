@@ -19,7 +19,7 @@ import {
   type Participant,
 } from 'livekit-client'
 import Button from './ui/Button'
-import { fetchLiveKitToken, startMeetingRecording } from '../lib/livekit'
+import { fetchLiveKitToken, startMeetingRecording, stopMeetingRecording } from '../lib/livekit'
 
 type Props = {
   meetingId: string
@@ -44,7 +44,7 @@ export default function MeetingRoom({ meetingId, meetingName, onLeave }: Props) 
   const [participants, setParticipants] = useState<ParticipantState[]>([])
   const [muted, setMuted] = useState(false)
   const [recording, setRecording] = useState(false)
-  const [startingRecording, setStartingRecording] = useState(false)
+  const [recPending, setRecPending] = useState(false) // start OR stop in flight
   const [recError, setRecError] = useState<string | null>(null)
 
   // Connect on mount, leave on unmount.
@@ -149,8 +149,8 @@ export default function MeetingRoom({ meetingId, meetingName, onLeave }: Props) 
   }
 
   async function startRecording() {
-    if (recording || startingRecording) return
-    setStartingRecording(true)
+    if (recording || recPending) return
+    setRecPending(true)
     setRecError(null)
     try {
       await startMeetingRecording(meetingId)
@@ -159,7 +159,21 @@ export default function MeetingRoom({ meetingId, meetingName, onLeave }: Props) 
     } catch (e) {
       setRecError(e instanceof Error ? e.message : String(e))
     } finally {
-      setStartingRecording(false)
+      setRecPending(false)
+    }
+  }
+
+  async function stopRecording() {
+    if (!recording || recPending) return
+    setRecPending(true)
+    setRecError(null)
+    try {
+      await stopMeetingRecording(meetingId)
+      // RecordingStatusChanged(false) will land within ~1s and clear REC.
+    } catch (e) {
+      setRecError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setRecPending(false)
     }
   }
 
@@ -241,17 +255,23 @@ export default function MeetingRoom({ meetingId, meetingName, onLeave }: Props) 
           )}
           <div className="flex items-center justify-between gap-[8px] pt-[5px]">
             {recording ? (
-              <span className="text-[11px] text-gray-main">
-                Recording — AI will summarize once everyone leaves.
-              </span>
+              <button
+                type="button"
+                onClick={() => void stopRecording()}
+                disabled={recPending}
+                className="inline-flex h-[32px] items-center gap-[6px] rounded-[5px] border border-red-med/40 bg-red-light px-[12px] text-[12px] font-semibold text-red-main hover:bg-red-light/80 disabled:opacity-50"
+              >
+                <span className="size-[8px] rounded-[2px] bg-red-main" />
+                {recPending ? 'Stopping…' : 'Stop recording'}
+              </button>
             ) : (
               <Button
                 variant="primary"
                 size="compact"
                 onClick={() => void startRecording()}
-                disabled={startingRecording}
+                disabled={recPending}
               >
-                {startingRecording ? 'Starting…' : '● Start recording'}
+                {recPending ? 'Starting…' : '● Start recording'}
               </Button>
             )}
             <div className="flex items-center gap-[8px]">

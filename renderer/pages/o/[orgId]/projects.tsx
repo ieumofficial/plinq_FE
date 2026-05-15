@@ -155,13 +155,18 @@ function matchFilter(p: ProjectWithStats, key: FilterKey): boolean {
 }
 
 /** Single category to display in the Health column — the most informative
- *  filter label for the project. Precedence: Blocked → At risk → Planned
- *  → Active (in-progress) → On track (review/done/healthy). */
+ *  filter label for the project. Precedence:
+ *    Blocked → Planned → At risk → Active (in-progress) → On track.
+ *  `planned` runs before the at-risk health check on purpose: a project
+ *  that hasn't started yet shouldn't be hidden from the Planned filter
+ *  just because some task has an early due date. Planned/blocked are
+ *  status-driven labels; at-risk is health-driven and only meaningful
+ *  for projects already in progress. */
 function projectCategory(p: ProjectWithStats): FilterKey {
   if (p.status === 'blocked') return 'blocked'
+  if (p.status === 'planned') return 'planned'
   const h = projectHealth(p)
   if (h === 'at-risk' || h === 'delayed') return 'at-risk'
-  if (p.status === 'planned') return 'planned'
   if (p.status === 'in_progress') return 'active'
   return 'on-track'
 }

@@ -1,38 +1,67 @@
-import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { supabase } from './supabase'
 
 export type Presence = 'available' | 'in_meeting' | 'unavailable'
 
-const STORAGE_KEY = 'plinq.presence'
-
-function read(): Presence {
-  if (typeof window === 'undefined') return 'available'
-  const raw = window.localStorage.getItem(STORAGE_KEY)
-  if (raw === 'available' || raw === 'in_meeting' || raw === 'unavailable') return raw
-  return 'available'
-}
-
-/** Client-side user presence — no backend yet, lives in localStorage so it
- *  persists across reloads and stays in sync across tabs. */
+/**
+ * Server-backed user presence stored on `users.status`.
+ *
+ * Picking 'Available' clears the manual lock so Phase 2's LiveKit auto-flip
+ * (in_meeting on join, available on leave) can take over again. Picking
+ * 'In meeting' or 'Unavailable' sets the manual lock so the auto-flip won't
+ * override the user's choice.
+ */
 export function usePresence(): [Presence, (next: Presence) => void] {
-  const [value, setValue] = useState<Presence>('available')
+  const qc = useQueryClient()
 
-  useEffect(() => {
-    setValue(read())
-    function onStorage(e: StorageEvent) {
-      if (e.key === STORAGE_KEY) setValue(read())
-    }
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
-  }, [])
+  const { data: presence = 'available' } = useQuery<Presence>({
+    queryKey: ['myStatus'],
+    queryFn: async () => {
+      const { data: userData } = await supabase.auth.getUser()
+      const me = userData.user
+      if (!me) return 'available'
+      const { data } = await supabase
+        .from('users')
+        .select('status')
+        .eq('id', me.id)
+        .maybeSingle()
+      const v = (data as { status?: Presence } | null)?.status
+      return v === 'in_meeting' || v === 'unavailable' || v === 'available' ? v : 'available'
+    },
+    // BE auto-flips on LiveKit join/leave webhooks; poll often enough that
+    // the sidebar dot follows within a few seconds of joining a room.
+    staleTime: 3_000,
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
+  })
 
-  const set = (next: Presence) => {
-    setValue(next)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, next)
-    }
-  }
+  const mut = useMutation({
+    mutationFn: async (next: Presence) => {
+      const { data: userData } = await supabase.auth.getUser()
+      const me = userData.user
+      if (!me) return
+      const { error } = await supabase
+        .from('users')
+        .update({
+          status: next,
+          // 'available' = release the manual lock and let LiveKit auto-flip
+          // resume. 'in_meeting' / 'unavailable' = explicit user choice.
+          status_is_manual: next !== 'available',
+        })
+        .eq('id', me.id)
+      if (error) throw new Error(error.message)
+    },
+    onMutate: async (next) => {
+      // Optimistic — the dot in the sidebar should switch instantly even
+      // before the round-trip lands.
+      qc.setQueryData<Presence>(['myStatus'], next)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['myStatus'] })
+    },
+  })
 
-  return [value, set]
+  return [presence, (next) => mut.mutate(next)]
 }
 
 export const PRESENCE_LABEL: Record<Presence, string> = {

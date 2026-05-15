@@ -5,9 +5,10 @@
  *
  * Renders as `position: fixed` so it floats above the header / page.
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import Icon from './ui/Icon'
+import CreateOrganizationModal from './CreateOrganizationModal'
 import { useCurrentUser, useMyOrg, useMyOrgsWithStats } from '../lib/hooks'
 
 type Props = {
@@ -23,8 +24,13 @@ export default function OrgSwitcherDropdown({ anchorRect, onClose }: Props) {
   const { data: allOrgs = [] } = useMyOrgsWithStats(user?.id)
 
   const ref = useRef<HTMLDivElement>(null)
+  const [createOpen, setCreateOpen] = useState(false)
   useEffect(() => {
     if (!anchorRect) return
+    // Pause the outside-click + Esc + scroll handlers while the create-org
+    // modal is open, otherwise interacting with it would close the dropdown
+    // (and unmount the modal with it).
+    if (createOpen) return
     function onDocClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose()
     }
@@ -47,7 +53,7 @@ export default function OrgSwitcherDropdown({ anchorRect, onClose }: Props) {
       window.removeEventListener('scroll', onScrollOrResize, true)
       window.removeEventListener('resize', onScrollOrResize)
     }
-  }, [anchorRect, onClose])
+  }, [anchorRect, onClose, createOpen])
 
   if (!anchorRect || typeof window === 'undefined') return null
 
@@ -152,16 +158,22 @@ export default function OrgSwitcherDropdown({ anchorRect, onClose }: Props) {
         )}
         <button
           type="button"
-          onClick={() => {
-            router.push('/organization')
-            onClose()
-          }}
+          onClick={() => setCreateOpen(true)}
           className="bg-white-white border border-solid border-gray-border-light rounded-[5px] px-[10px] py-[7px] flex items-center gap-[5px] text-black text-[12px] hover:bg-white-item transition-colors w-fit"
         >
           <Icon name="Add" size={12} />
           New organization
         </button>
       </div>
+
+      <CreateOrganizationModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(id) => {
+          router.push(`/o/${id}/dashboard`)
+          onClose()
+        }}
+      />
     </div>
   )
 }

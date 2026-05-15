@@ -1604,6 +1604,88 @@ export async function getUserCalendarEvents(
   return { meetings, tasksWithDue }
 }
 
+// ─── Notifications ──────────────────────────────────────────────────────────
+
+export type NotificationType =
+  | 'chat_message'
+  | 'task_assigned'
+  | 'task_due_soon'
+  | 'meeting_starting'
+  | 'mention'
+  | 'agent_proposal'
+
+export type NotificationRow = {
+  id: string
+  user_id: string
+  type: NotificationType
+  source_id: string
+  source_session_id: string | null
+  preview_title: string | null
+  preview_body: string | null
+  preview_meta: Record<string, unknown> | null
+  read_at: string | null
+  dismissed_at: string | null
+  created_at: string
+}
+
+/** Inbox for the current user. Returns undismissed rows newest-first.
+ *  RLS already restricts to user_id = auth.uid() — no extra .eq() needed. */
+export async function getNotifications(opts?: {
+  limit?: number
+}): Promise<NotificationRow[]> {
+  let q = supabase
+    .from('notifications')
+    .select(
+      'id, user_id, type, source_id, source_session_id, preview_title, preview_body, preview_meta, read_at, dismissed_at, created_at'
+    )
+    .is('dismissed_at', null)
+    .order('created_at', { ascending: false })
+  if (opts?.limit) q = q.limit(opts.limit)
+  const { data, error } = await q
+  if (error) {
+    console.error('[queries] getNotifications', error)
+    return []
+  }
+  return (data ?? []) as NotificationRow[]
+}
+
+export async function dismissNotification(
+  id: string
+): Promise<{ ok: true } | { error: string }> {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ dismissed_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
+/** Soft-delete every undismissed notification for the current user. */
+export async function dismissAllNotifications(): Promise<
+  { ok: true } | { error: string }
+> {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ dismissed_at: new Date().toISOString() })
+    .is('dismissed_at', null)
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
+/** Dismiss every notification tied to a particular chat session — used when
+ *  the user opens that session and "consumes" the unread bubble all at once. */
+export async function dismissNotificationsForSession(
+  sessionId: string
+): Promise<{ ok: true } | { error: string }> {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ dismissed_at: new Date().toISOString() })
+    .eq('source_session_id', sessionId)
+    .is('dismissed_at', null)
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
 // ─── Chat ────────────────────────────────────────────────────────────────────
 
 export type ChatSessionWithMeta = ChatSessionRow & {

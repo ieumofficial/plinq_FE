@@ -5,6 +5,7 @@
  *   - background refetches keep data fresh after staleTime
  *   - mutations can target precise keys for invalidation
  */
+import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useActiveOrgId } from './activeOrgStore'
 import {
@@ -13,6 +14,10 @@ import {
   deleteKnowledgeDoc,
   deleteProject,
   deleteTask,
+  dismissAllNotifications,
+  dismissNotification,
+  dismissNotificationsForSession,
+  getNotifications,
   // toggleDocPin removed — pin state lives in localStorage for now (see lib/pinPref.ts)
   getChatMessages,
   getChatSessionMembers,
@@ -755,6 +760,90 @@ export function useDeleteAgentConversation() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.agentChats.all })
+    },
+  })
+}
+
+// ─── Notifications inbox ────────────────────────────────────────────────────
+
+/** Live undismissed notifications for the current user. Realtime updates are
+ *  wired in `useNotificationsRealtime` below. */
+export function useNotifications(userId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.notifications.inbox(userId),
+    queryFn: () => getNotifications({ limit: 50 }),
+    enabled: !!userId,
+    staleTime: 10 * 1000,
+  })
+}
+
+/** Subscribe to INSERT/UPDATE/DELETE on `notifications` rows that target the
+ *  given user. Whenever something changes, just invalidate the inbox query —
+ *  TanStack will refetch and the dropdown re-renders. */
+export function useNotificationsRealtime(userId: string | null | undefined) {
+  const qc = useQueryClient()
+  useEffect(() => {
+    if (!userId) return
+    const ch = supabase
+      .channel(`notifications:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          qc.invalidateQueries({ queryKey: queryKeys.notifications.inbox(userId) })
+        }
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(ch)
+    }
+  }, [userId, qc])
+}
+
+/** Dismiss a single notification (X click). */
+export function useDismissNotification() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const r = await dismissNotification(id)
+      if ('error' in r) throw new Error(r.error)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.notifications.all })
+    },
+  })
+}
+
+/** Clear All in the dropdown header — dismiss every undismissed row. */
+export function useDismissAllNotifications() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const r = await dismissAllNotifications()
+      if ('error' in r) throw new Error(r.error)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.notifications.all })
+    },
+  })
+}
+
+/** Drop notifications for one session (called when the user opens that
+ *  conversation, so the inbox stops nagging). */
+export function useDismissNotificationsForSession() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (sessionId: string) => {
+      const r = await dismissNotificationsForSession(sessionId)
+      if ('error' in r) throw new Error(r.error)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.notifications.all })
     },
   })
 }

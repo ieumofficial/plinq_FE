@@ -31,6 +31,7 @@ import {
   useUserProjects,
 } from '../lib/hooks'
 import {
+  dismissNotificationsForSession,
   markChatSessionRead,
   sendChatMessage,
   type ChatMessageWithAuthor,
@@ -254,6 +255,8 @@ function MessagesBody() {
   }, [activeSessionId, messages.length])
 
   // Mark read whenever the active session changes / new messages arrive.
+  // Also drop any unread notifications for this session — opening the
+  // conversation is the user "consuming" them.
   useEffect(() => {
     if (!activeSessionId) return
     void markChatSessionRead(activeSessionId).then(() => {
@@ -262,6 +265,9 @@ function MessagesBody() {
           queryKey: queryKeys.chat.sessions(user.id, orgId),
         })
       }
+    })
+    void dismissNotificationsForSession(activeSessionId).then(() => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all })
     })
   }, [activeSessionId, messages.length, user?.id, orgId, queryClient])
 

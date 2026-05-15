@@ -4,10 +4,14 @@ import Button from './Button'
 import Icon from './Icon'
 import GlobalSearchDropdown from '../GlobalSearchDropdown'
 import OrgSwitcherDropdown from '../OrgSwitcherDropdown'
-import NotificationPanel from '../NotificationPanel'
+import NotificationDropdown from '../NotificationDropdown'
 import ProfileDropdown from '../ProfileDropdown'
 import { useAiBusy } from '../../lib/aiActivity'
-import { useCurrentUser } from '../../lib/hooks'
+import {
+  useCurrentUser,
+  useNotifications,
+  useNotificationsRealtime,
+} from '../../lib/hooks'
 import { useNavHistory } from '../../lib/navHistory'
 import { usePresence, PRESENCE_DOT } from '../../lib/presencePref'
 
@@ -166,6 +170,11 @@ export default function Header({
   // avatar can open the identical menu.
   const router = useRouter()
   const { data: currentUser } = useCurrentUser()
+  // Live unread count for the bell badge — also subscribes to realtime
+  // so the dot lights up the moment a new notification row lands.
+  const { data: notifs = [] } = useNotifications(currentUser?.id)
+  useNotificationsRealtime(currentUser?.id)
+  const hasUnreadNotifs = notifs.length > 0
   const [presence, setPresence] = usePresence()
   const nav = useNavHistory()
   const aiBusy = useAiBusy()
@@ -308,7 +317,7 @@ export default function Header({
           aria-label="Notifications"
         >
           <Icon name="Notification" size={18} />
-          {hasNotifications && (
+          {(hasUnreadNotifs || hasNotifications) && (
             <span className="absolute top-1 right-1 w-[5px] h-[5px] rounded-full bg-red-notification" />
           )}
         </button>
@@ -374,9 +383,10 @@ export default function Header({
         anchorRect={orgRect}
         onClose={() => setOrgRect(null)}
       />
-      <NotificationPanel
+      <NotificationDropdown
         anchorRect={notifRect}
         onClose={() => setNotifRect(null)}
+        userId={currentUser?.id}
       />
       <ProfileDropdown
         anchorRect={avatarRect}

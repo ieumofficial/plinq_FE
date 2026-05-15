@@ -9,7 +9,7 @@ import ProfileDropdown from '../ProfileDropdown'
 import { useAiBusy } from '../../lib/aiActivity'
 import { useCurrentUser } from '../../lib/hooks'
 import { useNavHistory } from '../../lib/navHistory'
-import { usePresence } from '../../lib/presencePref'
+import { usePresence, PRESENCE_DOT } from '../../lib/presencePref'
 
 const drag: CSSProperties = { WebkitAppRegion: 'drag' } as CSSProperties
 const noDrag: CSSProperties = { WebkitAppRegion: 'no-drag' } as CSSProperties
@@ -326,9 +326,24 @@ export default function Header({
             onAvatarClick?.()
           }}
           style={noDrag}
-          className="bg-primary-main text-white rounded-full w-[28px] h-[28px] inline-flex items-center justify-center text-[12px] font-semibold uppercase shrink-0"
+          className="relative bg-primary-main text-white rounded-full w-[28px] h-[28px] inline-flex items-center justify-center text-[12px] font-semibold uppercase shrink-0"
         >
           {userInitials}
+          {/* Status dot — same source/colors as the sidebar avatar; dark
+              border matches the header's dark gradient so the dot pops
+              against the avatar but blends into the header background. */}
+          <span
+            aria-hidden
+            className="absolute rounded-full"
+            style={{
+              width: 10,
+              height: 10,
+              right: -1,
+              bottom: -1,
+              backgroundColor: PRESENCE_DOT[presence],
+              border: '1.5px solid #1F2F38',
+            }}
+          />
         </button>
       </div>
 

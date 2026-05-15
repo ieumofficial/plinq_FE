@@ -13,6 +13,7 @@ import type { ReactNode } from 'react'
 import Icon from './Icon'
 import UserGroup, { type Member } from './UserGroup'
 import FileLabel, { type FileCategory } from './FileLabel'
+import CatchMeUpCard from './CatchMeUpCard'
 
 // ─── Shared helpers ─────────────────────────────────────────────────────────
 
@@ -156,6 +157,9 @@ type ChannelProps = {
   extraMemberCount?: number
   pinned?: ChatPinnedItem[]
   aiCard?: AiCardProps
+  /** When set, shows the AI "Catch me up" panel pinned to the bottom.
+   *  Cached per session (see useCatchMeUp) — no per-message refetch. */
+  sessionId?: string | null
 }
 
 type DmProps = {
@@ -166,6 +170,7 @@ type DmProps = {
   sharedSessions?: ChatSharedSession[]
   sharedFiles?: ChatSharedFile[]
   aiCard?: AiCardProps
+  sessionId?: string | null
 }
 
 type Props = ChannelProps | DmProps
@@ -181,6 +186,7 @@ export default function ChatDetails(props: Props) {
       extraMemberCount,
       pinned,
       aiCard,
+      sessionId,
     } = props
     return (
       <aside className="w-[290px] shrink-0 h-full flex flex-col bg-white-white border-t border-solid border-gray-border-light overflow-hidden">
@@ -245,18 +251,31 @@ export default function ChatDetails(props: Props) {
           )}
         </div>
 
-        {/* AI footer card */}
-        {aiCard && (
+        {/* AI footer card — Catch me up takes precedence when sessionId is
+            available; fall back to legacy stub aiCard otherwise. */}
+        {sessionId ? (
+          <div className="p-[10px] shrink-0">
+            <CatchMeUpCard sessionId={sessionId} />
+          </div>
+        ) : aiCard ? (
           <div className="p-[10px] shrink-0">
             <AiCard {...aiCard} />
           </div>
-        )}
+        ) : null}
       </aside>
     )
   }
 
   // DM
-  const { member, jobTitle, orgName, sharedSessions, sharedFiles, aiCard } = props
+  const {
+    member,
+    jobTitle,
+    orgName,
+    sharedSessions,
+    sharedFiles,
+    aiCard,
+    sessionId,
+  } = props
   const initial = (member.name?.charAt(0) ?? '?').toUpperCase()
   return (
     <aside className="w-[290px] shrink-0 h-full flex flex-col bg-white-white border-t border-solid border-gray-border-light overflow-hidden">
@@ -332,12 +351,16 @@ export default function ChatDetails(props: Props) {
         )}
       </div>
 
-      {/* AI footer card */}
-      {aiCard && (
+      {/* AI footer card — Catch me up when sessionId given, else legacy stub. */}
+      {sessionId ? (
+        <div className="p-[10px] shrink-0">
+          <CatchMeUpCard sessionId={sessionId} />
+        </div>
+      ) : aiCard ? (
         <div className="p-[10px] shrink-0">
           <AiCard {...aiCard} />
         </div>
-      )}
+      ) : null}
     </aside>
   )
 }

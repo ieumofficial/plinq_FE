@@ -1604,6 +1604,127 @@ export async function getUserCalendarEvents(
   return { meetings, tasksWithDue }
 }
 
+// ─── DM shared context (right-side panel) ──────────────────────────────────
+
+export type DmSharedSession = {
+  id: string
+  name: string
+  kind: import('./types').ChatSessionKind
+  scope: import('./types').ChatSessionScope
+  project_name: string | null
+}
+
+export type DmSharedFile = {
+  id: string
+  name: string
+  project_name: string | null
+  uploaded_at: string
+  file_type: string | null
+}
+
+export type DmSharedContext = {
+  sessions: DmSharedSession[]
+  files: DmSharedFile[]
+}
+
+/** For the DM ChatDetails panel: channels both ME and the other person are
+ *  members of, and recent knowledge docs from projects they share. We don't
+ *  have a chat-attachments table yet, so "shared files" approximates that
+ *  with knowledge_documents from the projects-in-common — the user wanted
+ *  *something* in the panel and these are the closest available signal. */
+export async function getDmSharedContext(
+  meId: string,
+  otherId: string
+): Promise<DmSharedContext> {
+  // Channels we both belong to (exclude DMs and exclude this very session).
+  // Two-step: pull session_ids both members are in, then fetch metadata.
+  const [meRes, otherRes] = await Promise.all([
+    supabase
+      .from('chat_session_members')
+      .select('session_id')
+      .eq('user_id', meId),
+    supabase
+      .from('chat_session_members')
+      .select('session_id')
+      .eq('user_id', otherId),
+  ])
+  const myIds = new Set((meRes.data ?? []).map((r) => r.session_id as string))
+  const sharedIds = (otherRes.data ?? [])
+    .map((r) => r.session_id as string)
+    .filter((id) => myIds.has(id))
+
+  let sessions: DmSharedSession[] = []
+  if (sharedIds.length > 0) {
+    const { data } = await supabase
+      .from('chat_sessions')
+      .select('id, name, kind, scope, project_id, projects(name)')
+      .in('id', sharedIds)
+      .neq('kind', 'dm')
+      .limit(5)
+    sessions = ((data ?? []) as unknown as Array<{
+      id: string
+      name: string | null
+      kind: import('./types').ChatSessionKind
+      scope: import('./types').ChatSessionScope
+      project_id: string | null
+      projects: { name: string } | { name: string }[] | null
+    }>).map((r) => {
+      const p = Array.isArray(r.projects) ? r.projects[0] : r.projects
+      return {
+        id: r.id,
+        name: r.name ?? '(untitled)',
+        kind: r.kind,
+        scope: r.scope,
+        project_name: p?.name ?? null,
+      }
+    })
+  }
+
+  // Knowledge docs from projects both members belong to. Same intersection
+  // pattern: each users' project_ids → set intersection → fetch docs.
+  const [myProj, otherProj] = await Promise.all([
+    supabase.from('project_members').select('project_id').eq('user_id', meId),
+    supabase
+      .from('project_members')
+      .select('project_id')
+      .eq('user_id', otherId),
+  ])
+  const myProjIds = new Set(
+    (myProj.data ?? []).map((r) => r.project_id as string)
+  )
+  const sharedProjIds = (otherProj.data ?? [])
+    .map((r) => r.project_id as string)
+    .filter((id) => myProjIds.has(id))
+
+  let files: DmSharedFile[] = []
+  if (sharedProjIds.length > 0) {
+    const { data } = await supabase
+      .from('knowledge_documents')
+      .select('id, name, file_type, uploaded_at, projects(name)')
+      .in('project_id', sharedProjIds)
+      .order('uploaded_at', { ascending: false })
+      .limit(5)
+    files = ((data ?? []) as unknown as Array<{
+      id: string
+      name: string
+      file_type: string | null
+      uploaded_at: string
+      projects: { name: string } | { name: string }[] | null
+    }>).map((r) => {
+      const p = Array.isArray(r.projects) ? r.projects[0] : r.projects
+      return {
+        id: r.id,
+        name: r.name,
+        project_name: p?.name ?? null,
+        uploaded_at: r.uploaded_at,
+        file_type: r.file_type,
+      }
+    })
+  }
+
+  return { sessions, files }
+}
+
 // ─── Notifications ──────────────────────────────────────────────────────────
 
 export type NotificationType =

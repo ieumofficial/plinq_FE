@@ -305,10 +305,10 @@ function StatCard({
   pillTextColor: string
 }) {
   return (
-    <div className="flex-1 min-w-0 bg-white-white border border-gray-border-light rounded-[10px] px-[15px] py-[15px] flex items-end justify-between gap-[10px]">
+    <div className="flex-1 min-w-0 bg-white-white border border-gray-border-light rounded-[10px] px-[15px] py-[15px] flex flex-col gap-[10px]">
       <div className="flex flex-col gap-[5px] min-w-0">
         <p
-          className="text-[10px] font-medium uppercase tracking-[1.5px] truncate"
+          className="text-[10px] font-medium uppercase tracking-[1.5px]"
           style={{ color: eyebrowColor }}
         >
           {eyebrow}
@@ -321,7 +321,7 @@ function StatCard({
         </p>
       </div>
       <span
-        className="shrink-0 inline-flex items-center gap-[5px] rounded-[2px] px-[8px] py-[3px]"
+        className="self-start max-w-full inline-flex items-center gap-[5px] rounded-[2px] px-[8px] py-[3px]"
         style={{ backgroundColor: pillBg }}
       >
         <span
@@ -329,7 +329,7 @@ function StatCard({
           style={{ backgroundColor: pillDotColor }}
         />
         <span
-          className="text-[10px] font-medium whitespace-nowrap"
+          className="text-[10px] font-medium truncate"
           style={{ color: pillTextColor }}
         >
           {pillText}

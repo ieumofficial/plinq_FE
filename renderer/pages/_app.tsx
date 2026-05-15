@@ -36,9 +36,19 @@ function MyApp({ Component, pageProps }: AppProps) {
   // though the token's `exp` is still in the future. A refresh hands us a
   // JWT signed by the *current* key. If there's no session, this is a no-op.
   useEffect(() => {
-    void supabase.auth.refreshSession().catch((e) => {
-      console.warn('[auth] boot-time refreshSession failed', e)
-    })
+    // Only attempt refresh if there's actually a session in storage.
+    // supabase-js's refreshSession() throws "Auth session missing!" when
+    // called from a logged-out state — including the landing page on a
+    // fresh install — and that surfaces in dev as a runtime overlay.
+    void (async () => {
+      try {
+        const { data } = await supabase.auth.getSession()
+        if (!data.session) return
+        await supabase.auth.refreshSession()
+      } catch (e) {
+        console.warn('[auth] boot-time refreshSession failed', e)
+      }
+    })()
   }, [])
 
   return (

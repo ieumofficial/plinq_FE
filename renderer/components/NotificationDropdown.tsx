@@ -9,7 +9,7 @@
  * components and add a dispatch in `renderItem`.
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import {
   useDismissAllNotifications,
@@ -64,43 +64,92 @@ function groupChat(notifs: NotificationRow[]): GroupedChat[] {
   return Array.from(map.values())
 }
 
-/** Stacked-card visual for groups with 2+ rows: 1-2 ghost cards behind the
- *  front card to hint at the count. Mirrors Figma's stack offsets (3+ shows
- *  3 cards; 2 shows 2; 1 shows 1). */
-function StackedCard({
-  count,
-  children,
+// Approximate single-card height so we can pre-compute the group's outer
+// height and animate height transitions. ChatNotificationItem ≈ 50px tall
+// (10px padding + 30px avatar/body row + 10 padding). Matches Figma.
+const CARD_H = 50
+const COLLAPSED_GHOST_OFFSET = 8  // each ghost peeks 8px below the previous
+const EXPANDED_GAP = 10
+
+/**
+ * Renders one chat-session group as a stack of ChatNotificationItem cards.
+ *
+ * Two visual states:
+ *   - collapsed (default): only the latest card is fully visible. Up to 2 of
+ *     the older cards peek 5px below it (Figma 1381:19830 / 1381:19849).
+ *   - expanded: every card in the group is laid out vertically, like macOS
+ *     Notification Center after a click. Smooth height + transform
+ *     transition (250ms, ease-out).
+ *
+ * Children are absolutely positioned so we can animate their `top` /
+ * `transform` independently while the outer wrapper interpolates `height`.
+ */
+function StackedGroup<T>({
+  rows,
+  isExpanded,
+  onToggleExpand,
+  renderItem,
 }: {
-  count: number
-  children: React.ReactNode
+  rows: T[]
+  isExpanded: boolean
+  onToggleExpand: () => void
+  renderItem: (row: T, index: number) => React.ReactNode
 }) {
-  if (count <= 1) return <>{children}</>
-  // Two ghost cards offset so the bottom border of each peeks ~3-5px below.
-  const ghosts = Math.min(count - 1, 2)
+  if (rows.length === 0) return null
+  if (rows.length === 1) {
+    // Nothing to stack — render the single card flat.
+    return <div className="w-full">{renderItem(rows[0], 0)}</div>
+  }
+
+  const ghosts = Math.min(rows.length - 1, 2)
+  const collapsedHeight = CARD_H + ghosts * COLLAPSED_GHOST_OFFSET
+  const expandedHeight = rows.length * CARD_H + (rows.length - 1) * EXPANDED_GAP
+
   return (
-    <div className="relative w-full">
-      {Array.from({ length: ghosts }).map((_, i) => (
-        <div
-          key={i}
-          aria-hidden
-          className="absolute left-0 right-0 bg-[#394851] border border-solid border-gray-main rounded-[5px] h-[40px]"
-          style={{
-            top: (i + 1) * 5,
-            zIndex: 0,
-            opacity: 1 - 0.15 * (i + 1),
-            boxShadow: '0px 4px 5px rgba(0,0,0,0.05)',
-          }}
-        />
-      ))}
-      <div
-        className="relative"
-        style={{
-          zIndex: ghosts + 1,
-          marginBottom: ghosts * 6,
-        }}
-      >
-        {children}
-      </div>
+    <div
+      className="relative w-full overflow-visible transition-[height] duration-[260ms] ease-out"
+      style={{ height: isExpanded ? expandedHeight : collapsedHeight }}
+    >
+      {rows.map((row, i) => {
+        // collapsed: ghosts pushed down by 5px each so they peek out below
+        // the front card (i=0). i > 2 stays clamped at the back of the stack.
+        const collapsedTop = Math.min(i, ghosts) * COLLAPSED_GHOST_OFFSET
+        const expandedTop = i * (CARD_H + EXPANDED_GAP)
+        // collapsed back cards fade slightly so the eye picks the front first.
+        const collapsedOpacity = i === 0 ? 1 : Math.max(0, 1 - i * 0.12)
+        const collapsedScale = 1 - Math.min(i, ghosts) * 0.02
+        return (
+          <div
+            key={(row as { id?: string }).id ?? i}
+            className="absolute left-0 right-0 transition-all duration-[260ms] ease-out"
+            style={{
+              top: isExpanded ? expandedTop : collapsedTop,
+              opacity: isExpanded ? 1 : collapsedOpacity,
+              transform: isExpanded
+                ? 'scale(1)'
+                : `scale(${collapsedScale})`,
+              transformOrigin: 'top center',
+              // Front card always above the rest while collapsed; while
+              // expanded, normal stacking is fine.
+              zIndex: isExpanded ? 1 : rows.length - i,
+              // Only the front card receives toggle clicks while collapsed —
+              // back cards are visually hinted but not interactive yet.
+              pointerEvents:
+                !isExpanded && i > 0 ? 'none' : 'auto',
+            }}
+            onClick={(e) => {
+              if (!isExpanded) {
+                // First click anywhere on the stack → expand. Stop the click
+                // from also firing the inner card's onClick (route to /messages).
+                e.stopPropagation()
+                onToggleExpand()
+              }
+            }}
+          >
+            {renderItem(row, i)}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -120,6 +169,19 @@ export default function NotificationDropdown({
   const dismissOne = useDismissNotification()
   const dismissAll = useDismissAllNotifications()
   const ref = useRef<HTMLDivElement>(null)
+  // Per-group expand state — collapsed by default. Closing the dropdown
+  // resets so reopening shows the compact view again.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (!anchorRect) setExpanded(new Set())
+  }, [anchorRect])
+  const toggleExpand = (sessionId: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(sessionId)) next.delete(sessionId)
+      else next.add(sessionId)
+      return next
+    })
 
   // Outside click + Esc to close. Pause when not open.
   useEffect(() => {
@@ -192,60 +254,75 @@ export default function NotificationDropdown({
         </p>
       </div>
 
-      {/* Items */}
-      <div className="flex flex-col gap-[10px]">
+      {/* Items — wider gap *between* sessions; intra-session stacks keep
+          their tight 5px ghost peek (handled inside StackedGroup). */}
+      <div className="flex flex-col gap-[18px]">
         {groups.length === 0 ? (
           <p className="text-gray-secondary text-[11px]">You're all caught up.</p>
         ) : (
           groups.map((g, idx) => {
-            const meta = readMeta(g.newest)
-            // First card → "Clear All" pill on hover-equivalent (we always
-            // show it since header click would be redundant). Other cards →
-            // single-message dismiss [×].
-            const isFirst = idx === 0
+            const isFirstGroup = idx === 0
+            const isExpanded = expanded.has(g.sessionId)
             return (
-              <StackedCard key={g.sessionId} count={g.rows.length}>
-                <ChatNotificationItem
-                  chatType={g.kind}
-                  title={g.newest.preview_title ?? ''}
-                  body={
-                    g.kind === 'channel' && meta.authorName
-                      ? // strip the "Author: " prefix our trigger added so we can
-                        // re-render it as bold + plain via the channelAuthorName prop
-                        (g.newest.preview_body ?? '').replace(
-                          new RegExp(`^${meta.authorName}: `),
-                          ''
-                        )
-                      : g.newest.preview_body ?? ''
-                  }
-                  channelAuthorName={
-                    g.kind === 'channel' ? meta.authorName : undefined
-                  }
-                  avatarInitial={
-                    g.kind === 'dm' ? g.newest.preview_title ?? 'U' : undefined
-                  }
-                  rightAction={
-                    isFirst && totalNew > 1 ? 'clearAll' : 'dismiss'
-                  }
-                  onRightAction={() => {
-                    if (isFirst && totalNew > 1) {
-                      dismissAll.mutate()
-                    } else {
-                      // Dismiss every row in this group (the user already saw
-                      // the latest preview; bulk-clear is more useful).
-                      for (const row of g.rows) dismissOne.mutate(row.id)
-                    }
-                  }}
-                  onClick={() => {
-                    onClose()
-                    // Phase 1 routing: there's a single org-scoped /messages
-                    // page; we just route to it and let the page re-select
-                    // the right session (TODO: deep-link to a session id once
-                    // the URL supports it).
-                    router.push('/messages')
-                  }}
-                />
-              </StackedCard>
+              <StackedGroup
+                key={g.sessionId}
+                rows={g.rows}
+                isExpanded={isExpanded}
+                onToggleExpand={() => toggleExpand(g.sessionId)}
+                renderItem={(row, i) => {
+                  const meta = readMeta(row)
+                  // Right action:
+                  //   - first group / first card while collapsed → Clear All
+                  //     (only when there's actually more than one notif)
+                  //   - everywhere else → single dismiss [×]
+                  const showClearAll =
+                    isFirstGroup && i === 0 && !isExpanded && totalNew > 1
+                  return (
+                    <ChatNotificationItem
+                      chatType={g.kind}
+                      title={row.preview_title ?? ''}
+                      body={
+                        g.kind === 'channel' && meta.authorName
+                          ? (row.preview_body ?? '').replace(
+                              new RegExp(`^${meta.authorName}: `),
+                              ''
+                            )
+                          : row.preview_body ?? ''
+                      }
+                      channelAuthorName={
+                        g.kind === 'channel' ? meta.authorName : undefined
+                      }
+                      avatarInitial={
+                        g.kind === 'dm' ? row.preview_title ?? 'U' : undefined
+                      }
+                      rightAction={showClearAll ? 'clearAll' : 'dismiss'}
+                      onRightAction={() => {
+                        if (showClearAll) {
+                          dismissAll.mutate()
+                        } else {
+                          // While expanded, [×] dismisses just this one row.
+                          // While collapsed (front of stack), it bulk-dismisses
+                          // the whole group — the user has only ever seen the
+                          // top preview anyway.
+                          if (isExpanded) {
+                            dismissOne.mutate(row.id)
+                          } else {
+                            for (const r of g.rows) dismissOne.mutate(r.id)
+                          }
+                        }
+                      }}
+                      onClick={() => {
+                        // Front card while collapsed → handled by the stack
+                        // wrapper (it expands instead). Cards while expanded
+                        // (or single-row groups) → route to /messages.
+                        if (!isExpanded && i === 0 && g.rows.length > 1) return
+                        onClose()
+                        router.push('/messages')
+                      }}
+                    />
+                  )
+                }}
+              />
             )
           })
         )}

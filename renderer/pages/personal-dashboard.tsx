@@ -108,7 +108,6 @@ export default function PersonalDashboardPage() {
   // together (and the "current org" header label doesn't match the data).
   const activeOrg = useActiveOrg(user?.id)
   const activeOrgId = activeOrg?.id ?? null
-  console.log('[personal-dashboard] activeOrg', { id: activeOrgId, name: activeOrg?.name })
 
   const { data: projects = [], isLoading: projectsLoading } = useUserProjects(userId, {
     statuses: ['planned', 'in_progress', 'review'],

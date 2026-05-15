@@ -687,7 +687,6 @@ export default function CreateTaskModal({
     // Also include the per-project key (`['project', projectId]`) used by
     // ProjectAppShell's tasks/counts hooks, which prefix `['projects']`
     // does NOT match.
-    console.log('[CreateTaskModal] invalidating after create', { taskId: result.id })
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all }),
       queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all }),

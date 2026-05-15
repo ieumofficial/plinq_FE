@@ -1113,13 +1113,6 @@ export async function getUserActionItems(
       .eq('org_id', opts.orgId)
     orgProjectIds = (orgProjects ?? []).map((p) => p.id as string)
   }
-  console.log('[getUserActionItems] probe', {
-    userId,
-    orgId: opts?.orgId,
-    assignedTaskIds: taskIds.length,
-    orgProjectIdsVisible: orgProjectIds?.length ?? null,
-  })
-
   let q = supabase
     .from('tasks')
     .select(

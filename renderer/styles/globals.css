@@ -1,15 +1,14 @@
 @import 'tailwindcss';
 
+/* Fonts are self-hosted under renderer/public/fonts so there's no CDN
+   round-trip (and no 404 when jsdelivr is flaky / the path changes).
+   Next serves renderer/public at the web root, so `/fonts/...`. */
 @font-face {
   font-family: "Wanted Sans Variable";
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
-  /* Older `/gh/` path 404'd because the v1.0.3 package no longer ships
-     the `.min.woff2` bundle. The npm-published `complete/woff2/...` file
-     contains every glyph (incl. Hangul) in a single ~1.3MB woff2. */
-  src: url("https://cdn.jsdelivr.net/npm/wanted-sans@1.0.3/fonts/webfonts/variable/complete/woff2/WantedSansVariable.woff2")
-    format("woff2-variations");
+  src: url("/fonts/WantedSansVariable.woff2") format("woff2-variations");
 }
 
 @font-face {
@@ -17,8 +16,7 @@
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
-  src: url("https://cdn.jsdelivr.net/npm/@fontsource-variable/geist-mono@5/files/geist-mono-latin-wght-normal.woff2")
-    format("woff2-variations");
+  src: url("/fonts/GeistMono.woff2") format("woff2-variations");
 }
 
 @theme {

@@ -518,7 +518,7 @@ function BacklogBody({ projectId }: { projectId: string }) {
 
       {/* Table — shrinks to content when rows are few, scrolls internally when overflowing */}
       <div className="min-h-0 bg-white-white rounded-[10px] border border-gray-border-light flex flex-col overflow-hidden">
-        <TableHeader columns={COLS} className="shrink-0" />
+        <TableHeader columns={COLS} className="shrink-0 !gap-[12px] !px-[16px]" />
         <div className="min-h-0 overflow-y-auto">
         {sorted.length === 0 ? (
           <div className="px-4 py-8 text-center text-gray-secondary text-[12px]">
@@ -532,6 +532,7 @@ function BacklogBody({ projectId }: { projectId: string }) {
                 key={t.id}
                 isLast={i === sorted.length - 1}
                 onClick={() => setOpenTask({ task: t, idx: i })}
+                className="!gap-[12px] !px-[16px]"
               >
                 <TableCell width="w-[80px]">
                   <span
@@ -545,7 +546,7 @@ function BacklogBody({ projectId }: { projectId: string }) {
                 </TableCell>
                 <TableCell width="flex-1">
                   <span
-                    className={`text-[14px] ${
+                    className={`text-[12px] ${
                       isDone ? 'text-gray-secondary line-through' : 'text-black'
                     }`}
                   >
